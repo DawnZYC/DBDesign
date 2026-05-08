@@ -38,7 +38,7 @@ export function TechnologyDetailPanel({ technologyId }: TechnologyDetailPanelPro
   if (technologyId == null) {
     return (
       <section className="tech-detail empty">
-        <p>从左侧列表选一个技术查看详情</p>
+        <p>Select a technology from the list to view details</p>
       </section>
     );
   }
@@ -46,7 +46,7 @@ export function TechnologyDetailPanel({ technologyId }: TechnologyDetailPanelPro
   if (loading && detail === null) {
     return (
       <section className="tech-detail">
-        <div className="loading">加载中…</div>
+        <div className="loading">Loading...</div>
       </section>
     );
   }
@@ -54,7 +54,7 @@ export function TechnologyDetailPanel({ technologyId }: TechnologyDetailPanelPro
   if (error) {
     return (
       <section className="tech-detail">
-        <div className="error">加载失败：{error}</div>
+        <div className="error">Failed to load: {error}</div>
       </section>
     );
   }
@@ -75,32 +75,32 @@ export function TechnologyDetailPanel({ technologyId }: TechnologyDetailPanelPro
         )}
         <dl className="detail-meta">
           <div>
-            <dt>开始年份</dt>
+            <dt>Start Year</dt>
             <dd>{detail.technology_start_year ?? '—'}</dd>
           </div>
           <div>
-            <dt>寿命</dt>
+            <dt>Lifetime</dt>
             <dd>
               {detail.technology_lifetime_years != null
-                ? `${detail.technology_lifetime_years} 年`
+                ? `${detail.technology_lifetime_years} years`
                 : '—'}
             </dd>
           </div>
           <div>
-            <dt>年份记录</dt>
+            <dt>Year Records</dt>
             <dd>{detail.years.length}</dd>
           </div>
         </dl>
       </header>
 
       {detail.years.length === 0 ? (
-        <div className="empty-rows">该技术没有年份数据</div>
+        <div className="empty-rows">This technology has no year data</div>
       ) : (
         <div className="year-table-wrap">
           <table className="year-table">
             <thead>
               <tr>
-                <th>年份</th>
+                <th>Year</th>
                 <th className="ralign">EF</th>
                 <th>EF unit</th>
                 <th className="ralign">CAPEX</th>

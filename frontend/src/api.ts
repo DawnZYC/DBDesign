@@ -19,13 +19,13 @@ async function parseError(response: Response): Promise<string> {
     const body = (await response.json()) as ApiError;
     if (body.detail) message = body.detail;
   } catch {
-    // 后端返回非 JSON
+    // Backend returned non-JSON.
   }
   return message;
 }
 
 /**
- * 预览 Excel 的 sheet 列表（不入库）。
+ * Preview the Excel sheet list without writing to the database.
  */
 export async function previewExcel(file: File): Promise<FilePreview> {
   const formData = new FormData();
@@ -41,7 +41,7 @@ export async function previewExcel(file: File): Promise<FilePreview> {
 }
 
 /**
- * 上传 Excel 并触发导入。
+ * Upload Excel and start the import.
  */
 export async function uploadExcel(
   file: File,
@@ -65,7 +65,7 @@ export async function uploadExcel(
 }
 
 /**
- * 列出所有待复核冲突（按 sheet + A 列值分组）。
+ * List conflicts pending review, grouped by sheet and column A value.
  */
 export async function listConflicts(): Promise<ConflictListResponse> {
   const response = await fetch(`${API_BASE}/imports/conflicts`);
@@ -74,7 +74,7 @@ export async function listConflicts(): Promise<ConflictListResponse> {
 }
 
 /**
- * 提交冲突复核结果。
+ * Submit conflict review results.
  */
 export async function resolveConflicts(
   resolutions: ConflictResolution[],
@@ -89,7 +89,7 @@ export async function resolveConflicts(
 }
 
 // ---------------------------------------------------------------------------
-// 浏览
+// Browse
 // ---------------------------------------------------------------------------
 export async function listSectors(): Promise<Sector[]> {
   const response = await fetch(`${API_BASE}/sectors`);
@@ -138,7 +138,7 @@ export async function getTechnology(technologyId: number): Promise<TechnologyDet
 }
 
 /**
- * 健康检查。
+ * Health check.
  */
 export async function checkHealth(): Promise<{ status: string; database: string }> {
   const response = await fetch(`${API_BASE}/health`);

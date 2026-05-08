@@ -16,7 +16,7 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
       if (!file) return;
       const lower = file.name.toLowerCase();
       if (!lower.endsWith('.xlsx') && !lower.endsWith('.xlsm')) {
-        alert('仅支持 .xlsx / .xlsm 文件');
+        alert('Only .xlsx / .xlsm files are supported');
         return;
       }
       onFileSelected(file);
@@ -26,7 +26,7 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     handleSelect(event.target.files?.[0]);
-    event.target.value = ''; // 允许同名文件再次触发
+    event.target.value = ''; // Allow selecting the same file again.
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -48,7 +48,7 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
       onClick={() => !disabled && inputRef.current?.click()}
       role="button"
       tabIndex={0}
-      aria-label="选择或拖拽 Excel 文件"
+      aria-label="Select or drag an Excel file"
     >
       <input
         ref={inputRef}
@@ -60,9 +60,9 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
       />
       <div className="drop-icon" aria-hidden="true">📂</div>
       <div className="drop-text">
-        <strong>点击选择</strong> 或将 .xlsx 文件 <strong>拖拽到此处</strong>
+        <strong>Click to choose</strong> or <strong>drag a .xlsx file here</strong>
       </div>
-      <div className="drop-hint">仅支持 .xlsx / .xlsm，单文件 ≤ 50 MB</div>
+      <div className="drop-hint">.xlsx / .xlsm only, max 50 MB per file</div>
     </div>
   );
 }

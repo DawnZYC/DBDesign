@@ -25,7 +25,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
     listConflicts()
       .then((res) => {
         setGroups(res.groups);
-        // 默认选 TRUST_SHEET（保持当前默认行为，最保险）
+        // Default to TRUST_SHEET to preserve the current behavior.
         const initial: DecisionMap = {};
         for (const g of res.groups) {
           initial[g.group_id] = 'TRUST_SHEET';
@@ -75,33 +75,33 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <header className="modal-header">
           <div>
-            <h2>冲突复核</h2>
+            <h2>Conflict Review</h2>
             <p className="modal-subtitle">
-              系统在 sheet 名与 A 列内容冲突的行上暂停了导入。请逐组决定使用哪边。
+              Rows where the sheet name conflicts with column A were held. Choose which value to use for each group.
             </p>
           </div>
           <button
             type="button"
             className="modal-close"
             onClick={onClose}
-            aria-label="关闭"
+            aria-label="Close"
           >
             ✕
           </button>
         </header>
 
         <div className="modal-body">
-          {loading && <div className="modal-empty">加载中…</div>}
+          {loading && <div className="modal-empty">Loading...</div>}
 
           {!loading && error && (
             <div className="modal-error">
-              <strong>加载失败：</strong>
+              <strong>Failed to load:</strong>
               <pre>{error}</pre>
             </div>
           )}
 
           {!loading && !error && groups && groups.length === 0 && (
-            <div className="modal-empty">当前没有待复核的冲突 ✓</div>
+            <div className="modal-empty">No conflicts are pending review ✓</div>
           )}
 
           {!loading && groups && groups.length > 0 && (
@@ -112,12 +112,12 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                   <li key={group.group_id} className="conflict-card">
                     <div className="conflict-header">
                       <strong>{group.sheet_name}</strong>
-                      <span className="conflict-rows">{group.rows.length} 行</span>
+                      <span className="conflict-rows">{group.rows.length} rows</span>
                     </div>
 
                     <div className="conflict-versus">
                       <div className="versus-side">
-                        <span className="versus-label">Sheet 名</span>
+                        <span className="versus-label">Sheet Name</span>
                         <span className="versus-value">{group.sheet_name}</span>
                         <span className="versus-arrow">→</span>
                         <span className="versus-sector">
@@ -125,24 +125,24 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                         </span>
                       </div>
                       <div className="versus-side">
-                        <span className="versus-label">A 列</span>
+                        <span className="versus-label">Column A</span>
                         <span className="versus-value">
                           {group.a_column_value ?? '—'}
                         </span>
                         <span className="versus-arrow">→</span>
                         <span className="versus-sector">
-                          {group.a_column_sector_code ?? '无法解析'}
+                          {group.a_column_sector_code ?? 'Unresolved'}
                         </span>
                       </div>
                     </div>
 
                     <div className="conflict-rows-list">
-                      影响行号：
+                      Affected rows:
                       {group.rows
                         .slice(0, 12)
                         .map((r) => `R${r.excel_row_number}`)
                         .join(', ')}
-                      {group.rows.length > 12 && ` … 等 ${group.rows.length} 行`}
+                      {group.rows.length > 12 && ` ... ${group.rows.length} rows total`}
                     </div>
 
                     <div className="decision-row">
@@ -161,7 +161,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                           disabled={!group.sheet_sector_code}
                         />
                         <span>
-                          信 sheet（{group.sheet_sector_code ?? '—'}）
+                          Trust sheet ({group.sheet_sector_code ?? '—'})
                         </span>
                       </label>
                       <label
@@ -179,7 +179,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                           disabled={!group.a_column_sector_code}
                         />
                         <span>
-                          信 A 列（{group.a_column_sector_code ?? '不可用'}）
+                          Trust column A ({group.a_column_sector_code ?? 'unavailable'})
                         </span>
                       </label>
                       <label
@@ -195,7 +195,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                             handleDecisionChange(group.group_id, 'SKIP')
                           }
                         />
-                        <span>跳过（不导入）</span>
+                        <span>Skip (do not import)</span>
                       </label>
                     </div>
                   </li>
@@ -207,7 +207,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
 
         <footer className="modal-footer">
           <span className="modal-meta">
-            共 {groups?.length ?? 0} 组 · {totalRows} 行待处理
+            {groups?.length ?? 0} groups · {totalRows} rows pending
           </span>
           <div className="modal-actions">
             <button
@@ -216,7 +216,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
               onClick={onClose}
               disabled={submitting}
             >
-              稍后再说
+              Later
             </button>
             <button
               type="button"
@@ -230,7 +230,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                 error !== null
               }
             >
-              {submitting ? '提交中…' : `应用决定（${totalRows} 行）`}
+              {submitting ? 'Submitting...' : `Apply Decisions (${totalRows} rows)`}
             </button>
           </div>
         </footer>

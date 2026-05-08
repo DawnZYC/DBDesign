@@ -1,4 +1,4 @@
-"""数据库连接 & 会话工厂。"""
+"""Database connection and session factory."""
 from __future__ import annotations
 
 from collections.abc import Generator
@@ -13,7 +13,7 @@ _settings = get_settings()
 
 
 def _engine_kwargs(url: str) -> dict[str, object]:
-    """SQLite memory 必须共享连接池；PG 走标准连接池。"""
+    """SQLite memory databases need a shared pool; PostgreSQL uses the standard pool."""
     if ":memory:" in url:
         return {
             "future": True,
@@ -42,11 +42,11 @@ SessionLocal = sessionmaker(
 
 
 class Base(DeclarativeBase):
-    """所有 ORM 模型的基类。"""
+    """Base class for all ORM models."""
 
 
 def get_db() -> Generator[Session, None, None]:
-    """FastAPI 依赖：每个请求一个 Session，结束时自动关闭。"""
+    """FastAPI dependency: one Session per request, closed at the end."""
     db = SessionLocal()
     try:
         yield db

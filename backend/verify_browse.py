@@ -1,7 +1,7 @@
-"""验证浏览端点的契约（用 FastAPI TestClient + SQLite，无 PG 依赖）。
+"""Verify browsing endpoint contracts with FastAPI TestClient and SQLite, without PostgreSQL.
 
-只检查路由是否注册、响应字段是否对得上、过滤参数是否生效。
-真正的业务数据请用 verify_import.py（依赖完整 PG ORM）。
+This checks only route registration, response fields, and filtering behavior.
+Use verify_import.py for real business data behavior; it depends on the full PostgreSQL ORM.
 """
 from __future__ import annotations
 
@@ -12,32 +12,32 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import os
 
-# 用 SQLite 内存库屏蔽真实 PG 依赖；JSONB 在 SQLite 上回退为 JSON 兼容类型
+# Use an in-memory SQLite database to avoid real PostgreSQL dependencies.
 os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 
-# 关键：在 SQLite 上把 JSONB 模拟成 JSON
+# Key point: emulate JSONB as JSON on SQLite.
 from sqlalchemy.dialects import postgresql
 import sqlalchemy.types as sa_types
 
-# 让 JSONB 在非 PG dialect 上 fallback 到 JSON
+# Let JSONB fall back to JSON on non-PostgreSQL dialects.
 postgresql.JSONB.cache_ok = True
 
 import app.database as dbmod
 from app import models
 from app.main import app
 
-# 复用 app.database 里的同一个 engine（sqlite memory 在不同连接间不共享数据，
-# 必须用同一个 engine 才能看到我们建的表）
+# Reuse the same engine from app.database. SQLite memory databases do not share
+# data across connections unless the same engine is used.
 engine = dbmod.engine
 TestSession = dbmod.SessionLocal
 
 
 def _create_tables() -> None:
-    """SQLite 不支持 JSONB / TIMESTAMPTZ；用通用类型重建一份用于 smoke test。"""
+    """Rebuild tables with generic types because SQLite does not support JSONB / TIMESTAMPTZ."""
     from sqlalchemy import (
         Column,
         Integer,
@@ -206,7 +206,7 @@ def _create_tables() -> None:
 
 
 def _seed() -> None:
-    """塞一份测试数据：1 个 sector / 1 个 geography / 2 个技术 + 一些年份。"""
+    """Seed test data: one sector, one geography, two technologies, and several years."""
     from sqlalchemy import text
 
     with engine.begin() as conn:
@@ -229,7 +229,7 @@ def _seed() -> None:
             "VALUES (2, 1, 'IRFELECAE00', 'Refinery Compressed Air System', 2018, 15, NULL)"
         ))
 
-        # 给 PWRNGACCF01 加 2 个年份
+        # Add two years for PWRNGACCF01.
         conn.execute(text(
             "INSERT INTO technology_year(technology_id, data_year) VALUES (1, 2018)"
         ))
@@ -263,7 +263,7 @@ def main() -> None:
     _create_tables()
     _seed()
 
-    # 把全局 engine / SessionLocal 换成测试用的
+    # Replace global engine / SessionLocal with the test versions.
     dbmod.engine = engine
     dbmod.SessionLocal = TestSession
     app.dependency_overrides[dbmod.get_db] = _override_get_db
@@ -304,7 +304,7 @@ def main() -> None:
     print(f"  status={r.status_code}  total={body['total']}")
     assert body["total"] == 1
 
-    print("\n== /api/technologies/1 (详情) ==")
+    print("\n== /api/technologies/1 (detail) ==")
     r = client.get("/api/technologies/1")
     body = r.json()
     print(
@@ -325,7 +325,7 @@ def main() -> None:
     assert len(y0["commodities"]) == 1
     c0 = y0["commodities"][0]
     assert c0["commodity_code"] == "PWRNGA"
-    # 验证扩展的字典字段也回流到了响应里
+    # Verify extended dictionary fields are included in the response.
     assert c0["commodity_set"] == "NRG", f"expected NRG, got {c0['commodity_set']}"
     assert c0["commodity_description"] == "Power Natural Gas"
     assert c0["unit"] == "PJ"
@@ -335,7 +335,7 @@ def main() -> None:
     print(f"  status={r.status_code}  body={r.json()}")
     assert r.status_code == 404
 
-    print("\n所有 browse API 契约测试通过 ✓")
+    print("\nAll browse API contract tests passed ✓")
 
 
 if __name__ == "__main__":

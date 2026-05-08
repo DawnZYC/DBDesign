@@ -1,14 +1,14 @@
-"""Excel → PostgreSQL 导入服务。
+"""Excel to PostgreSQL import service.
 
-每个 sheet 数据行 (row >= 10) 的处理流程：
-  1. 写入 raw_excel_row
-  2. 按 sheet 名映射 sector
-  3. upsert geography / data_source / commodity 字典
-  4. 写 traceability_record（A:G + sheet 元信息）
-  5. upsert technology_process（H/I/L/M/N，按 (tech_code, geography) 唯一）
-  6. 写 technology_year（K，按 (technology_id, data_year) 唯一）
-  7. 写各 satellite 表：ecotea_parameter / wp_descriptor / commodity / constraint / constraint_detail
-  8. 收集 #VALUE! 等公式错误到 data_quality_issue
+Processing flow for each sheet data row (row >= 10):
+  1. Write raw_excel_row.
+  2. Map sector by sheet name.
+  3. Upsert geography / data_source / commodity dictionaries.
+  4. Write traceability_record with A:G plus sheet metadata.
+  5. Upsert technology_process from H/I/L/M/N, unique by (tech_code, geography).
+  6. Write technology_year from K, unique by (technology_id, data_year).
+  7. Write satellite tables: ecotea_parameter / wp_descriptor / commodity / constraint / constraint_detail.
+  8. Collect formula errors such as #VALUE! into data_quality_issue.
 """
 from __future__ import annotations
 
@@ -50,25 +50,25 @@ from app.services.value_cleaner import (
 logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
-# 常量
+# Constants
 # -----------------------------------------------------------------------------
-DATA_START_ROW = 10  # 第 10 行开始是数据行（前 9 行是表头/元信息）
+DATA_START_ROW = 10  # Data starts at row 10; rows 1-9 are headers/metadata.
 
-# raw_excel_row.normalized_status 取值
-STATUS_NORMALIZED = "normalized"          # 已成功写入业务表
-STATUS_PENDING_SECTOR = "pending_sector_review"  # sector 冲突，待用户复核
-STATUS_SKIPPED = "skipped"                # 用户决定跳过
-STATUS_PENDING = "pending"                # 初始
+# raw_excel_row.normalized_status values.
+STATUS_NORMALIZED = "normalized"          # Successfully written to business tables.
+STATUS_PENDING_SECTOR = "pending_sector_review"  # Sector conflict awaiting user review.
+STATUS_SKIPPED = "skipped"                # User chose to skip.
+STATUS_PENDING = "pending"                # Initial state.
 
 ISSUE_SECTOR_CONFLICT = "sector_conflict"
 
-# decision 取值
+# Decision values.
 DECISION_TRUST_SHEET = "TRUST_SHEET"
 DECISION_TRUST_A = "TRUST_A"
 DECISION_SKIP = "SKIP"
 VALID_DECISIONS = {DECISION_TRUST_SHEET, DECISION_TRUST_A, DECISION_SKIP}
 
-# Sheet 名 → sector_code 映射（以 sheet 名为权威，A 列只做 raw 备份）
+# Sheet name to sector_code mapping. Sheet name is authoritative; column A is kept as raw backup.
 SHEET_TO_SECTOR_CODE: dict[str, str] = {
     "Power": "POWER",
     "Industry": "INDUSTRY",
@@ -82,7 +82,7 @@ SHEET_TO_SECTOR_CODE: dict[str, str] = {
     "InfoComm": "INFOCOMM",
 }
 
-# AJ:AL 三个详情列（构造 constraint_detail 时用）
+# AJ:AL detail columns used to build constraint_detail rows.
 CONSTRAINT_DETAIL_COLUMNS: tuple[tuple[str, str], ...] = (
     ("AJ", "max_import_possible"),
     ("AK", "max_solar_output_allowed"),
@@ -91,7 +91,7 @@ CONSTRAINT_DETAIL_COLUMNS: tuple[tuple[str, str], ...] = (
 
 
 # -----------------------------------------------------------------------------
-# 入口
+# Entry point
 # -----------------------------------------------------------------------------
 def import_excel(
     db: Session,
@@ -102,16 +102,16 @@ def import_excel(
     note: str | None = None,
     selected_sheets: list[str] | None = None,
 ) -> ImportResult:
-    """执行一次 Excel 导入，返回汇总结果。
+    """Run one Excel import and return a summary.
 
     Args:
-        selected_sheets: 仅导入这些 sheet（按 sheet 名）。为 None 或空时导入全部已知 sheet。
-            未识别的 sheet 名会被忽略并记入日志。
+        selected_sheets: Import only these sheets by sheet name. None or empty imports
+            all known sheets. Unknown sheet names are ignored and logged.
     """
 
     started = time.perf_counter()
 
-    # 1) 创建 import_batch
+    # 1) Create import_batch.
     batch = models.ImportBatch(
         file_name=file_name,
         file_hash=hashlib.sha256(file_bytes).hexdigest(),
@@ -120,12 +120,12 @@ def import_excel(
         imported_at=datetime.now(timezone.utc),
     )
     db.add(batch)
-    db.flush()  # 拿到 batch.import_batch_id
+    db.flush()  # Obtain batch.import_batch_id.
 
-    # 2) 加载 workbook（只读、纯数据，避开公式重算）
+    # 2) Load workbook in read-only data-only mode to avoid formula recalculation.
     workbook = load_workbook(filename=BytesIO(file_bytes), data_only=True, read_only=False)
 
-    # 3) 根据白名单决定要处理的 sheet 列表
+    # 3) Decide which sheets to process from the allowlist.
     requested = _normalize_sheet_filter(selected_sheets, workbook.sheetnames)
 
     sheet_summaries: list[ImportSheetSummary] = []
@@ -136,10 +136,10 @@ def import_excel(
 
     for sheet_name in workbook.sheetnames:
         if sheet_name not in SHEET_TO_SECTOR_CODE:
-            logger.warning("跳过未识别的 sheet: %s", sheet_name)
+            logger.warning("Skipping unrecognized sheet: %s", sheet_name)
             continue
         if requested is not None and sheet_name not in requested:
-            logger.info("按白名单跳过 sheet: %s", sheet_name)
+            logger.info("Skipping sheet due to allowlist: %s", sheet_name)
             continue
 
         worksheet = workbook[sheet_name]
@@ -167,7 +167,7 @@ def import_excel(
 
 
 # -----------------------------------------------------------------------------
-# 单 sheet 导入
+# Single-sheet import
 # -----------------------------------------------------------------------------
 def _import_sheet(
     db: Session,
@@ -176,17 +176,18 @@ def _import_sheet(
     worksheet: Worksheet,
     sheet_name: str,
 ) -> ImportSheetSummary:
-    """处理一个 sheet 的所有数据行。
+    """Process all data rows in one sheet.
 
-    支持「稀疏行」模式：某些 sheet（Transport / Water / Waste / Building /
-    Household / Agri / InfoComm）会用第 10 行存完整 metadata，后续行只填
-    K（年份）和 AD（需求）等变化字段，H 列留空表示沿用上一行的技术。
-    本函数实现 H 列以及 traceability/master metadata 的「向下填充」。
+    Supports sparse-row mode: some sheets such as Transport / Water / Waste /
+    Building / Household / Agri / InfoComm store full metadata in row 10, while
+    later rows only fill changing fields such as K (year) and AD (demand). An
+    empty H column means the technology from the previous row should be reused.
+    This function forward-fills column H plus traceability/master metadata.
     """
 
     sector = _get_sector_by_sheet_name(db, sheet_name=sheet_name)
 
-    # 这些列在「稀疏行」模式下需要从最近一条 H 非空的行继承
+    # These columns inherit from the nearest previous row with non-empty H in sparse-row mode.
     INHERIT_COLUMNS = ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "L", "M", "N")
 
     rows_imported = 0
@@ -199,29 +200,29 @@ def _import_sheet(
     for excel_row_number in range(DATA_START_ROW, last_row + 1):
         cells = _read_row_as_dict(worksheet=worksheet, row_number=excel_row_number)
 
-        # 全空行直接跳过
+        # Skip fully empty rows.
         if all(is_placeholder(v) for v in cells.values()):
             rows_skipped += 1
             continue
 
-        # 「稀疏行」处理：H 为空但至少有 K（年份），就把 metadata 列向下填充
+        # Sparse-row handling: if H is empty but K (year) exists, forward-fill metadata columns.
         if is_placeholder(cells.get("H")):
             if not inherited_metadata:
-                # 没有可继承的上文（首行就稀疏），跳过
+                # No previous metadata to inherit, such as a sparse first row.
                 rows_skipped += 1
                 continue
             for column in INHERIT_COLUMNS:
                 if is_placeholder(cells.get(column)):
                     cells[column] = inherited_metadata.get(column)
         else:
-            # 这一行有 H，刷新 metadata 缓存（只缓存非空的）
+            # This row has H, so refresh the metadata cache with non-empty values.
             inherited_metadata = {
                 column: cells.get(column)
                 for column in INHERIT_COLUMNS
                 if not is_placeholder(cells.get(column))
             }
 
-        # 1) 写 raw_excel_row（保留行内真实出现的内容，不写继承值）
+        # 1) Write raw_excel_row with only values actually present in the row, not inherited values.
         raw_cells_payload = _read_row_as_dict(
             worksheet=worksheet, row_number=excel_row_number
         )
@@ -231,20 +232,20 @@ def _import_sheet(
             excel_row_number=excel_row_number,
             row_type="data",
             raw_cells={k: _jsonify(v) for k, v in raw_cells_payload.items()},
-            normalized_status=STATUS_PENDING,  # 后续根据处理结果改
+            normalized_status=STATUS_PENDING,  # Updated later based on the processing result.
         )
         db.add(raw_row)
         db.flush()
 
-        # 2) 检查 sector 冲突：只看行内显式写的 A 列（不算继承值），
-        #    避免续行连带被误判
+        # 2) Check sector conflicts using only explicit column A values in this row,
+        #    excluding inherited values so continuation rows are not falsely flagged.
         explicit_a_value = raw_cells_payload.get("A")
         a_sector_code = resolve_sector_from_text(explicit_a_value)
         if (
             a_sector_code is not None
             and a_sector_code != sector.sector_code
         ):
-            # 冲突：暂不写业务表，标 pending，留 issue
+            # Conflict: do not write business tables yet; mark pending and record an issue.
             raw_row.normalized_status = STATUS_PENDING_SECTOR
             db.add(
                 models.DataQualityIssue(
@@ -255,8 +256,8 @@ def _import_sheet(
                     issue_type=ISSUE_SECTOR_CONFLICT,
                     original_value=str(explicit_a_value) if explicit_a_value is not None else None,
                     issue_message=(
-                        f"sheet 名为 {sheet_name}（→{sector.sector_code}）"
-                        f"，但 A 列写的是 '{explicit_a_value}'（→{a_sector_code}）"
+                        f"sheet name is {sheet_name} (->{sector.sector_code}), "
+                        f"but column A is '{explicit_a_value}' (->{a_sector_code})"
                     ),
                 )
             )
@@ -264,7 +265,7 @@ def _import_sheet(
             issues += 1
             continue
 
-        # 3) 写业务记录（用继承后的 cells）
+        # 3) Write business records using inherited cells.
         new_issues = _process_data_row(
             db=db,
             batch=batch,
@@ -289,7 +290,7 @@ def _import_sheet(
 
 
 # -----------------------------------------------------------------------------
-# 单行处理
+# Single-row processing
 # -----------------------------------------------------------------------------
 def _process_data_row(
     db: Session,
@@ -301,11 +302,11 @@ def _process_data_row(
     sheet_name: str,
     excel_row_number: int,
 ) -> int:
-    """处理单个数据行，返回新增的 data_quality_issue 数量。"""
+    """Process one data row and return the number of new data_quality_issue rows."""
 
     new_issues = 0
 
-    # ---- 字典 upsert（geography 仍走字典；data_source 已合并到 trace 表内） ----
+    # ---- Dictionary upserts. Geography remains a dictionary; data_source is merged into traceability. ----
     geography = _upsert_geography(db, code=clean_text(cells.get("J")) or "UNKNOWN")
 
     # ---- traceability_record ----
@@ -325,7 +326,7 @@ def _process_data_row(
     db.add(trace)
     db.flush()
 
-    # ---- technology_process（按 (code, geography) upsert）----
+    # ---- technology_process, upserted by (code, geography) ----
     tech = _upsert_technology_process(
         db,
         sector_id=sector.sector_id,
@@ -336,7 +337,7 @@ def _process_data_row(
     # ---- technology_year ----
     data_year_result = clean_numeric(cells.get("K"))
     if data_year_result.value is None:
-        # 没年份就没 anchor，记一个 issue
+        # No year means no anchor row; record an issue.
         _record_issue(
             db,
             raw_row=raw_row,
@@ -345,7 +346,7 @@ def _process_data_row(
             column="K",
             issue_type="missing_year",
             original_value=cells.get("K"),
-            issue_message="data_year 必填但缺失，无法建 technology_year anchor",
+            issue_message="data_year is required but missing; cannot create technology_year anchor",
         )
         return new_issues + 1
 
@@ -377,7 +378,7 @@ def _process_data_row(
         excel_row_number=excel_row_number,
     )
 
-    # ---- junction: technology_year_commodity（多商品按顺序）----
+    # ---- junction: technology_year_commodity, preserving multi-commodity order ----
     _insert_commodities(db, tech_year=tech_year, cells=cells)
 
     # ---- satellite 3: constraint (AH/AI) ----
@@ -404,14 +405,14 @@ def _process_data_row(
 
 
 # -----------------------------------------------------------------------------
-# upsert 工具函数
+# Upsert helpers
 # -----------------------------------------------------------------------------
 def _get_sector_by_sheet_name(db: Session, *, sheet_name: str) -> models.Sector:
-    """sheet 名 → sector（应在 schema 初始化时已 INSERT，这里只是查找）。"""
+    """Map sheet name to sector. Sectors should already exist from schema initialization."""
     code = SHEET_TO_SECTOR_CODE[sheet_name]
     sector = db.scalar(select(models.Sector).where(models.Sector.sector_code == code))
     if not sector:
-        # 防御：万一没预置数据
+        # Defensive fallback if seed data is missing.
         sector = models.Sector(sector_code=code, sector_name=sheet_name)
         db.add(sector)
         db.flush()
@@ -419,7 +420,7 @@ def _get_sector_by_sheet_name(db: Session, *, sheet_name: str) -> models.Sector:
 
 
 def _upsert_geography(db: Session, *, code: str) -> models.Geography:
-    """按 geography_code upsert。"""
+    """Upsert by geography_code."""
     existing = db.scalar(
         select(models.Geography).where(models.Geography.geography_code == code)
     )
@@ -432,7 +433,7 @@ def _upsert_geography(db: Session, *, code: str) -> models.Geography:
 
 
 def _upsert_commodity(db: Session, *, code: str) -> models.Commodity:
-    """按 commodity_code upsert。"""
+    """Upsert by commodity_code."""
     existing = db.scalar(
         select(models.Commodity).where(models.Commodity.commodity_code == code)
     )
@@ -451,10 +452,10 @@ def _upsert_technology_process(
     geography_id: int,
     cells: dict[str, Any],
 ) -> models.TechnologyProcess:
-    """按 (technology_code, geography_id) upsert。"""
+    """Upsert by (technology_code, geography_id)."""
     code = clean_text(cells.get("H"))
     if not code:
-        raise ValueError("technology_code 必填")
+        raise ValueError("technology_code is required")
 
     existing = db.scalar(
         select(models.TechnologyProcess).where(
@@ -489,14 +490,16 @@ def _upsert_technology_year(
     traceability_id: int,
     raw_row_id: int,
 ) -> models.TechnologyYear:
-    """按 (technology_id, data_year) upsert。
+    """Upsert by (technology_id, data_year).
 
-    同一 (技术, 年份) 重复导入时：
-      - 复用已存在的 technology_year 行（保留其主键，避免外键级联破坏）
-      - **清空其所有 satellite 行**（ecotea_parameter / wp_descriptor /
-        commodity / constraint / constraint_detail），让本次导入重新写入；
-        否则会因为 UNIQUE(technology_year_id, commodity_order) 等约束冲突
-      - 刷新 traceability / raw_row 指针为本次的
+    When the same (technology, year) is imported again:
+      - Reuse the existing technology_year row and keep its primary key to avoid
+        breaking foreign-key relationships.
+      - Clear all satellite rows for ecotea_parameter / wp_descriptor /
+        commodity / constraint / constraint_detail so this import can rewrite them.
+        Otherwise UNIQUE constraints such as (technology_year_id, commodity_order)
+        would conflict.
+      - Refresh traceability and raw_row references to this import.
     """
     existing = db.scalar(
         select(models.TechnologyYear).where(
@@ -524,7 +527,7 @@ def _upsert_technology_year(
 
 
 def _clear_satellite_rows(db: Session, *, technology_year_id: int) -> None:
-    """删除某 technology_year 下所有 satellite 行，让 import 可重入。"""
+    """Delete all satellite rows under one technology_year so imports are reentrant."""
     for model_cls in (
         models.TechnologyYearEcoteaParameter,
         models.TechnologyYearWpDescriptor,
@@ -541,7 +544,7 @@ def _clear_satellite_rows(db: Session, *, technology_year_id: int) -> None:
 
 
 # -----------------------------------------------------------------------------
-# Satellite 写入
+# Satellite writes
 # -----------------------------------------------------------------------------
 def _insert_ecotea_parameter(
     db: Session,
@@ -552,7 +555,7 @@ def _insert_ecotea_parameter(
     sheet_name: str,
     excel_row_number: int,
 ) -> int:
-    """O:Y 列。返回新增 issue 数。"""
+    """Columns O:Y. Return the number of new issues."""
     issues = 0
 
     field_to_column = {
@@ -595,7 +598,7 @@ def _insert_ecotea_parameter(
                     column=column,
                     issue_type="formula_error",
                     original_value=cell,
-                    issue_message=f"{field} 字段为公式错误 {result.excel_error}",
+                    issue_message=f"{field} field has formula error {result.excel_error}",
                 )
                 issues += 1
             if result.value is not None:
@@ -622,7 +625,7 @@ def _insert_wp_descriptor(
     sheet_name: str,
     excel_row_number: int,
 ) -> int:
-    """Z, AA, AF, AG 列。返回新增 issue 数。"""
+    """Columns Z, AA, AF, AG. Return the number of new issues."""
     issues = 0
 
     eff = parse_efficiency(cells.get("Z"))
@@ -635,7 +638,7 @@ def _insert_wp_descriptor(
             column="Z",
             issue_type="formula_error",
             original_value=cells.get("Z"),
-            issue_message=f"efficiency 字段为公式错误 {eff.excel_error}",
+            issue_message=f"efficiency field has formula error {eff.excel_error}",
         )
         issues += 1
 
@@ -653,7 +656,7 @@ def _insert_wp_descriptor(
                 column=column,
                 issue_type="formula_error",
                 original_value=cells.get(column),
-                issue_message=f"列 {column} 为公式错误 {result.excel_error}",
+                issue_message=f"column {column} has formula error {result.excel_error}",
             )
             issues += 1
 
@@ -684,7 +687,7 @@ def _insert_commodities(
     tech_year: models.TechnologyYear,
     cells: dict[str, Any],
 ) -> None:
-    """AB:AE 列。"""
+    """Columns AB:AE."""
     shares = parse_commodity_combo(cells.get("AC"), cells.get("AB"))
     if not shares:
         return
@@ -726,7 +729,7 @@ def _insert_constraint(
     sheet_name: str,
     excel_row_number: int,
 ) -> int:
-    """AH:AI 列。返回新增 issue 数。"""
+    """Columns AH:AI. Return the number of new issues."""
     cap = clean_numeric(cells.get("AH"))
     bound = clean_text(cells.get("AI"))
 
@@ -739,7 +742,7 @@ def _insert_constraint(
             column="AH",
             issue_type="formula_error",
             original_value=cells.get("AH"),
-            issue_message=f"capacity 字段为公式错误 {cap.excel_error}",
+            issue_message=f"capacity field has formula error {cap.excel_error}",
         )
 
     if cap.value is None and not bound:
@@ -765,7 +768,7 @@ def _insert_constraint_details(
     sheet_name: str,
     excel_row_number: int,
 ) -> int:
-    """AJ:AL 列。每个非空列插入一条记录。"""
+    """Columns AJ:AL. Insert one row for each non-empty column."""
     issues = 0
     for column, detail_type in CONSTRAINT_DETAIL_COLUMNS:
         result = clean_numeric(cells.get(column))
@@ -778,7 +781,7 @@ def _insert_constraint_details(
                 column=column,
                 issue_type="formula_error",
                 original_value=cells.get(column),
-                issue_message=f"列 {column} ({detail_type}) 为公式错误 {result.excel_error}",
+                issue_message=f"column {column} ({detail_type}) has formula error {result.excel_error}",
             )
             issues += 1
         if result.value is None:
@@ -794,7 +797,7 @@ def _insert_constraint_details(
 
 
 # -----------------------------------------------------------------------------
-# 工具
+# Utilities
 # -----------------------------------------------------------------------------
 def _record_issue(
     db: Session,
@@ -807,7 +810,7 @@ def _record_issue(
     original_value: Any,
     issue_message: str,
 ) -> None:
-    """写入 data_quality_issue。"""
+    """Write a data_quality_issue row."""
     db.add(
         models.DataQualityIssue(
             raw_row_id=raw_row.raw_row_id,
@@ -822,7 +825,7 @@ def _record_issue(
 
 
 def _read_row_as_dict(*, worksheet: Worksheet, row_number: int) -> dict[str, Any]:
-    """读取一行返回 {column_letter: value} 字典。"""
+    """Read one row and return a {column_letter: value} dictionary."""
     cells: dict[str, Any] = {}
     for col_index in range(1, (worksheet.max_column or 0) + 1):
         letter = get_column_letter(col_index)
@@ -831,7 +834,7 @@ def _read_row_as_dict(*, worksheet: Worksheet, row_number: int) -> dict[str, Any
 
 
 def _jsonify(value: Any) -> Any:
-    """把 cell 值转成可 JSON 序列化的形式（处理 datetime 等）。"""
+    """Convert a cell value into a JSON-serializable value, including datetime handling."""
     if value is None:
         return None
     if isinstance(value, (str, int, float, bool)):
@@ -840,7 +843,7 @@ def _jsonify(value: Any) -> Any:
 
 
 def _geography_full_name(code: str) -> str | None:
-    """常见 geography 代码的展开名称（不在表里的就 None）。"""
+    """Expand common geography codes. Return None for unknown values."""
     return {
         "SG": "Singapore",
         "MY": "Malaysia",
@@ -851,7 +854,7 @@ def _geography_full_name(code: str) -> str | None:
 
 
 def list_pending_conflicts(db: Session) -> ConflictListResponse:
-    """列出所有待复核的 sector 冲突，按 (sheet, A 列原值) 分组。"""
+    """List all sector conflicts pending review, grouped by (sheet, raw column A value)."""
     rows = list(
         db.scalars(
             select(models.RawExcelRow)
@@ -866,7 +869,7 @@ def list_pending_conflicts(db: Session) -> ConflictListResponse:
     if not rows:
         return ConflictListResponse(total_pending=0, groups=[])
 
-    # 把每个 raw_row 的 A 列原值挑出来，按 (sheet, a_value) 分组
+    # Extract each raw_row column A value and group by (sheet, a_value).
     grouped: dict[tuple[str, str | None], list[models.RawExcelRow]] = {}
     for row in rows:
         a_value = row.raw_cells.get("A") if isinstance(row.raw_cells, dict) else None
@@ -892,9 +895,9 @@ def list_pending_conflicts(db: Session) -> ConflictListResponse:
                     for r in members
                 ],
                 message=(
-                    f"{sheet_name} sheet 共 {len(members)} 行有冲突："
-                    f"sheet 名指向 {sheet_sector}，"
-                    f"但 A 列写的是 '{a_value}' → {a_sector or '无法解析'}"
+                    f"{sheet_name} sheet has {len(members)} conflicting rows: "
+                    f"the sheet name maps to {sheet_sector}, "
+                    f"but column A is '{a_value}' -> {a_sector or 'unresolved'}"
                 ),
             )
         )
@@ -905,7 +908,7 @@ def list_pending_conflicts(db: Session) -> ConflictListResponse:
 def resolve_pending_conflicts(
     db: Session, *, resolutions: list[ConflictResolution]
 ) -> ConflictResolveResponse:
-    """根据用户决定逐行处理 pending 行：写入业务表 / 跳过。"""
+    """Process pending rows according to user decisions: write business tables or skip."""
     resolved = 0
     failed = 0
     failure_reasons: list[str] = []
@@ -914,7 +917,7 @@ def resolve_pending_conflicts(
         if item.decision not in VALID_DECISIONS:
             failed += 1
             failure_reasons.append(
-                f"raw_row_id={item.raw_row_id}: 未知 decision '{item.decision}'"
+                f"raw_row_id={item.raw_row_id}: unknown decision '{item.decision}'"
             )
             continue
         try:
@@ -930,7 +933,7 @@ def resolve_pending_conflicts(
     if resolved > 0 and failed == 0:
         db.commit()
     elif resolved > 0 and failed > 0:
-        # 部分成功也提交（已 rollback 的失败项不会有副作用）
+        # Commit partial success; rolled-back failures have no side effects.
         db.commit()
 
     return ConflictResolveResponse(
@@ -941,14 +944,14 @@ def resolve_pending_conflicts(
 def _resolve_single_conflict(
     db: Session, *, raw_row_id: int, decision: str
 ) -> None:
-    """处理一条 pending 行。"""
+    """Process one pending row."""
     raw_row = db.get(models.RawExcelRow, raw_row_id)
     if raw_row is None:
-        raise ValueError(f"raw_row {raw_row_id} 不存在")
+        raise ValueError(f"raw_row {raw_row_id} does not exist")
     if raw_row.normalized_status != STATUS_PENDING_SECTOR:
         raise ValueError(
-            f"raw_row {raw_row_id} 状态为 '{raw_row.normalized_status}'，"
-            f"非 pending_sector_review，已被处理过"
+            f"raw_row {raw_row_id} status is '{raw_row.normalized_status}', "
+            f"not pending_sector_review; it has already been processed"
         )
 
     if decision == DECISION_SKIP:
@@ -965,19 +968,19 @@ def _resolve_single_conflict(
 
     if not sector_code:
         raise ValueError(
-            f"无法根据 decision='{decision}' 推出 sector_code"
-            f"（sheet={sheet_name}, A={cells.get('A')!r}）"
+            f"cannot derive sector_code from decision='{decision}' "
+            f"(sheet={sheet_name}, A={cells.get('A')!r})"
         )
 
     sector = db.scalar(
         select(models.Sector).where(models.Sector.sector_code == sector_code)
     )
     if sector is None:
-        raise ValueError(f"sector_code '{sector_code}' 在 sector 表里不存在")
+        raise ValueError(f"sector_code '{sector_code}' does not exist in the sector table")
 
     batch = db.get(models.ImportBatch, raw_row.import_batch_id)
     if batch is None:
-        raise ValueError(f"对应的 import_batch {raw_row.import_batch_id} 不存在")
+        raise ValueError(f"corresponding import_batch {raw_row.import_batch_id} does not exist")
 
     _process_data_row(
         db=db,
@@ -992,7 +995,7 @@ def _resolve_single_conflict(
 
 
 def preview_excel(*, file_bytes: bytes, file_name: str) -> FilePreview:
-    """只解析 sheet 列表 + 行数，不写库。供前端「选 sheet 再导入」使用。"""
+    """Parse only sheet names and row counts without writing to the database for sheet selection."""
     workbook = load_workbook(
         filename=BytesIO(file_bytes), data_only=True, read_only=True
     )
@@ -1015,14 +1018,14 @@ def preview_excel(*, file_bytes: bytes, file_name: str) -> FilePreview:
 
 
 # -----------------------------------------------------------------------------
-# 内部辅助
+# Internal helpers
 # -----------------------------------------------------------------------------
 def _normalize_sheet_filter(
     selected: list[str] | None, available: list[str]
 ) -> set[str] | None:
-    """规范化白名单：去空白、去重、保留与文件中实际存在的交集。
+    """Normalize the allowlist: trim whitespace, deduplicate, and keep only sheets present in the file.
 
-    返回 None 表示不过滤（导入全部已知 sheet）。
+    Return None to mean no filtering, importing all known sheets.
     """
     if not selected:
         return None
@@ -1033,12 +1036,12 @@ def _normalize_sheet_filter(
     valid = cleaned & available_set
     invalid = cleaned - available_set
     if invalid:
-        logger.warning("白名单中以下 sheet 在文件里不存在，已忽略：%s", sorted(invalid))
+        logger.warning("These sheets from the allowlist do not exist in the file and were ignored: %s", sorted(invalid))
     return valid
 
 
 def _count_non_empty_data_rows(worksheet: Worksheet) -> int:
-    """统计 row >= 10 起非空数据行数（read_only 模式下）。"""
+    """Count non-empty data rows from row >= 10 in read_only mode."""
     count = 0
     for row_index, row_values in enumerate(worksheet.iter_rows(values_only=True), start=1):
         if row_index < DATA_START_ROW:

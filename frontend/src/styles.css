@@ -762,7 +762,7 @@ body {
   gap: 10px;
 }
 
-/* ============== 浏览视图 ============== */
+/* ============== Browse View ============== */
 .browse-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
@@ -916,7 +916,7 @@ body {
   font-family: ui-monospace, Menlo, Consolas, monospace;
 }
 
-/* 详情面板 */
+/* Detail panel */
 .tech-detail.empty {
   text-align: center;
   color: var(--text-muted);

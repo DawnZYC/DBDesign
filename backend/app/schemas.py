@@ -1,4 +1,4 @@
-"""Pydantic schemas — API 请求/响应模型。"""
+"""Pydantic schemas for API request and response models."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,34 +8,34 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SheetPreview(BaseModel):
-    """文件预览中的单个 sheet 信息。"""
+    """Single sheet entry in a file preview."""
 
     sheet_name: str
-    is_known: bool = Field(..., description="是否在已知行业映射表里（10 个 sheet）")
-    sector_code: str | None = Field(default=None, description="对应的 sector_code")
-    data_rows: int = Field(..., description="非空数据行数（行 10 起）")
+    is_known: bool = Field(..., description="Whether the sheet is in the known sector mapping table.")
+    sector_code: str | None = Field(default=None, description="Mapped sector_code.")
+    data_rows: int = Field(..., description="Non-empty data rows from row 10 onward.")
 
 
 class FilePreview(BaseModel):
-    """POST /api/imports/preview 的响应。"""
+    """Response for POST /api/imports/preview."""
 
     file_name: str
     sheets: list[SheetPreview]
 
 
 class ImportSheetSummary(BaseModel):
-    """单个 sheet 的导入摘要。"""
+    """Import summary for a single sheet."""
 
     sheet_name: str
-    rows_total: int = Field(..., description="该 sheet 数据行总数（不含表头）")
-    rows_imported: int = Field(..., description="成功导入的行数")
-    rows_skipped: int = Field(default=0, description="跳过的空行 / 无效行")
-    rows_pending: int = Field(default=0, description="发现冲突待复核的行数")
-    issues: int = Field(default=0, description="data_quality_issue 新增数")
+    rows_total: int = Field(..., description="Total data rows in the sheet, excluding headers.")
+    rows_imported: int = Field(..., description="Rows imported successfully.")
+    rows_skipped: int = Field(default=0, description="Empty or invalid rows skipped.")
+    rows_pending: int = Field(default=0, description="Rows pending conflict review.")
+    issues: int = Field(default=0, description="New data_quality_issue rows.")
 
 
 class ImportResult(BaseModel):
-    """整个导入操作的结果摘要。"""
+    """Summary for the full import operation."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -44,67 +44,67 @@ class ImportResult(BaseModel):
     imported_at: datetime
     rows_imported: int
     rows_skipped: int
-    rows_pending: int = Field(default=0, description="待复核行数（有 sector 冲突等）")
+    rows_pending: int = Field(default=0, description="Rows pending review, such as sector conflicts.")
     issues: int
     sheets: list[ImportSheetSummary]
     duration_ms: int
 
 
 class ConflictRow(BaseModel):
-    """一条待复核的行（按 sheet + A 列值分组前的原始记录）。"""
+    """Single row pending review before grouping by sheet and column A value."""
 
     raw_row_id: int
     excel_row_number: int
 
 
 class ConflictGroup(BaseModel):
-    """同 sheet、同 A 列值的若干行打包成一组，让用户一次决定。"""
+    """Rows with the same sheet and column A value, grouped for one decision."""
 
-    group_id: str = Field(..., description="组 ID，由 sheet+a_value 派生，用于客户端引用")
+    group_id: str = Field(..., description="Group ID derived from sheet+a_value for client references.")
     sheet_name: str
     sheet_sector_code: str | None
-    a_column_value: str | None = Field(..., description="A 列原始值")
+    a_column_value: str | None = Field(..., description="Raw value from column A.")
     a_column_sector_code: str | None = Field(
-        ..., description="A 列文本解析出的 sector_code（无法解析则为 None）"
+        ..., description="sector_code parsed from column A text, or None when unresolved."
     )
     rows: list[ConflictRow]
     message: str
 
 
 class ConflictListResponse(BaseModel):
-    """GET /api/imports/conflicts 响应。"""
+    """Response for GET /api/imports/conflicts."""
 
     total_pending: int
     groups: list[ConflictGroup]
 
 
 class ConflictResolution(BaseModel):
-    """客户端提交的单条决定。"""
+    """Single decision submitted by the client."""
 
     raw_row_id: int
     decision: str = Field(
         ...,
-        description="TRUST_SHEET（用 sheet 推出的 sector）/ TRUST_A（用 A 列推出的 sector）/ SKIP（不导入）",
+        description="TRUST_SHEET uses the sheet-derived sector; TRUST_A uses the column A-derived sector; SKIP does not import the row.",
     )
 
 
 class ConflictResolveResponse(BaseModel):
-    """POST /api/imports/conflicts/resolve 响应。"""
+    """Response for POST /api/imports/conflicts/resolve."""
 
-    resolved: int = Field(..., description="处理成功的行数")
-    failed: int = Field(default=0, description="处理失败的行数")
+    resolved: int = Field(..., description="Rows processed successfully.")
+    failed: int = Field(default=0, description="Rows that failed to process.")
     failure_reasons: list[str] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):
-    """健康检查响应。"""
+    """Health check response."""
 
     status: str = "ok"
-    database: str = Field(..., description="数据库连接状态")
+    database: str = Field(..., description="Database connection status.")
 
 
 # =============================================================================
-# 浏览相关
+# Browse
 # =============================================================================
 class SectorOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -123,7 +123,7 @@ class GeographyOut(BaseModel):
 
 
 class TechnologyListItem(BaseModel):
-    """技术列表的一行（用于 /api/technologies）。"""
+    """Single technology list row for /api/technologies."""
 
     technology_id: int
     technology_code: str
@@ -134,14 +134,14 @@ class TechnologyListItem(BaseModel):
     technology_start_year: int | None
     technology_lifetime_years: int | None
     grade: str | None
-    year_count: int = Field(..., description="该技术下 technology_year 的数量")
+    year_count: int = Field(..., description="Number of technology_year rows for this technology.")
     year_min: int | None
     year_max: int | None
 
 
 class TechnologyListResponse(BaseModel):
     items: list[TechnologyListItem]
-    total: int = Field(..., description="符合过滤条件的总数（分页用）")
+    total: int = Field(..., description="Total rows matching the filters, for pagination.")
     page: int
     page_size: int
 
@@ -153,7 +153,7 @@ class CommodityRowOut(BaseModel):
     share_text: str | None
     demand_value: Decimal | None
     demand_text: str | None
-    # 来自 commodity 字典表（VEDA Commodities sheet）
+    # From the commodity dictionary table (VEDA Commodities sheet).
     commodity_set: str | None = None
     commodity_description: str | None = None
     unit: str | None = None
@@ -166,7 +166,7 @@ class ConstraintDetailOut(BaseModel):
 
 
 class TechnologyYearOut(BaseModel):
-    """单个技术年份的全部参数（master + 5 satellites）。"""
+    """All parameters for one technology year, including master and satellite data."""
 
     technology_year_id: int
     data_year: int
@@ -205,7 +205,7 @@ class TechnologyYearOut(BaseModel):
 
 
 class TechnologyDetail(BaseModel):
-    """技术详情：master + 所有年份。"""
+    """Technology detail: master row plus all years."""
 
     technology_id: int
     technology_code: str

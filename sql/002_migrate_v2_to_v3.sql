@@ -1,24 +1,24 @@
 -- =============================================================================
--- v2 → v3 迁移脚本（保留已有数据）
--- 变更：
---   1. 把 data_source 表的字段下沉到 traceability_record（删表）
---   2. commodity 表扩列：commodity_set / commodity_description / unit /
---      lim_type / cts_lvl / peak_ts / ctype；并把旧的 commodity_name 重命名
---      为 commodity_description
--- 用法：psql -U <user> -d ecotea -f 002_migrate_v2_to_v3.sql
--- 重复执行安全（用 IF NOT EXISTS / IF EXISTS / DO blocks）
+-- v2 to v3 migration script, preserving existing data
+-- Changes:
+--   1. Move data_source table fields into traceability_record and drop the table.
+--   2. Extend commodity with commodity_set / commodity_description / unit /
+--      lim_type / cts_lvl / peak_ts / ctype, and rename old commodity_name
+--      to commodity_description.
+-- Usage: psql -U <user> -d ecotea -f 002_migrate_v2_to_v3.sql
+-- Safe to run repeatedly with IF NOT EXISTS / IF EXISTS / DO blocks.
 -- =============================================================================
 
 BEGIN;
 
 -- -----------------------------------------------------------------------------
--- 1. traceability_record 增加两列
+-- 1. Add two columns to traceability_record.
 -- -----------------------------------------------------------------------------
 ALTER TABLE traceability_record
     ADD COLUMN IF NOT EXISTS data_source_name        TEXT,
     ADD COLUMN IF NOT EXISTS data_source_description TEXT;
 
--- 把 data_source 现有记录回填到 traceability_record（仅当还存在 data_source 表时）
+-- Backfill existing data_source records into traceability_record if data_source still exists.
 DO $$
 BEGIN
     IF EXISTS (
@@ -35,7 +35,7 @@ BEGIN
 END $$;
 
 -- -----------------------------------------------------------------------------
--- 2. 删 data_source_id 外键 + 列 + 表
+-- 2. Drop data_source_id foreign key, column, and table.
 -- -----------------------------------------------------------------------------
 ALTER TABLE traceability_record DROP COLUMN IF EXISTS data_source_id;
 DROP TABLE IF EXISTS data_source;
@@ -44,7 +44,7 @@ CREATE INDEX IF NOT EXISTS idx_trace_data_source
     ON traceability_record (data_source_name);
 
 -- -----------------------------------------------------------------------------
--- 3. commodity 表扩列
+-- 3. Extend commodity table.
 -- -----------------------------------------------------------------------------
 ALTER TABLE commodity
     ADD COLUMN IF NOT EXISTS commodity_set         TEXT,
@@ -55,7 +55,7 @@ ALTER TABLE commodity
     ADD COLUMN IF NOT EXISTS peak_ts               TEXT,
     ADD COLUMN IF NOT EXISTS ctype                 TEXT;
 
--- 把旧的 commodity_name 数据迁移到 commodity_description（若 commodity_name 还在）
+-- Migrate old commodity_name data to commodity_description if commodity_name still exists.
 DO $$
 BEGIN
     IF EXISTS (

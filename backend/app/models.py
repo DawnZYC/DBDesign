@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM 模型 — 与 sql/001_init_schema.sql 一一对应。"""
+"""SQLAlchemy ORM models aligned with sql/001_init_schema.sql."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -77,7 +77,7 @@ class Sector(Base):
 
 
 # =============================================================================
-# 4. (REMOVED) data_source — 已合并进 traceability_record
+# 4. (REMOVED) data_source, merged into traceability_record
 # =============================================================================
 
 
@@ -93,7 +93,7 @@ class Geography(Base):
 
 
 # =============================================================================
-# 11. commodity（含 VEDA Commodities 字段）
+# 11. commodity, including VEDA Commodities fields
 # =============================================================================
 class Commodity(Base):
     __tablename__ = "commodity"
