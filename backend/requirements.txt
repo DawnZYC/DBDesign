@@ -1,10 +1,30 @@
+# --- Web 框架 ---
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
+starlette==0.41.3
+python-multipart==0.0.20
+
+# --- DB / ORM ---
 sqlalchemy==2.0.36
 psycopg[binary]==3.2.3
+
+# --- 配置 / 校验 ---
 pydantic==2.10.3
 pydantic-settings==2.6.1
-python-multipart==0.0.20
-openpyxl==3.1.5
 python-dotenv==1.0.1
-starlette==0.41.3
+
+# --- Excel ---
+openpyxl==3.1.5
+
+# --- LLM 抽象层 (M0) ---
+langchain-core>=0.3.21
+langchain-openai>=0.2.10        # OpenAI / DeepSeek / Qwen / Moonshot / 智谱（OpenAI 兼容）
+langchain-anthropic>=0.2.4      # Anthropic（独立 SDK）
+tiktoken>=0.8.0                 # token 计数 / 费用估算
+
+# --- RAG / 向量库 (M1) ---
+chromadb>=0.5.20                # 向量库（PersistentClient 模式）
+langchain-chroma>=0.1.4         # Chroma 与 LangChain Embeddings 的桥接
+langchain-huggingface>=0.1.0    # 本地 sentence-transformers 包装（默认 embedding）
+sentence-transformers>=3.0      # 实际 embedding 算子
+langchain-community>=0.3.5      # DashScope (Qwen) 等国产 embedding

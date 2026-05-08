@@ -96,11 +96,41 @@ class ConflictResolveResponse(BaseModel):
     failure_reasons: list[str] = Field(default_factory=list)
 
 
+class LLMHealth(BaseModel):
+    """LLM 子系统的健康检查信息。"""
+
+    provider: str
+    model: str | None = None
+    configured: bool = Field(..., description="当前 provider 是否已配置 API key")
+    ok: bool = Field(default=False, description="最近一次连通性测试是否成功")
+    latency_ms: int | None = None
+    error: str | None = None
+
+
 class HealthResponse(BaseModel):
     """健康检查响应。"""
 
     status: str = "ok"
     database: str = Field(..., description="数据库连接状态")
+    llm: LLMHealth | None = Field(default=None, description="LLM 抽象层状态")
+
+
+class ProviderInfo(BaseModel):
+    """单个 provider 的元信息（用于 GET /api/llm/providers）。"""
+
+    name: str
+    display_name: str
+    adapter: str
+    default_model: str
+    base_url: str | None
+    docs_url: str | None
+    configured: bool
+    is_active: bool
+
+
+class ProvidersResponse(BaseModel):
+    active: str
+    providers: list[ProviderInfo]
 
 
 # =============================================================================
