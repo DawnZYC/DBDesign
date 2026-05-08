@@ -30,20 +30,20 @@ function App() {
             className={`tab ${activeTab === 'import' ? 'active' : ''}`}
             onClick={() => setActiveTab('import')}
           >
-            导入数据
+            Import Data
           </button>
           <button
             type="button"
             className={`tab ${activeTab === 'browse' ? 'active' : ''}`}
             onClick={() => setActiveTab('browse')}
           >
-            浏览数据
+            Browse Data
           </button>
         </nav>
         <span className={`health-pill health-${health.status}`}>
-          {health.status === 'checking' && '后端检测中…'}
-          {health.status === 'ok' && `后端正常 · DB ${health.database}`}
-          {health.status === 'error' && `后端异常：${health.message}`}
+          {health.status === 'checking' && 'Checking backend...'}
+          {health.status === 'ok' && `Backend OK · DB ${health.database}`}
+          {health.status === 'error' && `Backend error: ${health.message}`}
         </span>
       </header>
 
@@ -57,7 +57,7 @@ function App() {
           /api/health
         </a>
         <a href="http://localhost:8000/docs" target="_blank" rel="noreferrer">
-          API 文档
+          API Docs
         </a>
       </footer>
     </div>

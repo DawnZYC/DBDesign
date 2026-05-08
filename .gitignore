@@ -28,7 +28,7 @@ build/
 *.tsbuildinfo
 
 # =============================================================================
-# IDE / 编辑器
+# IDE / Editors
 # =============================================================================
 .idea/
 .vscode/
@@ -38,14 +38,14 @@ build/
 *.swo
 
 # =============================================================================
-# 操作系统
+# Operating Systems
 # =============================================================================
 .DS_Store
 Thumbs.db
 desktop.ini
 
 # =============================================================================
-# 环境变量 / 机密
+# Environment Variables / Secrets
 # =============================================================================
 .env
 .env.local
@@ -54,43 +54,43 @@ desktop.ini
 *.key
 
 # =============================================================================
-# 日志与生成产物
+# Logs and Generated Artifacts
 # =============================================================================
 *.log
 logs/
 
 # =============================================================================
-# 项目数据 / 设计文档（按用户要求不入库）
+# Project Data / Design Documents
 # =============================================================================
 
-# 设计文档与规划草稿
+# Design documents and planning drafts
 others/
 
-# 用户数据：原始 Excel 文件 / 模板文件（敏感且体积大）
+# User data: raw Excel files and templates, sensitive and large
 uploads/
 
 # =============================================================================
-# 后续 milestone 会出现的产物（提前 gitignore，避免误入库）
+# Artifacts expected in later milestones
 # =============================================================================
 
-# ChromaDB 持久化目录（M1）
+# ChromaDB persistence directory (M1)
 chroma_data/
 **/chroma_data/
 
-# Docker volume 挂载目录（M6）
+# Docker volume mount directory (M6)
 pg_data/
 **/pg_data/
 
-# LangSmith / Langfuse 本地缓存（M6 可选）
+# Local LangSmith / Langfuse cache (M6 optional)
 .langchain/
 langsmith_cache/
 
-# 本地 SQLite 测试库（如果有）
+# Local SQLite test databases, if any
 *.sqlite
 *.sqlite3
 *.db
 
-# Python 打包产物
+# Python packaging artifacts
 *.whl
 build/
 sdist/

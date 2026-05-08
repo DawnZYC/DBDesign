@@ -1,76 +1,82 @@
-# EcoTEA WP1 — Excel → PostgreSQL 导入工具
+# EcoTEA WP1 Excel to PostgreSQL Import Tool
 
-把 EcoTEA 的多 sheet Excel 文件（10 个行业 × 38 列）按规范化的 15 张表 schema 导入本地 PostgreSQL。
+Imports EcoTEA multi-sheet Excel files (10 sectors x 38 columns) into a normalized 15-table PostgreSQL schema.
 
-- **后端**：Python 3.11+ / FastAPI / SQLAlchemy 2 / openpyxl
-- **前端**：React 18 / Vite / TypeScript
-- **数据库**：PostgreSQL（本地实例）
+- Backend: Python 3.11+ / FastAPI / SQLAlchemy 2 / openpyxl
+- Frontend: React 18 / Vite / TypeScript
+- Database: local PostgreSQL instance
 
-## 项目结构
+## Project Structure
 
-```
+```text
 DBDesign/
 ├── sql/
-│   └── 001_init_schema.sql              # 15 张表的 DDL（含约束/索引/sector 预置数据）
-├── backend/                             # FastAPI 服务
+│   └── 001_init_schema.sql              # DDL for 15 tables, including constraints, indexes, and sector seed data
+├── backend/                             # FastAPI service
 │   ├── app/
-│   │   ├── main.py                      # FastAPI 入口
-│   │   ├── config.py                    # .env 配置
-│   │   ├── database.py                  # SQLAlchemy engine + session
-│   │   ├── models.py                    # 15 张表 ORM
-│   │   ├── schemas.py                   # API Pydantic schema
+│   │   ├── main.py                      # FastAPI entry point
+│   │   ├── config.py                    # .env configuration
+│   │   ├── database.py                  # SQLAlchemy engine and session
+│   │   ├── models.py                    # ORM models for the 15 tables
+│   │   ├── schemas.py                   # API Pydantic schemas
 │   │   ├── routers/
 │   │   │   ├── health.py                # GET /api/health
 │   │   │   └── imports.py               # POST /api/imports
 │   │   └── services/
-│   │       ├── value_cleaner.py         # 占位符 / 公式错误 / 混合文本清洗
-│   │       └── excel_importer.py        # 主导入逻辑
+│   │       ├── value_cleaner.py         # Placeholder, formula-error, and mixed-text cleaning
+│   │       └── excel_importer.py        # Main import logic
 │   ├── requirements.txt
 │   ├── .env.example
 │   └── README.md
-├── frontend/                            # React + Vite + TS 单页
+├── frontend/                            # React + Vite + TypeScript SPA
 │   ├── src/...
 │   ├── package.json
 │   ├── vite.config.ts
 │   └── README.md
-├── EcoTEA_WP1_ER_Diagram_v2.html        # 设计文档（可视化）
+├── EcoTEA_WP1_ER_Diagram_v2.html        # Visual design document
 ├── EcoTEA_Design_Review.html
 ├── EcoTEA_Sample_Row_Mapping.html
-└── README.md（本文件）
+└── README.md
 ```
 
-## 端到端启动
+## End-to-End Startup
 
-### 1. 准备 PostgreSQL
+### 1. Prepare PostgreSQL
 
-假设你本地已经有 PG（用户 `postgres`，端口 5432）。新建一个数据库：
+Assuming you already have local PostgreSQL running with user `postgres` on port 5432, create the database:
 
 ```bash
 psql -U postgres -c "CREATE DATABASE ecotea;"
 psql -U postgres -d ecotea -f sql/001_init_schema.sql
 ```
 
-预期输出最后一行：`COMMIT`。`sector` 表会自动预置 10 行（POWER…INFOCOMM）。
+The final expected output is `COMMIT`. The `sector` table is seeded with 10 rows from POWER through INFOCOMM.
 
-### 2. 启动后端
+### 2. Start the Backend
 
 ```bash
 cd backend
 
-conda activate excelagent          # 你的 conda 环境
+conda activate excelagent
 pip install -r requirements.txt
 
-cp .env.example .env               # 按需修改 DATABASE_URL
+cp .env.example .env               # Edit DATABASE_URL as needed.
 
 uvicorn app.main:app --reload --port 8000
 ```
 
-> 不用 conda 也可：`python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+Without conda, you can use:
 
-- API 文档：http://localhost:8000/docs
-- 健康检查：http://localhost:8000/api/health → 应返回 `{"status":"ok","database":"ok"}`
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-### 3. 启动前端
+- API docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/api/health, expected response `{"status":"ok","database":"ok"}`
+
+### 3. Start the Frontend
 
 ```bash
 cd frontend
@@ -78,57 +84,57 @@ npm install
 npm run dev
 ```
 
-打开 http://localhost:5173 ，顶部有两个标签：
+Open http://localhost:5173. The header has two tabs:
 
-- **导入数据**：拖入 `EcoTEA Endo WP1.xlsx` → 选 sheet → 导入 → 看摘要 → 有冲突就「去复核」逐项确认。
-- **浏览数据**：技术列表（行业/地区/搜索筛选 + 分页）→ 点某条 → 右侧出现该技术全年份的所有参数（CAPEX、OPEX、效率、容量、commodity 等）。
+- Import Data: drop `EcoTEA Endo WP1.xlsx`, select sheets, import, review the summary, and resolve conflicts if any are held.
+- Browse Data: filter and page through the technology list by sector, geography, or search, then select a row to view all yearly parameters such as CAPEX, OPEX, efficiency, capacity, and commodities.
 
-### 导入流程（用户视角）
+### Import Flow
 
-1. 选/拖入 .xlsx 文件
-2. 后端预览：返回 sheet 列表（包含 sheet 名 / 是否已知行业 / 数据行数）
-3. 前端展示带 checkbox 的 sheet 列表，默认全部勾上已知 sheet
-4. 用户取消 / 勾选要导入的 sheet
-5. 点击导入 → 仅导入勾选的 sheet
-6. 看汇总结果
+1. Select or drag in an `.xlsx` file.
+2. The backend preview returns sheet names, known-sector status, and data-row counts.
+3. The frontend shows a checkbox list of sheets, with all known sheets selected by default.
+4. The user changes the selected sheets if needed.
+5. Clicking import imports only the selected sheets.
+6. The summary result is displayed.
 
-## 数据清洗规则
+## Data Cleaning Rules
 
-代码集中在 `backend/app/services/value_cleaner.py`：
+The implementation is in `backend/app/services/value_cleaner.py`.
 
-| 输入 | 处理 | 是否写 data_quality_issue |
+| Input | Handling | Writes data_quality_issue |
 |---|---|---|
-| `'-'` / `'NA'` / 空字符串 / 空白 | → `NULL` | 否 |
-| `#VALUE!` / `#REF!` / `#DIV/0!` / `#N/A` 等 | 主表 → `NULL` | **是**（含原值 + 行号 + 列号） |
-| `0.497` 这类纯数字 | 直接存 | 否 |
-| `'COP: 3.91'` / `'13.33 km/litre'` | 拆为 `_value` + `_text` + `_unit` | 否（仅限 efficiency 列） |
-| `'PWRBMS+PWACOA'` / `'20%+80%'` | 按 `+` 拆成多条 `technology_year_commodity`（保 `commodity_order`） | 否 |
-| sheet 名 ≠ A 列值（Agri/Building 异常） | sector 取 sheet 名；A 列原值留在 `traceability_record.wp_title_raw` | 否 |
+| `'-'` / `'NA'` / empty string / whitespace | `NULL` | No |
+| `#VALUE!` / `#REF!` / `#DIV/0!` / `#N/A` and similar | Main table value becomes `NULL` | Yes, with original value, row number, and column |
+| Plain numbers such as `0.497` | Stored directly | No |
+| `'COP: 3.91'` / `'13.33 km/litre'` | Split into `_value`, `_text`, and `_unit` | No, limited to efficiency columns |
+| `'PWRBMS+PWACOA'` / `'20%+80%'` | Split by `+` into multiple `technology_year_commodity` rows, preserving `commodity_order` | No |
+| Sheet name differs from column A value, such as Agri/Building | Sector comes from the sheet name; raw column A value stays in `traceability_record.wp_title_raw` | No |
 
-## 验证已导入
+## Verify Imported Data
 
 ```sql
--- 最近一次批次概况
+-- Most recent import batches.
 SELECT import_batch_id, file_name, imported_at, imported_by
 FROM   import_batch
 ORDER  BY imported_at DESC
 LIMIT  5;
 
--- 各 sheet 写了多少条 raw_excel_row
+-- raw_excel_row counts by sheet for the latest batch.
 SELECT source_sheet_name, COUNT(*) AS rows
 FROM   raw_excel_row
 WHERE  import_batch_id = (SELECT MAX(import_batch_id) FROM import_batch)
 GROUP  BY source_sheet_name
 ORDER  BY source_sheet_name;
 
--- 异常列表（#VALUE! 等）
+-- Quality issue list, such as #VALUE!.
 SELECT source_sheet_name, excel_row_number, excel_column,
        issue_type, original_value, issue_message
 FROM   data_quality_issue
 ORDER  BY issue_id DESC
 LIMIT  20;
 
--- 多商品行（应能看到 PWRBMS / PWACOA 各占一行）
+-- Multi-commodity rows, expected to show PWRBMS / PWACOA as separate rows.
 SELECT ty.data_year, tp.technology_code, c.commodity_code,
        tyc.commodity_order, tyc.commodity_share_value, tyc.commodity_share_text
 FROM   technology_year_commodity tyc
@@ -139,17 +145,20 @@ WHERE  tp.technology_code = 'PWRBMCSTP00'
 ORDER  BY ty.data_year, tyc.commodity_order;
 ```
 
-## 常见问题
+## FAQ
 
-**psql: 连接被拒** → 确认 PG 服务在跑：`pg_isready -h localhost -p 5432`。
-**前端报 `Failed to fetch`** → 后端没起 / 起在别的端口；右上角 health pill 会显示具体错误。
-**PostgreSQL 用户名密码不是 postgres/postgres** → 改 `backend/.env` 的 `DATABASE_URL`。
-**重复导入同一文件** → 不会爆唯一约束；sector / commodity / technology_process / technology_year 全部走 upsert，新批次只多出一份 `import_batch` + `raw_excel_row`。
+**psql: connection refused**: confirm PostgreSQL is running with `pg_isready -h localhost -p 5432`.
 
-## 设计参考
+**Frontend shows `Failed to fetch`**: the backend is not running or is on another port. The health pill in the header shows the specific error.
 
-打开下面三份 HTML 在浏览器看可视化设计：
+**PostgreSQL username/password is not postgres/postgres**: update `DATABASE_URL` in `backend/.env`.
 
-- `EcoTEA_WP1_ER_Diagram_v2.html` — 修正版 ER 图（15 张表 + 5 处变更标记）
-- `EcoTEA_Design_Review.html` — 用实际 Excel 数据对您 15 张表设计的核查报告
-- `EcoTEA_Sample_Row_Mapping.html` — 单行 Power 数据从 Excel → 数据库的填表演示
+**Importing the same file multiple times**: uniqueness constraints are not violated. sector, commodity, technology_process, and technology_year use upsert behavior. Each new batch adds only one `import_batch` plus its `raw_excel_row` records.
+
+## Design References
+
+Open these HTML files in a browser to view the visual design references:
+
+- `EcoTEA_WP1_ER_Diagram_v2.html`: revised ER diagram with 15 tables and 5 change markers
+- `EcoTEA_Design_Review.html`: review report using real Excel data against the 15-table design
+- `EcoTEA_Sample_Row_Mapping.html`: single Power row mapping from Excel to database

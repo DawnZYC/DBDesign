@@ -1,4 +1,4 @@
-"""数据浏览相关只读路由。"""
+"""Read-only data browsing routes."""
 from __future__ import annotations
 
 import logging
@@ -31,15 +31,15 @@ MAX_PAGE_SIZE = 200
 
 
 # -----------------------------------------------------------------------------
-# 字典查询（用于前端筛选下拉框）
+# Dictionary lookups for frontend filter dropdowns.
 # -----------------------------------------------------------------------------
-@router.get("/sectors", response_model=list[SectorOut], summary="列出所有 sector")
+@router.get("/sectors", response_model=list[SectorOut], summary="List all sectors")
 def list_sectors(db: Session = Depends(get_db)) -> list[SectorOut]:
     rows = db.scalars(select(models.Sector).order_by(models.Sector.sector_id)).all()
     return [SectorOut.model_validate(r) for r in rows]
 
 
-@router.get("/geographies", response_model=list[GeographyOut], summary="列出所有地区")
+@router.get("/geographies", response_model=list[GeographyOut], summary="List all geographies")
 def list_geographies(db: Session = Depends(get_db)) -> list[GeographyOut]:
     rows = db.scalars(
         select(models.Geography).order_by(models.Geography.geography_id)
@@ -48,27 +48,27 @@ def list_geographies(db: Session = Depends(get_db)) -> list[GeographyOut]:
 
 
 # -----------------------------------------------------------------------------
-# 技术列表
+# Technology list.
 # -----------------------------------------------------------------------------
 @router.get(
     "/technologies",
     response_model=TechnologyListResponse,
-    summary="按筛选条件列出技术（含每个技术的年份范围）",
+    summary="List technologies by filters, including year range for each technology",
 )
 def list_technologies(
     db: Session = Depends(get_db),
-    sector_id: Annotated[int | None, Query(description="按 sector_id 过滤")] = None,
-    geography_id: Annotated[int | None, Query(description="按 geography_id 过滤")] = None,
+    sector_id: Annotated[int | None, Query(description="Filter by sector_id")] = None,
+    geography_id: Annotated[int | None, Query(description="Filter by geography_id")] = None,
     q: Annotated[
         str | None,
-        Query(description="按 technology_code 或 description 模糊搜索"),
+        Query(description="Fuzzy search by technology_code or description"),
     ] = None,
-    page: Annotated[int, Query(ge=1, description="页码（1-based）")] = 1,
+    page: Annotated[int, Query(ge=1, description="Page number, 1-based")] = 1,
     page_size: Annotated[
-        int, Query(ge=1, le=MAX_PAGE_SIZE, description="每页大小")
+        int, Query(ge=1, le=MAX_PAGE_SIZE, description="Page size")
     ] = DEFAULT_PAGE_SIZE,
 ) -> TechnologyListResponse:
-    """技术列表 + 简要统计（年份数量 / 最早年 / 最晚年）。"""
+    """Technology list with summary statistics: year count, earliest year, latest year."""
 
     tp = models.TechnologyProcess
     s = models.Sector
@@ -116,11 +116,11 @@ def list_technologies(
             (tp.technology_code.ilike(like)) | (tp.technology_description.ilike(like))
         )
 
-    # 总数（用 subquery 包一层去掉 group/order，再 count）
+    # Count rows by wrapping the grouped query in a subquery.
     count_stmt = select(func.count()).select_from(base.subquery())
     total = int(db.scalar(count_stmt) or 0)
 
-    # 实际分页
+    # Apply pagination.
     rows = db.execute(
         base.order_by(tp.technology_code).offset((page - 1) * page_size).limit(page_size)
     ).all()
@@ -148,12 +148,12 @@ def list_technologies(
 
 
 # -----------------------------------------------------------------------------
-# 技术详情：master + 全部 year + satellites
+# Technology detail: master row plus all years and satellite rows.
 # -----------------------------------------------------------------------------
 @router.get(
     "/technologies/{technology_id}",
     response_model=TechnologyDetail,
-    summary="某技术的全部年份及参数",
+    summary="All years and parameters for one technology",
 )
 def get_technology(
     technology_id: int, db: Session = Depends(get_db)
@@ -162,13 +162,13 @@ def get_technology(
     if tp is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"technology_id={technology_id} 不存在",
+            detail=f"technology_id={technology_id} does not exist",
         )
 
     sector = db.get(models.Sector, tp.sector_id)
     geography = db.get(models.Geography, tp.geography_id)
 
-    # 一次查所有年份
+    # Fetch all years in one query.
     year_rows = db.scalars(
         select(models.TechnologyYear)
         .where(models.TechnologyYear.technology_id == technology_id)
@@ -245,7 +245,7 @@ def get_technology(
 
 
 # -----------------------------------------------------------------------------
-# 内部辅助
+# Internal helpers.
 # -----------------------------------------------------------------------------
 def _empty_detail(
     tp: models.TechnologyProcess,
@@ -272,7 +272,7 @@ def _fetch_by_year_id(
     fk_column,
     year_ids: list[int],
 ) -> dict[int, object]:
-    """把 satellite 行按 technology_year_id 索引（每个 ID 至多 1 条）。"""
+    """Index satellite rows by technology_year_id, with at most one row per ID."""
     rows = db.scalars(select(model_cls).where(fk_column.in_(year_ids))).all()
     return {getattr(r, "technology_year_id"): r for r in rows}
 
@@ -287,7 +287,7 @@ def _fetch_constraints(
     ).all()
     out: dict[int, models.TechnologyYearConstraint] = {}
     for r in rows:
-        out.setdefault(r.technology_year_id, r)  # 取第一条
+        out.setdefault(r.technology_year_id, r)  # Use the first row.
     return out
 
 

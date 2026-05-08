@@ -1,4 +1,4 @@
-"""导入相关路由。"""
+"""Import routes."""
 from __future__ import annotations
 
 import logging
@@ -31,20 +31,20 @@ MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 def _validate_upload(file: UploadFile, file_bytes: bytes) -> None:
-    """通用文件校验：扩展名、是否为空、大小上限。"""
+    """Common upload validation for suffix, empty content, and size limit."""
     if not file.filename or not file.filename.lower().endswith(ALLOWED_SUFFIXES):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"仅支持 {ALLOWED_SUFFIXES} 类型的文件",
+            detail=f"Only {ALLOWED_SUFFIXES} files are supported",
         )
     if not file_bytes:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="文件为空"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="File is empty"
         )
     if len(file_bytes) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"文件超过 {MAX_FILE_SIZE_BYTES // 1024 // 1024} MB 上限",
+            detail=f"File exceeds the {MAX_FILE_SIZE_BYTES // 1024 // 1024} MB limit",
         )
 
 
@@ -52,22 +52,22 @@ def _validate_upload(file: UploadFile, file_bytes: bytes) -> None:
     "/preview",
     response_model=FilePreview,
     status_code=status.HTTP_200_OK,
-    summary="预览 Excel 的 sheet 列表（不入库）",
+    summary="Preview Excel sheet list without writing to the database",
 )
 async def preview_import(
-    file: UploadFile = File(..., description="要预览的 .xlsx 文件"),
+    file: UploadFile = File(..., description=".xlsx file to preview"),
 ) -> FilePreview:
-    """读取上传文件的 sheet 名称、行数、是否在已知映射表内。前端调用后用于让用户选 sheet。"""
+    """Read sheet names, row counts, and known mapping status for sheet selection."""
     file_bytes = await file.read()
     _validate_upload(file, file_bytes)
 
     try:
         return preview_excel(file_bytes=file_bytes, file_name=file.filename or "upload.xlsx")
     except Exception as exc:  # noqa: BLE001
-        logger.exception("预览失败")
+        logger.exception("Preview failed")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"读取 Excel 失败：{exc!s}",
+            detail=f"Failed to read Excel: {exc!s}",
         ) from exc
 
 
@@ -75,21 +75,21 @@ async def preview_import(
     "",
     response_model=ImportResult,
     status_code=status.HTTP_201_CREATED,
-    summary="上传并导入 EcoTEA Excel 文件（可选择 sheet 白名单）",
+    summary="Upload and import an EcoTEA Excel file with an optional sheet allowlist",
 )
 async def create_import(
-    file: UploadFile = File(..., description="要导入的 .xlsx 文件"),
-    imported_by: str | None = Form(default=None, description="导入操作人（可选）"),
-    note: str | None = Form(default=None, description="本次导入备注（可选）"),
+    file: UploadFile = File(..., description=".xlsx file to import"),
+    imported_by: str | None = Form(default=None, description="Importer name, optional"),
+    note: str | None = Form(default=None, description="Import note, optional"),
     sheets: str | None = Form(
         default=None,
-        description="只导入这些 sheet，逗号分隔。为空时导入全部已知 sheet。",
+        description="Comma-separated sheet names to import. Empty imports all known sheets.",
     ),
     db: Session = Depends(get_db),
 ) -> ImportResult:
-    """接收 Excel 文件，同步写入数据库并返回汇总结果。
+    """Receive an Excel file, write it to the database synchronously, and return a summary.
 
-    sheets 字段示例：`Power,Industry` 或 `Power, Industry`（空格无所谓）。
+    Example sheets value: `Power,Industry` or `Power, Industry`; spaces are ignored.
     """
     file_bytes = await file.read()
     _validate_upload(file, file_bytes)
@@ -109,17 +109,17 @@ async def create_import(
         )
     except SQLAlchemyError as exc:
         db.rollback()
-        logger.exception("导入失败 (DB 异常)")
+        logger.exception("Import failed (database error)")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"数据库写入失败：{exc!s}",
+            detail=f"Database write failed: {exc!s}",
         ) from exc
     except Exception as exc:  # noqa: BLE001
         db.rollback()
-        logger.exception("导入失败 (未知异常)")
+        logger.exception("Import failed (unknown error)")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导入失败：{exc!s}",
+            detail=f"Import failed: {exc!s}",
         ) from exc
 
     return result
@@ -128,7 +128,7 @@ async def create_import(
 @router.get(
     "/conflicts",
     response_model=ConflictListResponse,
-    summary="列出所有待复核的 sector 冲突（按 sheet + A 列值分组）",
+    summary="List sector conflicts pending review, grouped by sheet and column A value",
 )
 def get_conflicts(db: Session = Depends(get_db)) -> ConflictListResponse:
     return list_pending_conflicts(db)
@@ -137,26 +137,26 @@ def get_conflicts(db: Session = Depends(get_db)) -> ConflictListResponse:
 @router.post(
     "/conflicts/resolve",
     response_model=ConflictResolveResponse,
-    summary="批量提交冲突复核结果",
+    summary="Submit conflict review decisions in bulk",
 )
 def post_resolve_conflicts(
     resolutions: list[ConflictResolution] = Body(
         ...,
-        description="决定列表，每条 {raw_row_id, decision: 'TRUST_SHEET'|'TRUST_A'|'SKIP'}",
+        description="Decision list. Each item is {raw_row_id, decision: 'TRUST_SHEET'|'TRUST_A'|'SKIP'}",
     ),
     db: Session = Depends(get_db),
 ) -> ConflictResolveResponse:
     if not resolutions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="resolutions 列表为空",
+            detail="resolutions list is empty",
         )
     try:
         return resolve_pending_conflicts(db, resolutions=resolutions)
     except SQLAlchemyError as exc:
         db.rollback()
-        logger.exception("复核冲突时数据库异常")
+        logger.exception("Database error while reviewing conflicts")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"数据库写入失败：{exc!s}",
+            detail=f"Database write failed: {exc!s}",
         ) from exc

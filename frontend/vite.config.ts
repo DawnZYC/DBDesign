@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // 把 /api/* 转发给后端，避免 CORS 问题
+      // Proxy /api/* to the backend to avoid CORS issues.
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,

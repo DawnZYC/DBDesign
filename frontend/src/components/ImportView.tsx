@@ -49,7 +49,7 @@ export function ImportView() {
   const handleImport = async () => {
     if (stage.kind !== 'picking') return;
     if (stage.selected.size === 0) {
-      alert('请至少选择一个 sheet');
+      alert('Select at least one sheet');
       return;
     }
 
@@ -83,10 +83,10 @@ export function ImportView() {
     setReviewing(false);
     if (response.failed > 0) {
       setReviewMessage(
-        `已处理 ${response.resolved} 行，${response.failed} 行失败：${response.failure_reasons.join('; ')}`,
+        `Resolved ${response.resolved} rows; ${response.failed} rows failed: ${response.failure_reasons.join('; ')}`,
       );
     } else {
-      setReviewMessage(`已处理 ${response.resolved} 行 ✓`);
+      setReviewMessage(`Resolved ${response.resolved} rows ✓`);
     }
     if (stage.kind === 'success') {
       const newPending = Math.max(stage.result.rows_pending - response.resolved, 0);
@@ -110,25 +110,25 @@ export function ImportView() {
           <section className="form-row">
             <label className="form-field">
               <span>
-                导入操作人 <em>(可选)</em>
+                Imported by <em>(optional)</em>
               </span>
               <input
                 type="text"
                 value={importedBy}
                 onChange={(e) => setImportedBy(e.target.value)}
-                placeholder="例如：zyc"
+                placeholder="Example: zyc"
                 disabled={isWorking}
               />
             </label>
             <label className="form-field">
               <span>
-                本次备注 <em>(可选)</em>
+                Note <em>(optional)</em>
               </span>
               <input
                 type="text"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="例如：Power sheet sample row import"
+                placeholder="Example: Power sheet sample row import"
                 disabled={isWorking}
               />
             </label>
@@ -141,7 +141,7 @@ export function ImportView() {
         <section className="status uploading">
           <div className="spinner" aria-hidden="true" />
           <div>
-            正在读取 <code>{stage.fileName}</code> 的 sheet 列表 ……
+            Reading the sheet list from <code>{stage.fileName}</code>...
           </div>
         </section>
       )}
@@ -156,7 +156,7 @@ export function ImportView() {
           />
           <div className="action-row">
             <button type="button" className="btn-secondary" onClick={handleReset}>
-              重新选择文件
+              Choose Another File
             </button>
             <button
               type="button"
@@ -164,7 +164,7 @@ export function ImportView() {
               onClick={handleImport}
               disabled={stage.selected.size === 0}
             >
-              导入选中的 {stage.selected.size} 个 sheet
+              Import {stage.selected.size} Selected Sheets
             </button>
           </div>
         </>
@@ -174,17 +174,17 @@ export function ImportView() {
         <section className="status uploading">
           <div className="spinner" aria-hidden="true" />
           <div>
-            正在导入 <code>{stage.fileName}</code> 的 {stage.sheetCount} 个 sheet ……
+            Importing {stage.sheetCount} sheets from <code>{stage.fileName}</code>...
           </div>
         </section>
       )}
 
       {stage.kind === 'error' && (
         <section className="status error">
-          <strong>{stage.canRetry ? '预览失败' : '导入失败'}</strong>
+          <strong>{stage.canRetry ? 'Preview failed' : 'Import failed'}</strong>
           <pre>{stage.message}</pre>
           <button type="button" onClick={handleReset}>
-            重试
+            Retry
           </button>
         </section>
       )}
@@ -197,7 +197,7 @@ export function ImportView() {
           />
           {reviewMessage && <div className="review-message">{reviewMessage}</div>}
           <button className="reset-btn" type="button" onClick={handleReset}>
-            再导入一份
+            Import Another File
           </button>
         </>
       )}

@@ -1,4 +1,4 @@
-"""应用配置：从环境变量加载（.env 自动支持）。"""
+"""Application configuration loaded from environment variables, with .env support."""
 from __future__ import annotations
 
 from functools import lru_cache
@@ -8,17 +8,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """全局配置。所有字段都能由环境变量覆盖。"""
+    """Global settings. Every field can be overridden by environment variables."""
 
     database_url: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/ecotea",
-        description="SQLAlchemy 数据库连接 URL（建议 psycopg v3）。",
+        description="SQLAlchemy database URL; psycopg v3 is recommended.",
     )
     allowed_origins: str = Field(
         default="http://localhost:5173,http://127.0.0.1:5173",
-        description="CORS 允许的前端 origin，逗号分隔。",
+        description="Comma-separated frontend origins allowed by CORS.",
     )
-    log_level: str = Field(default="INFO", description="日志级别。")
+    log_level: str = Field(default="INFO", description="Log level.")
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -28,11 +28,11 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        """把逗号分隔字符串切成列表。"""
+        """Split a comma-separated string into a list."""
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """单例模式取配置，避免重复读 .env。"""
+    """Return cached settings to avoid repeatedly reading .env."""
     return Settings()

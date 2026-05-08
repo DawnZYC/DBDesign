@@ -1,9 +1,9 @@
-"""单元格值清洗规则。
+"""Cell value cleaning rules.
 
-清洗 3 类规则（与 ER 图 v2 设计一致）：
-  1. 占位符（'-' / 'NA' / '' / 空白） → SQL NULL
-  2. 公式错误（#VALUE! 等） → 主表 NULL，但单独写 data_quality_issue
-  3. 带语义混合文本（'COP: 3.91'） → 拆出 value / text / unit
+The three cleaning rules match the ER diagram v2 design:
+  1. Placeholders ('-' / 'NA' / '' / whitespace) become SQL NULL.
+  2. Formula errors such as #VALUE! become NULL in main tables and create data_quality_issue rows.
+  3. Mixed semantic text such as 'COP: 3.91' is split into value / text / unit.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 # -------------------------------------------------------------------------
-# 常量
+# Constants
 # -------------------------------------------------------------------------
 PLACEHOLDER_LITERALS: frozenset[str] = frozenset(
     {"", "-", "—", "na", "n/a", "n.a.", "null", "none"}
@@ -22,7 +22,7 @@ EXCEL_ERROR_TOKENS: frozenset[str] = frozenset(
     {"#VALUE!", "#REF!", "#DIV/0!", "#N/A", "#NAME?", "#NULL!", "#NUM!"}
 )
 
-# A 列文本 → sector_code 的模糊映射（容忍同义词、复数）
+# Fuzzy mapping from column A text to sector_code, allowing synonyms and plurals.
 SECTOR_NAME_TO_CODE: dict[str, str] = {
     "power": "POWER",
     "industry": "INDUSTRY",
@@ -46,10 +46,10 @@ SECTOR_NAME_TO_CODE: dict[str, str] = {
 
 
 # -------------------------------------------------------------------------
-# 判定函数
+# Predicates
 # -------------------------------------------------------------------------
 def is_placeholder(value: Any) -> bool:
-    """是否为占位符（应转 NULL，不留痕）。"""
+    """Return whether the value is a placeholder that should become NULL without a trace."""
     if value is None:
         return True
     if isinstance(value, str):
@@ -58,19 +58,19 @@ def is_placeholder(value: Any) -> bool:
 
 
 def is_excel_error(value: Any) -> bool:
-    """是否为 Excel 公式错误（应转 NULL，但要写 data_quality_issue）。"""
+    """Return whether the value is an Excel formula error that should create a data_quality_issue."""
     if isinstance(value, str):
         return value.strip().upper() in EXCEL_ERROR_TOKENS
     return False
 
 
 def resolve_sector_from_text(value: Any) -> str | None:
-    """把 A 列的文本（"Building"、"Power"、"Transportation"…）解析为 sector_code。
+    """Resolve column A text such as "Building", "Power", or "Transportation" to sector_code.
 
-    匹配规则：
-      - 占位符 / 错误 → None
-      - lower-case strip 后查 SECTOR_NAME_TO_CODE
-      - 不在表里 → None（视为"无法解析"，不一定就是冲突）
+    Matching rules:
+      - Placeholder or error values become None.
+      - Strip and lower-case text before looking it up in SECTOR_NAME_TO_CODE.
+      - Unknown values become None, meaning unresolved but not necessarily conflicting.
     """
     if is_placeholder(value) or is_excel_error(value):
         return None
@@ -80,19 +80,19 @@ def resolve_sector_from_text(value: Any) -> str | None:
 
 
 # -------------------------------------------------------------------------
-# 清洗结果数据类
+# Cleaning result data classes
 # -------------------------------------------------------------------------
 @dataclass(slots=True, frozen=True)
 class NumericResult:
-    """clean_numeric 的返回值。"""
+    """Return value for clean_numeric."""
 
     value: float | None
-    excel_error: str | None  # 若来源是 #VALUE! 等，原始 token；否则 None
+    excel_error: str | None  # Original token for #VALUE! and similar errors, otherwise None.
 
 
 @dataclass(slots=True, frozen=True)
 class EfficiencyResult:
-    """efficiency 三元组（value / text / unit）。"""
+    """Efficiency triple: value / text / unit."""
 
     value: float | None
     text: str | None
@@ -102,7 +102,7 @@ class EfficiencyResult:
 
 @dataclass(slots=True, frozen=True)
 class CommodityShare:
-    """单个商品份额（多商品行会拆成多个）。"""
+    """Single commodity share; multi-commodity rows are split into multiple items."""
 
     code: str
     share_value: float | None
@@ -110,10 +110,10 @@ class CommodityShare:
 
 
 # -------------------------------------------------------------------------
-# 清洗实现
+# Cleaning implementation
 # -------------------------------------------------------------------------
 def clean_numeric(value: Any) -> NumericResult:
-    """通用数值清洗。
+    """Clean a generic numeric value.
 
     >>> clean_numeric(56.1)
     NumericResult(value=56.1, excel_error=None)
@@ -126,13 +126,13 @@ def clean_numeric(value: Any) -> NumericResult:
         return NumericResult(None, None)
     if is_excel_error(value):
         return NumericResult(None, str(value).strip())
-    if isinstance(value, bool):  # 防止 True/False 被当成 1/0
+    if isinstance(value, bool):  # Avoid treating True/False as 1/0.
         return NumericResult(None, None)
     if isinstance(value, (int, float)):
         return NumericResult(float(value), None)
     if isinstance(value, str):
         text = value.strip()
-        # 处理百分号
+        # Handle percentages.
         if text.endswith("%"):
             try:
                 return NumericResult(float(text.rstrip("%")) / 100.0, None)
@@ -146,7 +146,7 @@ def clean_numeric(value: Any) -> NumericResult:
 
 
 def clean_text(value: Any) -> str | None:
-    """通用文本清洗：占位符 / Excel 错误 → None；其他 strip 后保留。"""
+    """Clean generic text: placeholders and Excel errors become None; other values are stripped."""
     if is_placeholder(value) or is_excel_error(value):
         return None
     if isinstance(value, str):
@@ -155,21 +155,21 @@ def clean_text(value: Any) -> str | None:
 
 
 # -------------------------------------------------------------------------
-# efficiency 解析（正则分离 value / unit）
+# Efficiency parsing with regex-based value / unit splitting.
 # -------------------------------------------------------------------------
 _RE_NUM_THEN_UNIT = re.compile(r"^([+-]?\d+(?:\.\d+)?)\s+(.+)$")
 _RE_LABEL_NUM = re.compile(r"^([A-Za-z][\w/\s]*?)\s*[:：]\s*([+-]?\d+(?:\.\d+)?)\s*$")
 
 
 def parse_efficiency(value: Any) -> EfficiencyResult:
-    """解析 efficiency 字段。
+    """Parse the efficiency field.
 
-    支持：
-      - 0.497              → value=0.497
-      - 'COP: 3.91'        → value=3.91, unit='COP'
-      - '13.33 km/litre'   → value=13.33, unit='km/litre'
-      - 'NA' / '-' / ''    → 三者皆 None
-      - '#VALUE!'          → excel_error 标记
+    Supported examples:
+      - 0.497              -> value=0.497
+      - 'COP: 3.91'        -> value=3.91, unit='COP'
+      - '13.33 km/litre'   -> value=13.33, unit='km/litre'
+      - 'NA' / '-' / ''    -> all fields None
+      - '#VALUE!'          -> excel_error marker
     """
     if is_placeholder(value):
         return EfficiencyResult(None, None, None)
@@ -186,7 +186,7 @@ def parse_efficiency(value: Any) -> EfficiencyResult:
         if not text:
             return EfficiencyResult(None, None, None)
 
-        # 1) 纯数字
+        # 1) Plain number.
         try:
             return EfficiencyResult(float(text), text, None)
         except ValueError:
@@ -208,20 +208,20 @@ def parse_efficiency(value: Any) -> EfficiencyResult:
             except ValueError:
                 pass
 
-        # 4) 其它文本：只保留原文
+        # 4) Other text: keep the original text only.
         return EfficiencyResult(None, text, None)
 
     return EfficiencyResult(None, None, None)
 
 
 # -------------------------------------------------------------------------
-# 多商品 / 多份额拆分（'PWRBMS+PWACOA' / '20%+80%'）
+# Multi-commodity / multi-share splitting ('PWRBMS+PWACOA' / '20%+80%').
 # -------------------------------------------------------------------------
 _RE_PLUS_SPLIT = re.compile(r"\s*\+\s*")
 
 
 def parse_commodity_combo(commodity_cell: Any, share_cell: Any) -> list[CommodityShare]:
-    """拆分多商品行。
+    """Split a multi-commodity row.
 
     >>> parse_commodity_combo('PWRBMS+PWACOA', '20%+80%')
     [CommodityShare(code='PWRBMS', share_value=0.2, share_text='20%'),
@@ -244,7 +244,7 @@ def parse_commodity_combo(commodity_cell: Any, share_cell: Any) -> list[Commodit
     if not codes:
         return []
 
-    # 解析 share
+    # Parse share.
     if isinstance(share_cell, bool):
         share_pairs: list[tuple[float | None, str | None]] = [(None, None)] * len(codes)
     elif isinstance(share_cell, (int, float)):
@@ -257,7 +257,7 @@ def parse_commodity_combo(commodity_cell: Any, share_cell: Any) -> list[Commodit
     else:
         share_pairs = [(None, str(share_cell))] * len(codes)
 
-    # 长度对齐：share 不够时补 (None, None)
+    # Align lengths: pad missing share values with (None, None).
     while len(share_pairs) < len(codes):
         share_pairs.append((None, None))
 
@@ -268,7 +268,7 @@ def parse_commodity_combo(commodity_cell: Any, share_cell: Any) -> list[Commodit
 
 
 def _parse_share_token(token: str) -> tuple[float | None, str | None]:
-    """解析单个 share 文本，如 '20%' / '0.2' / 'NA'。"""
+    """Parse one share token such as '20%', '0.2', or 'NA'."""
     text = token.strip()
     if not text or is_placeholder(text):
         return (None, None)

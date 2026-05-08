@@ -1,5 +1,5 @@
 /**
- * 与后端 schemas.py 保持一致的类型定义。
+ * Type definitions kept in sync with backend schemas.py.
  */
 
 export interface SheetPreview {
@@ -69,7 +69,7 @@ export interface ConflictResolveResponse {
 }
 
 // =============================================================================
-// 浏览
+// Browse
 // =============================================================================
 export interface Sector {
   sector_id: number;

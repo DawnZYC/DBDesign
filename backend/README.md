@@ -1,66 +1,75 @@
-# EcoTEA WP1 Import — Backend
+# EcoTEA WP1 Import Backend
 
-FastAPI 后端，负责把 EcoTEA Excel 文件导入到 PostgreSQL（15 张表 schema）。
+FastAPI backend for importing EcoTEA Excel files into PostgreSQL using the 15-table schema.
 
-## 目录结构
+## Structure
 
-```
+```text
 backend/
 ├── app/
-│   ├── main.py                     # FastAPI 入口
-│   ├── config.py                   # 配置（.env 加载）
-│   ├── database.py                 # SQLAlchemy engine + Session
-│   ├── models.py                   # 15 张表的 ORM 模型
-│   ├── schemas.py                  # Pydantic API 模型
+│   ├── main.py                     # FastAPI entry point
+│   ├── config.py                   # Configuration with .env loading
+│   ├── database.py                 # SQLAlchemy engine and Session
+│   ├── models.py                   # ORM models for the 15 tables
+│   ├── schemas.py                  # Pydantic API models
 │   ├── routers/
 │   │   ├── health.py               # GET /api/health
 │   │   └── imports.py              # POST /api/imports
 │   └── services/
-│       ├── value_cleaner.py        # 清洗 '-' / 'NA' / #VALUE! / 混合文本
-│       └── excel_importer.py       # 主导入流程
+│       ├── value_cleaner.py        # Cleans placeholders, formula errors, and mixed text
+│       └── excel_importer.py       # Main import flow
 ├── requirements.txt
 └── .env.example
 ```
 
-## 快速启动
+## Quick Start
 
 ```bash
 cd backend
 
-# 1) 激活 conda 环境并装依赖
+# 1) Activate the conda environment and install dependencies.
 conda activate excelagent
 pip install -r requirements.txt
 
-# 2) 初始化 schema（用 sql/ 下的 DDL）
-#    先在你的本地 PG 里建一个数据库，比如 ecotea：
+# 2) Initialize the schema from sql/.
+#    First create a local PostgreSQL database such as ecotea:
 #    psql -U postgres -c "CREATE DATABASE ecotea;"
 psql -U postgres -d ecotea -f ../sql/001_init_schema.sql
 
-# 3) 配置环境变量
+# 3) Configure environment variables.
 cp .env.example .env
-# 编辑 .env 把 DATABASE_URL 改成你本地 PG 的实际值
+# Edit .env so DATABASE_URL matches your local PostgreSQL instance.
 
-# 4) 启动 dev server
+# 4) Start the development server.
 uvicorn app.main:app --reload --port 8000
 ```
 
-> 如果你不用 conda，也可以用 venv：`python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+Without conda, you can use venv:
 
-启动后：
-- API 文档：http://localhost:8000/docs
-- 健康检查：http://localhost:8000/api/health
-- 预览（拿 sheet 列表，不入库）：`POST http://localhost:8000/api/imports/preview`
-- 导入：`POST http://localhost:8000/api/imports`（multipart/form-data）
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-## 命令行直接调用（不走前端）
+After startup:
 
-预览（看文件里有哪些 sheet）：
+- API docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/api/health
+- Preview sheet list without writing to the database: `POST http://localhost:8000/api/imports/preview`
+- Import: `POST http://localhost:8000/api/imports` with `multipart/form-data`
+
+## Command-Line Calls
+
+Preview sheets:
+
 ```bash
 curl -X POST http://localhost:8000/api/imports/preview \
   -F "file=@../EcoTEA Endo WP1.xlsx" | python -m json.tool
 ```
 
-导入全部 sheet：
+Import all sheets:
+
 ```bash
 curl -X POST http://localhost:8000/api/imports \
   -F "file=@../EcoTEA Endo WP1.xlsx" \
@@ -68,35 +77,39 @@ curl -X POST http://localhost:8000/api/imports \
   -F "note=first run"
 ```
 
-只导入指定 sheet（白名单逗号分隔）：
+Import selected sheets only:
+
 ```bash
 curl -X POST http://localhost:8000/api/imports \
   -F "file=@../EcoTEA Endo WP1.xlsx" \
   -F "sheets=Power,Industry"
 ```
 
-## 设计要点
+## Design Notes
 
-- **数据清洗 3 类规则**（与 ER 图 v2 一致）：
-  - 占位符（`-`、`NA`、空）→ 直接 `NULL`，不留痕
-  - 公式错误（`#VALUE!`、`#REF!` 等）→ 主表 `NULL` + 写 `data_quality_issue` 记录原值
-  - 混合语义文本（`COP: 3.91`）→ 拆出 `_value` / `_text` / `_unit`
-- **粒度**：每条 `technology_year` = `(technology_id, data_year)`，5 张 satellite 都挂在它下面。
-- **upsert 策略**：sector / geography / commodity / data_source / technology_process 全部按业务唯一键 upsert；同一个文件重复导入不会爆唯一约束。
-- **审计**：每行原始 Excel 数据完整保留在 `raw_excel_row.raw_cells` (JSONB)。
+- Data cleaning follows three rule groups aligned with the ER diagram v2:
+  - Placeholders such as `-`, `NA`, and empty values become `NULL` without trace records.
+  - Formula errors such as `#VALUE!` and `#REF!` become `NULL` in the main table and create `data_quality_issue` rows with the original value.
+  - Mixed semantic text such as `COP: 3.91` is split into `_value`, `_text`, and `_unit`.
+- Grain: each `technology_year` row represents `(technology_id, data_year)`, and five satellite tables attach to it.
+- Upsert strategy: sector, geography, commodity, data_source, and technology_process are upserted by business keys. Reimporting the same file does not violate uniqueness constraints.
+- Audit: every raw Excel row is preserved in `raw_excel_row.raw_cells` as JSONB.
 
-## 验证已写入数据
+## Verify Written Data
 
 ```sql
--- 最近一次导入的概况
-SELECT * FROM import_batch ORDER BY imported_at DESC LIMIT 5;
+-- Most recent import summary.
+SELECT * FROM import_batch ORDER BY import_batch_id DESC LIMIT 1;
 
--- 各 sheet 写入了多少行
+-- Rows written per sheet.
 SELECT source_sheet_name, COUNT(*)
 FROM raw_excel_row
-WHERE import_batch_id = (SELECT MAX(import_batch_id) FROM import_batch)
-GROUP BY source_sheet_name;
+GROUP BY source_sheet_name
+ORDER BY source_sheet_name;
 
--- 异常追踪
-SELECT * FROM data_quality_issue ORDER BY issue_id DESC LIMIT 20;
+-- Quality issue tracing.
+SELECT source_sheet_name, excel_row_number, excel_column, issue_type, original_value
+FROM data_quality_issue
+ORDER BY issue_id DESC
+LIMIT 20;
 ```

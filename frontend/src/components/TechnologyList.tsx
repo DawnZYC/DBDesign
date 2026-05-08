@@ -25,7 +25,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 字典只取一次
+  // Load dictionaries once.
   useEffect(() => {
     Promise.all([listSectors(), listGeographies()])
       .then(([s, g]) => {
@@ -35,7 +35,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
       .catch((err) => setError((err as Error).message));
   }, []);
 
-  // 列表查询：依赖任何过滤变化
+  // Refresh the list when any filter changes.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -78,7 +78,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
       <header className="tech-list-filters">
         <input
           type="text"
-          placeholder="搜技术 code 或描述…"
+          placeholder="Search technology code or description..."
           value={search}
           onChange={(e) => handleFilterChange(setSearch)(e.target.value)}
           className="filter-input"
@@ -91,7 +91,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
             )
           }
         >
-          <option value="">全部行业</option>
+          <option value="">All Sectors</option>
           {sectors.map((s) => (
             <option key={s.sector_id} value={s.sector_id}>
               {s.sector_name}
@@ -106,7 +106,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
             )
           }
         >
-          <option value="">全部地区</option>
+          <option value="">All Geographies</option>
           {geographies.map((g) => (
             <option key={g.geography_id} value={g.geography_id}>
               {g.geography_code}
@@ -117,7 +117,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
 
       {error && (
         <div className="tech-list-error">
-          <strong>加载失败：</strong>
+          <strong>Failed to load:</strong>
           {error}
         </div>
       )}
@@ -126,27 +126,27 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
         <table className="tech-table">
           <thead>
             <tr>
-              <th>技术代码</th>
-              <th>行业</th>
-              <th>地区</th>
-              <th>描述</th>
-              <th className="ralign">寿命</th>
-              <th className="ralign">年份范围</th>
-              <th className="ralign">条数</th>
+              <th>Technology Code</th>
+              <th>Sector</th>
+              <th>Geography</th>
+              <th>Description</th>
+              <th className="ralign">Lifetime</th>
+              <th className="ralign">Year Range</th>
+              <th className="ralign">Rows</th>
             </tr>
           </thead>
           <tbody>
             {loading && data === null && (
               <tr>
                 <td colSpan={7} className="tech-table-loading">
-                  加载中…
+                  Loading...
                 </td>
               </tr>
             )}
             {data?.items.length === 0 && (
               <tr>
                 <td colSpan={7} className="tech-table-empty">
-                  没有匹配的技术
+                  No matching technologies
                 </td>
               </tr>
             )}
@@ -180,8 +180,8 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
 
       <footer className="tech-list-pager">
         <span className="pager-info">
-          {data ? `共 ${data.total} 条` : '—'}
-          {loading && data !== null && ' · 加载中…'}
+          {data ? `${data.total} total` : '—'}
+          {loading && data !== null && ' · Loading...'}
         </span>
         <div className="pager-buttons">
           <button
@@ -190,7 +190,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
             disabled={page <= 1 || loading}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
-            上一页
+            Previous
           </button>
           <span className="pager-page">
             {page} / {totalPages}
@@ -201,7 +201,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
             disabled={page >= totalPages || loading}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
-            下一页
+            Next
           </button>
         </div>
       </footer>

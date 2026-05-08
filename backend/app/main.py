@@ -1,4 +1,4 @@
-"""FastAPI 应用入口。"""
+"""FastAPI application entry point."""
 from __future__ import annotations
 
 import logging
@@ -18,7 +18,7 @@ logging.basicConfig(
 
 app = FastAPI(
     title="EcoTEA WP1 Import API",
-    description="把 EcoTEA Excel 数据导入到 PostgreSQL（15 张表 schema）。",
+    description="Import EcoTEA Excel data into a PostgreSQL schema with 15 tables.",
     version="0.1.0",
 )
 
