@@ -17,7 +17,7 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 2: runtime — Nginx serving the static bundle
 # ---------------------------------------------------------------------------
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.29-alpine AS runtime
 
 # Replace the default config with one tuned for an SPA + /api reverse-proxy.
 COPY nginx.conf /etc/nginx/conf.d/default.conf
