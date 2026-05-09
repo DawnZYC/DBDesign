@@ -71,8 +71,11 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
-          psql -h localhost -U postgres -d ecotea -f ../sql/001_init_schema.sql
-          psql -h localhost -U postgres -d ecotea -f ../sql/002_migrate_v2_to_v3.sql
+          set -euo pipefail
+          for f in $(ls ../sql/*.sql | sort); do
+            echo "==> Applying $f"
+            psql -h localhost -U postgres -d ecotea -v ON_ERROR_STOP=1 -f "$f"
+          done
 
       - name: Run tests
         env:
