@@ -1,0 +1,261 @@
+name: CI
+
+# Trigger on every PR to any branch and on direct pushes to main.
+# Manual dispatch is also allowed for ad-hoc reruns.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Backend: ruff lint + format check + pytest with coverage against PG 17.
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend (lint + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ecotea
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ecotea"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # SonarCloud needs full history for blame.
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Apply database schema
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for f in $(ls ../sql/*.sql | sort); do
+            echo "==> Applying $f"
+            psql -h localhost -U postgres -d ecotea -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/ecotea
+          ALLOWED_ORIGINS: http://localhost:5173
+        run: pytest
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Frontend: eslint + prettier + tsc + vitest + production build.
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: Frontend (lint + test + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Prettier check
+        run: npm run format:check
+
+      - name: TypeScript type check
+        run: npm run typecheck
+
+      - name: Unit tests with coverage
+        run: npm run test:coverage
+
+      - name: Production build
+        run: npm run build
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/lcov.info
+          if-no-files-found: warn
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Stand-alone DB migration check: run every sql/*.sql in order against a
+  # fresh PG 17 instance. Catches schema regressions independent of tests.
+  # ---------------------------------------------------------------------------
+  db-schema:
+    name: DB schema check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ecotea
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ecotea"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply SQL files in lexicographic order
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for f in $(ls sql/*.sql | sort); do
+            echo "==> Applying $f"
+            psql -h localhost -U postgres -d ecotea -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: Verify expected tables exist
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d ecotea -c "\dt"
+
+  # ---------------------------------------------------------------------------
+  # SonarCloud quality gate. Runs after backend + frontend so we have both
+  # coverage reports available. SONAR_TOKEN secret must be configured in repo.
+  # ---------------------------------------------------------------------------
+  sonarcloud:
+    name: SonarCloud quality gate
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    # Pull requests from forks cannot read secrets; skip Sonar for them.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download backend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend
+        continue-on-error: true
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+        continue-on-error: true
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Dependency vulnerability scan (informational; does not block merges yet).
+  # ---------------------------------------------------------------------------
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    continue-on-error: true  # informational in v1; flip to false after triage.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: pip-audit (backend)
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --strict || true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm audit (frontend)
+        working-directory: frontend
+        run: npm audit --audit-level=high || true

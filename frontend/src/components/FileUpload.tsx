@@ -58,7 +58,9 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
         disabled={disabled}
         hidden
       />
-      <div className="drop-icon" aria-hidden="true">📂</div>
+      <div className="drop-icon" aria-hidden="true">
+        📂
+      </div>
       <div className="drop-text">
         <strong>Click to choose</strong> or <strong>drag a .xlsx file here</strong>
       </div>

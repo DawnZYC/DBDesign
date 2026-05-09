@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listGeographies, listSectors, listTechnologies } from '../api';
-import type {
-  Geography,
-  Sector,
-  TechnologyListItem,
-  TechnologyListResponse,
-} from '../types';
+import type { Geography, Sector, TechnologyListResponse } from '../types';
 
 interface TechnologyListProps {
   onSelect: (technologyId: number) => void;
@@ -68,10 +63,12 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
     return Math.max(1, Math.ceil(data.total / data.page_size));
   }, [data]);
 
-  const handleFilterChange = <T,>(setter: (v: T) => void) => (v: T) => {
-    setter(v);
-    setPage(1);
-  };
+  const handleFilterChange =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v);
+      setPage(1);
+    };
 
   return (
     <section className="tech-list">
@@ -86,9 +83,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
         <select
           value={sectorId}
           onChange={(e) =>
-            handleFilterChange(setSectorId)(
-              e.target.value === '' ? '' : Number(e.target.value),
-            )
+            handleFilterChange(setSectorId)(e.target.value === '' ? '' : Number(e.target.value))
           }
         >
           <option value="">All Sectors</option>
@@ -101,9 +96,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
         <select
           value={geographyId}
           onChange={(e) =>
-            handleFilterChange(setGeographyId)(
-              e.target.value === '' ? '' : Number(e.target.value),
-            )
+            handleFilterChange(setGeographyId)(e.target.value === '' ? '' : Number(e.target.value))
           }
         >
           <option value="">All Geographies</option>

@@ -22,11 +22,7 @@ export function ImportResultPanel({ result, onReviewConflicts }: ImportResultPan
             <strong>{result.rows_pending} rows</strong> were held for sector conflict review
           </div>
           {onReviewConflicts && (
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={onReviewConflicts}
-            >
+            <button type="button" className="btn-primary" onClick={onReviewConflicts}>
               Review
             </button>
           )}
@@ -56,15 +52,11 @@ export function ImportResultPanel({ result, onReviewConflicts }: ImportResultPan
         </div>
         <div>
           <dt>Pending Review</dt>
-          <dd className={hasPending ? 'num-warn' : ''}>
-            {result.rows_pending.toLocaleString()}
-          </dd>
+          <dd className={hasPending ? 'num-warn' : ''}>{result.rows_pending.toLocaleString()}</dd>
         </div>
         <div>
           <dt>Quality Issues</dt>
-          <dd className={result.issues > 0 ? 'num-warn' : ''}>
-            {result.issues.toLocaleString()}
-          </dd>
+          <dd className={result.issues > 0 ? 'num-warn' : ''}>{result.issues.toLocaleString()}</dd>
         </div>
       </dl>
 
@@ -86,9 +78,7 @@ export function ImportResultPanel({ result, onReviewConflicts }: ImportResultPan
               <td className="ralign">{s.rows_total}</td>
               <td className="ralign num-ok">{s.rows_imported}</td>
               <td className="ralign">{s.rows_skipped}</td>
-              <td className={`ralign ${s.rows_pending > 0 ? 'num-warn' : ''}`}>
-                {s.rows_pending}
-              </td>
+              <td className={`ralign ${s.rows_pending > 0 ? 'num-warn' : ''}`}>{s.rows_pending}</td>
               <td className={`ralign ${s.issues > 0 ? 'num-warn' : ''}`}>{s.issues}</td>
             </tr>
           ))}

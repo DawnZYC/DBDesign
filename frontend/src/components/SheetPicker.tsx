@@ -76,12 +76,13 @@ export function SheetPicker({
                   disabled={disabled || !sheet.is_known}
                 />
                 <span className="sheet-name">{sheet.sheet_name}</span>
-                {sheet.sector_code && (
-                  <span className="sheet-sector">{sheet.sector_code}</span>
-                )}
+                {sheet.sector_code && <span className="sheet-sector">{sheet.sector_code}</span>}
                 <span className="sheet-rows">{sheet.data_rows} data rows</span>
                 {!sheet.is_known && (
-                  <span className="sheet-warn" title="Not in the known mapping table; it will be skipped">
+                  <span
+                    className="sheet-warn"
+                    title="Not in the known mapping table; it will be skipped"
+                  >
                     Unrecognized
                   </span>
                 )}

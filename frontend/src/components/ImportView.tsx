@@ -4,11 +4,7 @@ import { FileUpload } from './FileUpload';
 import { ImportResultPanel } from './ImportResultPanel';
 import { SheetPicker } from './SheetPicker';
 import { previewExcel, uploadExcel } from '../api';
-import type {
-  ConflictResolveResponse,
-  FilePreview,
-  ImportResult,
-} from '../types';
+import type { ConflictResolveResponse, FilePreview, ImportResult } from '../types';
 
 type Stage =
   | { kind: 'idle' }
@@ -29,9 +25,7 @@ export function ImportView() {
     setStage({ kind: 'previewing', fileName: file.name });
     try {
       const preview = await previewExcel(file);
-      const selected = new Set(
-        preview.sheets.filter((s) => s.is_known).map((s) => s.sheet_name),
-      );
+      const selected = new Set(preview.sheets.filter((s) => s.is_known).map((s) => s.sheet_name));
       setStage({ kind: 'picking', file, preview, selected });
     } catch (err) {
       setStage({
@@ -191,10 +185,7 @@ export function ImportView() {
 
       {stage.kind === 'success' && (
         <>
-          <ImportResultPanel
-            result={stage.result}
-            onReviewConflicts={() => setReviewing(true)}
-          />
+          <ImportResultPanel result={stage.result} onReviewConflicts={() => setReviewing(true)} />
           {reviewMessage && <div className="review-message">{reviewMessage}</div>}
           <button className="reset-btn" type="button" onClick={handleReset}>
             Import Another File

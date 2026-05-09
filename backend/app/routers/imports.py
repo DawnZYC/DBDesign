@@ -1,4 +1,5 @@
 """Import routes."""
+
 from __future__ import annotations
 
 import logging
@@ -38,9 +39,7 @@ def _validate_upload(file: UploadFile, file_bytes: bytes) -> None:
             detail=f"Only {ALLOWED_SUFFIXES} files are supported",
         )
     if not file_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="File is empty"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File is empty")
     if len(file_bytes) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,

@@ -5,6 +5,7 @@ The three cleaning rules match the ER diagram v2 design:
   2. Formula errors such as #VALUE! become NULL in main tables and create data_quality_issue rows.
   3. Mixed semantic text such as 'COP: 3.91' is split into value / text / unit.
 """
+
 from __future__ import annotations
 
 import re
@@ -128,7 +129,7 @@ def clean_numeric(value: Any) -> NumericResult:
         return NumericResult(None, str(value).strip())
     if isinstance(value, bool):  # Avoid treating True/False as 1/0.
         return NumericResult(None, None)
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return NumericResult(float(value), None)
     if isinstance(value, str):
         text = value.strip()
@@ -178,7 +179,7 @@ def parse_efficiency(value: Any) -> EfficiencyResult:
 
     if isinstance(value, bool):
         return EfficiencyResult(None, None, None)
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return EfficiencyResult(float(value), str(value), None)
 
     if isinstance(value, str):
@@ -236,18 +237,14 @@ def parse_commodity_combo(commodity_cell: Any, share_cell: Any) -> list[Commodit
     if is_placeholder(commodity_cell):
         return []
 
-    codes = [
-        c.strip()
-        for c in _RE_PLUS_SPLIT.split(str(commodity_cell).strip())
-        if c.strip()
-    ]
+    codes = [c.strip() for c in _RE_PLUS_SPLIT.split(str(commodity_cell).strip()) if c.strip()]
     if not codes:
         return []
 
     # Parse share.
     if isinstance(share_cell, bool):
         share_pairs: list[tuple[float | None, str | None]] = [(None, None)] * len(codes)
-    elif isinstance(share_cell, (int, float)):
+    elif isinstance(share_cell, int | float):
         share_pairs = [(float(share_cell), str(share_cell))]
     elif is_placeholder(share_cell) or is_excel_error(share_cell):
         share_pairs = [(None, None)] * len(codes)

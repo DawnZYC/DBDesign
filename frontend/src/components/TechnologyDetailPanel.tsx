@@ -139,9 +139,7 @@ function YearRow({ year }: { year: TechnologyYearOut }) {
         {year.efficiency_text ? (
           <>
             <strong>{year.efficiency_text}</strong>
-            {year.efficiency_unit && (
-              <span className="muted"> · {year.efficiency_unit}</span>
-            )}
+            {year.efficiency_unit && <span className="muted"> · {year.efficiency_unit}</span>}
           </>
         ) : (
           '—'
