@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: builder — install npm deps and build the Vite production bundle
 # ---------------------------------------------------------------------------
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /build
 
