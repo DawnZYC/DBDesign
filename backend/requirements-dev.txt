@@ -1,0 +1,13 @@
+# Development & CI dependencies, kept separate from production requirements.txt.
+-r requirements.txt
+
+# Lint & format
+ruff==0.7.4
+
+# Test
+pytest==8.3.4
+pytest-cov==6.0.0
+httpx==0.28.1
+
+# Security scanning (optional; CI also installs latest in pipeline)
+pip-audit==2.7.3

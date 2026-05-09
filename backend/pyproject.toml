@@ -1,0 +1,74 @@
+[project]
+name = "ecotea-wp1-backend"
+version = "0.1.0"
+description = "EcoTEA WP1 Excel-to-PostgreSQL import API."
+requires-python = ">=3.11"
+
+# ---------------------------------------------------------------------------
+# Ruff: lint + format (replaces black / isort / flake8 / pyupgrade).
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [
+    ".venv",
+    "build",
+    "dist",
+    "__pycache__",
+    # Ad-hoc developer scripts — kept in repo for convenience, not part of the
+    # shipped backend. Their style intentionally diverges (env-mutation before
+    # imports, etc.) so they are excluded from the lint baseline.
+    "seed_commodities.py",
+    "verify_*.py",
+]
+
+[tool.ruff.lint]
+# Enable a curated set: pycodestyle (E/W), Pyflakes (F), isort (I),
+# pep8-naming (N), pyupgrade (UP), bugbear (B), comprehensions (C4),
+# simplify (SIM), and security (S).
+select = ["E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "S"]
+ignore = [
+    "E501",   # line length is enforced by formatter, not linter
+    "S101",   # allow assert in tests
+    "B008",   # FastAPI Depends() pattern uses function calls in defaults
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "N802", "N803"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ---------------------------------------------------------------------------
+# Pytest configuration.
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=xml:coverage.xml",
+]
+markers = [
+    "integration: tests that require a real PostgreSQL instance",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

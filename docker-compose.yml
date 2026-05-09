@@ -1,0 +1,54 @@
+# Local + CI integration stack for EcoTEA WP1.
+#
+# Usage:
+#   docker compose up -d            # start db + backend + frontend
+#   docker compose logs -f backend  # tail backend logs
+#   docker compose down -v          # stop and wipe DB volume
+#
+# Once up, open:
+#   http://localhost:5173       (frontend)
+#   http://localhost:8000/docs  (FastAPI Swagger UI)
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ecotea
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # SQL files in /docker-entrypoint-initdb.d run on first start, in
+      # filename order, so 001_*.sql runs before 002_*.sql.
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ecotea"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ecotea
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:

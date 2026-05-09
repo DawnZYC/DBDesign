@@ -1,4 +1,5 @@
 """Read-only data browsing routes."""
+
 from __future__ import annotations
 
 import logging
@@ -41,9 +42,7 @@ def list_sectors(db: Session = Depends(get_db)) -> list[SectorOut]:
 
 @router.get("/geographies", response_model=list[GeographyOut], summary="List all geographies")
 def list_geographies(db: Session = Depends(get_db)) -> list[GeographyOut]:
-    rows = db.scalars(
-        select(models.Geography).order_by(models.Geography.geography_id)
-    ).all()
+    rows = db.scalars(select(models.Geography).order_by(models.Geography.geography_id)).all()
     return [GeographyOut.model_validate(r) for r in rows]
 
 
@@ -142,9 +141,7 @@ def list_technologies(
         )
         for r in rows
     ]
-    return TechnologyListResponse(
-        items=items, total=total, page=page, page_size=page_size
-    )
+    return TechnologyListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 # -----------------------------------------------------------------------------
@@ -155,9 +152,7 @@ def list_technologies(
     response_model=TechnologyDetail,
     summary="All years and parameters for one technology",
 )
-def get_technology(
-    technology_id: int, db: Session = Depends(get_db)
-) -> TechnologyDetail:
+def get_technology(technology_id: int, db: Session = Depends(get_db)) -> TechnologyDetail:
     tp = db.get(models.TechnologyProcess, technology_id)
     if tp is None:
         raise HTTPException(
@@ -274,7 +269,7 @@ def _fetch_by_year_id(
 ) -> dict[int, object]:
     """Index satellite rows by technology_year_id, with at most one row per ID."""
     rows = db.scalars(select(model_cls).where(fk_column.in_(year_ids))).all()
-    return {getattr(r, "technology_year_id"): r for r in rows}
+    return {r.technology_year_id: r for r in rows}
 
 
 def _fetch_constraints(
@@ -311,9 +306,7 @@ def _fetch_constraint_details(
     return out
 
 
-def _fetch_commodities(
-    db: Session, year_ids: list[int]
-) -> dict[int, list[CommodityRowOut]]:
+def _fetch_commodities(db: Session, year_ids: list[int]) -> dict[int, list[CommodityRowOut]]:
     rows = (
         db.execute(
             select(models.TechnologyYearCommodity, models.Commodity)

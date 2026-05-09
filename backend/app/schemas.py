@@ -1,4 +1,5 @@
 """Pydantic schemas for API request and response models."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -11,7 +12,9 @@ class SheetPreview(BaseModel):
     """Single sheet entry in a file preview."""
 
     sheet_name: str
-    is_known: bool = Field(..., description="Whether the sheet is in the known sector mapping table.")
+    is_known: bool = Field(
+        ..., description="Whether the sheet is in the known sector mapping table."
+    )
     sector_code: str | None = Field(default=None, description="Mapped sector_code.")
     data_rows: int = Field(..., description="Non-empty data rows from row 10 onward.")
 
@@ -44,7 +47,9 @@ class ImportResult(BaseModel):
     imported_at: datetime
     rows_imported: int
     rows_skipped: int
-    rows_pending: int = Field(default=0, description="Rows pending review, such as sector conflicts.")
+    rows_pending: int = Field(
+        default=0, description="Rows pending review, such as sector conflicts."
+    )
     issues: int
     sheets: list[ImportSheetSummary]
     duration_ms: int
@@ -60,7 +65,9 @@ class ConflictRow(BaseModel):
 class ConflictGroup(BaseModel):
     """Rows with the same sheet and column A value, grouped for one decision."""
 
-    group_id: str = Field(..., description="Group ID derived from sheet+a_value for client references.")
+    group_id: str = Field(
+        ..., description="Group ID derived from sheet+a_value for client references."
+    )
     sheet_name: str
     sheet_sector_code: str | None
     a_column_value: str | None = Field(..., description="Raw value from column A.")

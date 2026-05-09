@@ -10,12 +10,13 @@ Processing flow for each sheet data row (row >= 10):
   7. Write satellite tables: ecotea_parameter / wp_descriptor / commodity / constraint / constraint_detail.
   8. Collect formula errors such as #VALUE! into data_quality_issue.
 """
+
 from __future__ import annotations
 
 import hashlib
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import BytesIO
 from typing import Any
 
@@ -40,7 +41,6 @@ from app.schemas import (
 from app.services.value_cleaner import (
     clean_numeric,
     clean_text,
-    is_excel_error,
     is_placeholder,
     parse_commodity_combo,
     parse_efficiency,
@@ -55,10 +55,10 @@ logger = logging.getLogger(__name__)
 DATA_START_ROW = 10  # Data starts at row 10; rows 1-9 are headers/metadata.
 
 # raw_excel_row.normalized_status values.
-STATUS_NORMALIZED = "normalized"          # Successfully written to business tables.
+STATUS_NORMALIZED = "normalized"  # Successfully written to business tables.
 STATUS_PENDING_SECTOR = "pending_sector_review"  # Sector conflict awaiting user review.
-STATUS_SKIPPED = "skipped"                # User chose to skip.
-STATUS_PENDING = "pending"                # Initial state.
+STATUS_SKIPPED = "skipped"  # User chose to skip.
+STATUS_PENDING = "pending"  # Initial state.
 
 ISSUE_SECTOR_CONFLICT = "sector_conflict"
 
@@ -117,7 +117,7 @@ def import_excel(
         file_hash=hashlib.sha256(file_bytes).hexdigest(),
         imported_by=imported_by,
         note=note,
-        imported_at=datetime.now(timezone.utc),
+        imported_at=datetime.now(UTC),
     )
     db.add(batch)
     db.flush()  # Obtain batch.import_batch_id.
@@ -188,7 +188,7 @@ def _import_sheet(
     sector = _get_sector_by_sheet_name(db, sheet_name=sheet_name)
 
     # These columns inherit from the nearest previous row with non-empty H in sparse-row mode.
-    INHERIT_COLUMNS = ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "L", "M", "N")
+    INHERIT_COLUMNS = ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "L", "M", "N")  # noqa: N806
 
     rows_imported = 0
     rows_skipped = 0
@@ -223,9 +223,7 @@ def _import_sheet(
             }
 
         # 1) Write raw_excel_row with only values actually present in the row, not inherited values.
-        raw_cells_payload = _read_row_as_dict(
-            worksheet=worksheet, row_number=excel_row_number
-        )
+        raw_cells_payload = _read_row_as_dict(worksheet=worksheet, row_number=excel_row_number)
         raw_row = models.RawExcelRow(
             import_batch_id=batch.import_batch_id,
             source_sheet_name=sheet_name,
@@ -241,10 +239,7 @@ def _import_sheet(
         #    excluding inherited values so continuation rows are not falsely flagged.
         explicit_a_value = raw_cells_payload.get("A")
         a_sector_code = resolve_sector_from_text(explicit_a_value)
-        if (
-            a_sector_code is not None
-            and a_sector_code != sector.sector_code
-        ):
+        if a_sector_code is not None and a_sector_code != sector.sector_code:
             # Conflict: do not write business tables yet; mark pending and record an issue.
             raw_row.normalized_status = STATUS_PENDING_SECTOR
             db.add(
@@ -421,9 +416,7 @@ def _get_sector_by_sheet_name(db: Session, *, sheet_name: str) -> models.Sector:
 
 def _upsert_geography(db: Session, *, code: str) -> models.Geography:
     """Upsert by geography_code."""
-    existing = db.scalar(
-        select(models.Geography).where(models.Geography.geography_code == code)
-    )
+    existing = db.scalar(select(models.Geography).where(models.Geography.geography_code == code))
     if existing:
         return existing
     geo = models.Geography(geography_code=code, geography_name=_geography_full_name(code))
@@ -434,9 +427,7 @@ def _upsert_geography(db: Session, *, code: str) -> models.Geography:
 
 def _upsert_commodity(db: Session, *, code: str) -> models.Commodity:
     """Upsert by commodity_code."""
-    existing = db.scalar(
-        select(models.Commodity).where(models.Commodity.commodity_code == code)
-    )
+    existing = db.scalar(select(models.Commodity).where(models.Commodity.commodity_code == code))
     if existing:
         return existing
     commodity = models.Commodity(commodity_code=code)
@@ -508,9 +499,7 @@ def _upsert_technology_year(
         )
     )
     if existing:
-        _clear_satellite_rows(
-            db, technology_year_id=existing.technology_year_id
-        )
+        _clear_satellite_rows(db, technology_year_id=existing.technology_year_id)
         existing.traceability_id = traceability_id
         existing.raw_row_id = raw_row_id
         db.flush()
@@ -535,11 +524,7 @@ def _clear_satellite_rows(db: Session, *, technology_year_id: int) -> None:
         models.TechnologyYearConstraint,
         models.TechnologyYearConstraintDetail,
     ):
-        db.execute(
-            delete(model_cls).where(
-                model_cls.technology_year_id == technology_year_id
-            )
-        )
+        db.execute(delete(model_cls).where(model_cls.technology_year_id == technology_year_id))
     db.flush()
 
 
@@ -837,7 +822,7 @@ def _jsonify(value: Any) -> Any:
     """Convert a cell value into a JSON-serializable value, including datetime handling."""
     if value is None:
         return None
-    if isinstance(value, (str, int, float, bool)):
+    if isinstance(value, str | int | float | bool):
         return value
     return str(value)
 
@@ -889,9 +874,7 @@ def list_pending_conflicts(db: Session) -> ConflictListResponse:
                 a_column_value=a_value,
                 a_column_sector_code=a_sector,
                 rows=[
-                    ConflictRow(
-                        raw_row_id=r.raw_row_id, excel_row_number=r.excel_row_number
-                    )
+                    ConflictRow(raw_row_id=r.raw_row_id, excel_row_number=r.excel_row_number)
                     for r in members
                 ],
                 message=(
@@ -921,9 +904,7 @@ def resolve_pending_conflicts(
             )
             continue
         try:
-            _resolve_single_conflict(
-                db, raw_row_id=item.raw_row_id, decision=item.decision
-            )
+            _resolve_single_conflict(db, raw_row_id=item.raw_row_id, decision=item.decision)
             resolved += 1
         except Exception as exc:  # noqa: BLE001
             failed += 1
@@ -941,9 +922,7 @@ def resolve_pending_conflicts(
     )
 
 
-def _resolve_single_conflict(
-    db: Session, *, raw_row_id: int, decision: str
-) -> None:
+def _resolve_single_conflict(db: Session, *, raw_row_id: int, decision: str) -> None:
     """Process one pending row."""
     raw_row = db.get(models.RawExcelRow, raw_row_id)
     if raw_row is None:
@@ -972,9 +951,7 @@ def _resolve_single_conflict(
             f"(sheet={sheet_name}, A={cells.get('A')!r})"
         )
 
-    sector = db.scalar(
-        select(models.Sector).where(models.Sector.sector_code == sector_code)
-    )
+    sector = db.scalar(select(models.Sector).where(models.Sector.sector_code == sector_code))
     if sector is None:
         raise ValueError(f"sector_code '{sector_code}' does not exist in the sector table")
 
@@ -996,9 +973,7 @@ def _resolve_single_conflict(
 
 def preview_excel(*, file_bytes: bytes, file_name: str) -> FilePreview:
     """Parse only sheet names and row counts without writing to the database for sheet selection."""
-    workbook = load_workbook(
-        filename=BytesIO(file_bytes), data_only=True, read_only=True
-    )
+    workbook = load_workbook(filename=BytesIO(file_bytes), data_only=True, read_only=True)
     previews: list[SheetPreview] = []
     try:
         for sheet_name in workbook.sheetnames:
@@ -1020,9 +995,7 @@ def preview_excel(*, file_bytes: bytes, file_name: str) -> FilePreview:
 # -----------------------------------------------------------------------------
 # Internal helpers
 # -----------------------------------------------------------------------------
-def _normalize_sheet_filter(
-    selected: list[str] | None, available: list[str]
-) -> set[str] | None:
+def _normalize_sheet_filter(selected: list[str] | None, available: list[str]) -> set[str] | None:
     """Normalize the allowlist: trim whitespace, deduplicate, and keep only sheets present in the file.
 
     Return None to mean no filtering, importing all known sheets.
@@ -1036,7 +1009,10 @@ def _normalize_sheet_filter(
     valid = cleaned & available_set
     invalid = cleaned - available_set
     if invalid:
-        logger.warning("These sheets from the allowlist do not exist in the file and were ignored: %s", sorted(invalid))
+        logger.warning(
+            "These sheets from the allowlist do not exist in the file and were ignored: %s",
+            sorted(invalid),
+        )
     return valid
 
 

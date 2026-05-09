@@ -111,13 +111,10 @@ export interface TechFilters {
   page_size?: number;
 }
 
-export async function listTechnologies(
-  filters: TechFilters = {},
-): Promise<TechnologyListResponse> {
+export async function listTechnologies(filters: TechFilters = {}): Promise<TechnologyListResponse> {
   const params = new URLSearchParams();
   if (filters.sector_id != null) params.set('sector_id', String(filters.sector_id));
-  if (filters.geography_id != null)
-    params.set('geography_id', String(filters.geography_id));
+  if (filters.geography_id != null) params.set('geography_id', String(filters.geography_id));
   if (filters.q) params.set('q', filters.q);
   if (filters.page != null) params.set('page', String(filters.page));
   if (filters.page_size != null) params.set('page_size', String(filters.page_size));

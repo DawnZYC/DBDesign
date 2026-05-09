@@ -77,15 +77,11 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
           <div>
             <h2>Conflict Review</h2>
             <p className="modal-subtitle">
-              Rows where the sheet name conflicts with column A were held. Choose which value to use for each group.
+              Rows where the sheet name conflicts with column A were held. Choose which value to use
+              for each group.
             </p>
           </div>
-          <button
-            type="button"
-            className="modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </header>
@@ -120,15 +116,11 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                         <span className="versus-label">Sheet Name</span>
                         <span className="versus-value">{group.sheet_name}</span>
                         <span className="versus-arrow">→</span>
-                        <span className="versus-sector">
-                          {group.sheet_sector_code ?? '—'}
-                        </span>
+                        <span className="versus-sector">{group.sheet_sector_code ?? '—'}</span>
                       </div>
                       <div className="versus-side">
                         <span className="versus-label">Column A</span>
-                        <span className="versus-value">
-                          {group.a_column_value ?? '—'}
-                        </span>
+                        <span className="versus-value">{group.a_column_value ?? '—'}</span>
                         <span className="versus-arrow">→</span>
                         <span className="versus-sector">
                           {group.a_column_sector_code ?? 'Unresolved'}
@@ -146,54 +138,32 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                     </div>
 
                     <div className="decision-row">
-                      <label
-                        className={`decision ${
-                          current === 'TRUST_SHEET' ? 'active' : ''
-                        }`}
-                      >
+                      <label className={`decision ${current === 'TRUST_SHEET' ? 'active' : ''}`}>
                         <input
                           type="radio"
                           name={group.group_id}
                           checked={current === 'TRUST_SHEET'}
-                          onChange={() =>
-                            handleDecisionChange(group.group_id, 'TRUST_SHEET')
-                          }
+                          onChange={() => handleDecisionChange(group.group_id, 'TRUST_SHEET')}
                           disabled={!group.sheet_sector_code}
                         />
-                        <span>
-                          Trust sheet ({group.sheet_sector_code ?? '—'})
-                        </span>
+                        <span>Trust sheet ({group.sheet_sector_code ?? '—'})</span>
                       </label>
-                      <label
-                        className={`decision ${
-                          current === 'TRUST_A' ? 'active' : ''
-                        }`}
-                      >
+                      <label className={`decision ${current === 'TRUST_A' ? 'active' : ''}`}>
                         <input
                           type="radio"
                           name={group.group_id}
                           checked={current === 'TRUST_A'}
-                          onChange={() =>
-                            handleDecisionChange(group.group_id, 'TRUST_A')
-                          }
+                          onChange={() => handleDecisionChange(group.group_id, 'TRUST_A')}
                           disabled={!group.a_column_sector_code}
                         />
-                        <span>
-                          Trust column A ({group.a_column_sector_code ?? 'unavailable'})
-                        </span>
+                        <span>Trust column A ({group.a_column_sector_code ?? 'unavailable'})</span>
                       </label>
-                      <label
-                        className={`decision ${
-                          current === 'SKIP' ? 'active skip' : ''
-                        }`}
-                      >
+                      <label className={`decision ${current === 'SKIP' ? 'active skip' : ''}`}>
                         <input
                           type="radio"
                           name={group.group_id}
                           checked={current === 'SKIP'}
-                          onChange={() =>
-                            handleDecisionChange(group.group_id, 'SKIP')
-                          }
+                          onChange={() => handleDecisionChange(group.group_id, 'SKIP')}
                         />
                         <span>Skip (do not import)</span>
                       </label>
@@ -210,25 +180,14 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
             {groups?.length ?? 0} groups · {totalRows} rows pending
           </span>
           <div className="modal-actions">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={onClose}
-              disabled={submitting}
-            >
+            <button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>
               Later
             </button>
             <button
               type="button"
               className="btn-primary"
               onClick={handleSubmit}
-              disabled={
-                submitting ||
-                loading ||
-                !groups ||
-                groups.length === 0 ||
-                error !== null
-              }
+              disabled={submitting || loading || !groups || groups.length === 0 || error !== null}
             >
               {submitting ? 'Submitting...' : `Apply Decisions (${totalRows} rows)`}
             </button>
