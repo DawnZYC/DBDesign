@@ -34,7 +34,6 @@ will all turn green.
 |---|---|
 | `.github/workflows/ci.yml` | PR + push CI: lint, test, SonarCloud, dep audit |
 | `.github/workflows/build-images.yml` | main / tag: docker build + push GHCR + Trivy |
-| `.github/dependabot.yml` | Weekly dependency PRs (pip / npm / actions / docker) |
 | `.github/pull_request_template.md` | PR description template |
 | `.pre-commit-config.yaml` | Local pre-commit hooks (ruff, prettier, hygiene) |
 | `sonar-project.properties` | SonarCloud project config |
@@ -94,11 +93,11 @@ must allow it to publish packages:
 - ☑ Require branches to be up to date before merging
 - ☑ Do not allow bypassing the above
 
-### 3.4 Dependabot
+### 3.4 Dependency updates
 
-No setup required — committing `.github/dependabot.yml` enables it.
-Optional: in **Settings → Code security**, enable *Dependabot alerts* and
-*Dependabot security updates* to also get CVE-only PRs.
+Dependabot was intentionally **not enabled** for this project (mid-development
+noise outweighed the value). To bring it back later, drop a
+`.github/dependabot.yml` describing pip / npm / actions / docker ecosystems.
 
 ## 4. Local developer onboarding
 
