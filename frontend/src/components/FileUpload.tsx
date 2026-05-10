@@ -59,7 +59,13 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
         hidden
       />
       <div className="drop-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M12 16V4" />
           <path d="M7 9l5-5 5 5" />
           <path d="M5 20h14" />

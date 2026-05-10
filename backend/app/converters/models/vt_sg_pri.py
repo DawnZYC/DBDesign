@@ -9,45 +9,75 @@ Each process expands to 27 rows (years 2018-2070, step 2).
 
 from __future__ import annotations
 
+import contextlib
+
 import numpy as np
-import pandas as pd
 
 from app.converters.base_model import MISSING, BaseConverter, PowerRecord
-
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-TRACEABILITY = dict(
-    wp6_title="Primary",
-    data_owner="ESI",
-    data_provider="WP1",
-    data_source="GREF",
-    data_source_desc="SG GREF v8.14; VT_SG_PRI_GREF",
-    data_user="WP1",
-    usage_purpose="Scenario analysis",
-    geography="SG",
-)
+TRACEABILITY = {
+    "wp6_title": "Primary",
+    "data_owner": "ESI",
+    "data_provider": "WP1",
+    "data_source": "GREF",
+    "data_source_desc": "SG GREF v8.14; VT_SG_PRI_GREF",
+    "data_user": "WP1",
+    "usage_purpose": "Scenario analysis",
+    "geography": "SG",
+}
 
 EF_FALLBACK = {
-    "COA": 94.6, "PCK": 100.833, "NGA": 56.1, "LNG": 64.2,
-    "HFO": 77.4, "BDS": 70.8, "DSL": 74.1, "GSL": 69.3,
-    "BMS": 0, "URA": 0, "HYG": 0, "BEN": 43.079,
-    "LPG": 63.1, "RGA": 57.567, "TGA": 55.733, "WAS": 50,
-    "EEE": 0, "SOL": 0, "WAT": 0,
+    "COA": 94.6,
+    "PCK": 100.833,
+    "NGA": 56.1,
+    "LNG": 64.2,
+    "HFO": 77.4,
+    "BDS": 70.8,
+    "DSL": 74.1,
+    "GSL": 69.3,
+    "BMS": 0,
+    "URA": 0,
+    "HYG": 0,
+    "BEN": 43.079,
+    "LPG": 63.1,
+    "RGA": 57.567,
+    "TGA": 55.733,
+    "WAS": 50,
+    "EEE": 0,
+    "SOL": 0,
+    "WAT": 0,
 }
 
 NO_EF_COMMS = {
     "OIL",
-    "2MM", "3MM", "CFO",
-    "NCH", "NCW", "NCC", "NCM", "NCI", "NCV", "NCT", "NCA", "NCF",
-    "AGG", "WAG", "WSG", "LUF",
+    "2MM",
+    "3MM",
+    "CFO",
+    "NCH",
+    "NCW",
+    "NCC",
+    "NCM",
+    "NCI",
+    "NCV",
+    "NCT",
+    "NCA",
+    "NCF",
+    "AGG",
+    "WAG",
+    "WSG",
+    "LUF",
 }
 
 START_2071_PROCS = {"IMPHYG00", "IMPHYG01", "IMPHYG02", "IMPEEE01"}
 ACT_BND_PROCS = {"IMPEEE00", "MINRGA00", "MINWAS00"}
 CONSTRAINT_PROCS = {"IMPEEE00"}
+
+# Header / placeholder rows that should be skipped while scanning sheets.
+SKIP_TECH_NAMES = {"*", "TechName", "Technology Name"}
 
 YEARS = list(range(2018, 2072, 2))
 
@@ -55,6 +85,7 @@ YEARS = list(range(2018, 2072, 2))
 # ---------------------------------------------------------------------------
 # Converter
 # ---------------------------------------------------------------------------
+
 
 class VTSGPRIConverter(BaseConverter):
     """Converter for VT_SG_PRI_GREF source files."""
@@ -82,10 +113,8 @@ class VTSGPRIConverter(BaseConverter):
             abbr = df.iloc[i, 1]
             ef = df.iloc[i, 2]
             if isinstance(abbr, str) and abbr.strip() and not abbr.startswith("*"):
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     self._ef_by_comm[abbr.strip()] = float(ef)
-                except (ValueError, TypeError):
-                    pass
 
     @staticmethod
     def _find_col_maps(df) -> tuple[int | None, dict[int, int], dict[int, int]]:
@@ -124,14 +153,12 @@ class VTSGPRIConverter(BaseConverter):
         hdr_row, cost_cols, act_bnd_cols = self._find_col_maps(df)
         start_row = (hdr_row + 1) if hdr_row is not None else 6
 
-        SKIP = {"*", "TechName", "Technology Name"}
-
         for i in range(start_row, len(df)):
             code = df.iloc[i, 2]
             if not isinstance(code, str):
                 continue
             code = code.strip()
-            if code in SKIP or not code.upper().startswith("IMP"):
+            if code in SKIP_TECH_NAMES or not code.upper().startswith("IMP"):
                 continue
 
             desc = df.iloc[i, 3]
@@ -152,16 +179,10 @@ class VTSGPRIConverter(BaseConverter):
                 {
                     "sheet": "Import",
                     "code": code,
-                    "description": str(desc).strip()
-                    if isinstance(desc, str)
-                    else str(desc),
-                    "comm_out": comm_out.strip()
-                    if isinstance(comm_out, str)
-                    else MISSING,
+                    "description": str(desc).strip() if isinstance(desc, str) else str(desc),
+                    "comm_out": comm_out.strip() if isinstance(comm_out, str) else MISSING,
                     "start_year": start_yr,
-                    "afa": afa_v
-                    if not (isinstance(afa_v, float) and np.isnan(afa_v))
-                    else MISSING,
+                    "afa": afa_v if not (isinstance(afa_v, float) and np.isnan(afa_v)) else MISSING,
                     "costs": self._read_year_vals(df, i, cost_cols),
                     "act_bnd": self._read_year_vals(df, i, act_bnd_cols),
                 }
@@ -172,14 +193,12 @@ class VTSGPRIConverter(BaseConverter):
         hdr_row, cost_cols, act_bnd_cols = self._find_col_maps(df)
         start_row = (hdr_row + 1) if hdr_row is not None else 6
 
-        SKIP = {"*", "TechName", "Technology Name"}
-
         for i in range(start_row, len(df)):
             code = df.iloc[i, 2]
             if not isinstance(code, str):
                 continue
             code = code.strip()
-            if code in SKIP or not code.upper().startswith("MIN"):
+            if code in SKIP_TECH_NAMES or not code.upper().startswith("MIN"):
                 continue
 
             desc = df.iloc[i, 3]
@@ -189,12 +208,8 @@ class VTSGPRIConverter(BaseConverter):
                 {
                     "sheet": "Mining",
                     "code": code,
-                    "description": str(desc).strip()
-                    if isinstance(desc, str)
-                    else str(desc),
-                    "comm_out": comm_out.strip()
-                    if isinstance(comm_out, str)
-                    else MISSING,
+                    "description": str(desc).strip() if isinstance(desc, str) else str(desc),
+                    "comm_out": comm_out.strip() if isinstance(comm_out, str) else MISSING,
                     "start_year": 2018,
                     "afa": MISSING,
                     "costs": self._read_year_vals(df, i, cost_cols),

@@ -52,8 +52,15 @@
   --radius-lg: 10px;
 
   font-family:
-    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    Arial,
+    sans-serif;
   font-feature-settings: 'cv02', 'cv03', 'cv04';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -159,7 +166,9 @@ button {
   text-align: left;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
 }
 
 .sidebar-step:hover:not(.active) {
@@ -350,7 +359,9 @@ button {
   font-size: 13.5px;
   background: var(--surface);
   color: var(--text);
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .form-field input:hover,
@@ -377,7 +388,10 @@ button {
   font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .btn-primary {
@@ -453,7 +467,9 @@ button {
   padding: 40px 24px;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
   user-select: none;
 }
 
@@ -902,7 +918,9 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
 .modal-close svg {
@@ -1057,7 +1075,10 @@ button {
   border-radius: var(--radius-md);
   font-size: 12.5px;
   cursor: pointer;
-  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
 .decision:hover {
@@ -1163,7 +1184,9 @@ button {
   font-size: 13px;
   background: var(--surface);
   color: var(--text);
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .filter-input {
@@ -1213,7 +1236,9 @@ button {
   border-radius: var(--radius-md);
   padding: 12px 14px;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
 }
 
 .tech-card:hover {
@@ -1665,7 +1690,9 @@ button {
   cursor: pointer;
   text-align: left;
   font-family: inherit;
-  transition: border-color 0.12s ease, background 0.12s ease;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
 }
 
 .model-option:hover:not(.active) {

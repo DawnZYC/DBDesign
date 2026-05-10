@@ -11,22 +11,21 @@ import pandas as pd
 
 from app.converters.base_model import MISSING, BaseConverter, PowerRecord
 
-
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-TRACEABILITY = dict(
-    wp6_title="Power",
-    data_owner="ESI",
-    data_provider="WP1",
-    data_source="GREF",
-    data_source_desc="SG GREF v8.14; VT_SG_PWR_GREF",
-    data_user="WP1",
-    usage_purpose="Scenario analysis",
-    geography="SG",
-    start_year=2018,
-)
+TRACEABILITY = {
+    "wp6_title": "Power",
+    "data_owner": "ESI",
+    "data_provider": "WP1",
+    "data_source": "GREF",
+    "data_source_desc": "SG GREF v8.14; VT_SG_PWR_GREF",
+    "data_user": "WP1",
+    "usage_purpose": "Scenario analysis",
+    "geography": "SG",
+    "start_year": 2018,
+}
 
 EF_MAP = {
     "PWRNGA": 56.1,
@@ -126,10 +125,42 @@ COMMODITY_SHARE_OVERRIDES = {
 
 INTERPOLATION_OVERRIDES = {"PWRBMCSTP00": 5}
 
+# Header / placeholder rows in the SOL sheet that should be skipped while
+# scanning data blocks.
+SOL_SKIP_CODES = {
+    "*",
+    "TechName",
+    "*Technology name",
+    "*Units",
+    "~FI_T:AF~UP",
+    "~FI_T:AFA~UP",
+}
+
+# Process-level emission factor overrides (where the simple Comm-IN lookup
+# would give the wrong fuel).
+EF_OVERRIDES = {
+    "PWRWASWTE00": EF_MAP["PWRWAS"],
+    "PWRNGACCH11": EF_MAP["PWRNGA"],
+    "IRFNGACGP00": EF_MAP["PWRNGA"],
+    "IBMNGACGP00": EF_MAP["PWRNGA"],
+}
+
+# Fixed UC_RHSRT reference values (annual constraint values that cannot be
+# derived from the VT SOL sheet without TIMES period-duration metadata).
+UC_RHSRT_FIXED = {
+    "PWRSOLLPV00": {
+        2018: 0.0290451024544057,
+        2020: 0.0641013375821088,
+        2030: 0.870599786263404,
+        2050: 0.870599786263404,
+    },
+}
+
 
 # ---------------------------------------------------------------------------
 # Converter
 # ---------------------------------------------------------------------------
+
 
 class VTSGPWRConverter(BaseConverter):
     """Converter for VT_SG_PWR_GREF source files."""
@@ -195,29 +226,19 @@ class VTSGPWRConverter(BaseConverter):
                 "invcost": {
                     int(float(df.iloc[1, 8 + j])): df.iloc[i, 8 + j]
                     for j in range(7)
-                    if not (
-                        isinstance(df.iloc[1, 8 + j], float) and np.isnan(df.iloc[1, 8 + j])
-                    )
+                    if not (isinstance(df.iloc[1, 8 + j], float) and np.isnan(df.iloc[1, 8 + j]))
                 },
                 "fixom": {
                     int(float(df.iloc[1, 15 + j])): df.iloc[i, 15 + j]
                     for j in range(7)
-                    if not (
-                        isinstance(df.iloc[1, 15 + j], float)
-                        and np.isnan(df.iloc[1, 15 + j])
-                    )
+                    if not (isinstance(df.iloc[1, 15 + j], float) and np.isnan(df.iloc[1, 15 + j]))
                 },
                 "varom": {
                     int(float(df.iloc[1, 22 + j])): df.iloc[i, 22 + j]
                     for j in range(7)
-                    if not (
-                        isinstance(df.iloc[1, 22 + j], float)
-                        and np.isnan(df.iloc[1, 22 + j])
-                    )
+                    if not (isinstance(df.iloc[1, 22 + j], float) and np.isnan(df.iloc[1, 22 + j]))
                 },
-                "capacity": {
-                    self._cap_year_headers[j]: cap_vals[j] for j in range(n_cap)
-                },
+                "capacity": {self._cap_year_headers[j]: cap_vals[j] for j in range(n_cap)},
             }
 
     def _parse_pwr(self) -> None:
@@ -233,15 +254,11 @@ class VTSGPWRConverter(BaseConverter):
                 current_code = code
             comm = df.iloc[i, 10]
             if (
-                current_code
-                and isinstance(comm, str)
-                and comm != "*"
-                and not pd.isna(comm)
-            ):
-                if current_code not in self._pwr_comm:
-                    self._pwr_comm[current_code] = comm
-                    self._pwr_share0[current_code] = df.iloc[i, 12]
-                    self._pwr_share[current_code] = df.iloc[i, 13]
+                current_code and isinstance(comm, str) and comm != "*" and not pd.isna(comm)
+            ) and current_code not in self._pwr_comm:
+                self._pwr_comm[current_code] = comm
+                self._pwr_share0[current_code] = df.iloc[i, 12]
+                self._pwr_share[current_code] = df.iloc[i, 13]
 
     def _parse_sol(self) -> None:
         df = self._sheets["SOL"]
@@ -276,20 +293,11 @@ class VTSGPWRConverter(BaseConverter):
             if isinstance(headers[i], str) and headers[i].startswith("VAROM~")
         ]
 
-        SKIP_CODES = {
-            "*",
-            "TechName",
-            "*Technology name",
-            "*Units",
-            "~FI_T:AF~UP",
-            "~FI_T:AFA~UP",
-        }
-
         for i in range(len(df)):
             code = df.iloc[i, 9]
             if not isinstance(code, str):
                 continue
-            if code in SKIP_CODES:
+            if code in SOL_SKIP_CODES:
                 continue
 
             if code not in self._sol_data:
@@ -308,19 +316,13 @@ class VTSGPWRConverter(BaseConverter):
         commodities = df.iloc[4, 2:].values
         ef_values = df.iloc[6, 2:].values
         self._emi: dict[str, float] = {}
-        for comm, val in zip(commodities, ef_values):
+        for comm, val in zip(commodities, ef_values, strict=False):
             if isinstance(comm, str) and not pd.isna(val):
                 self._emi[comm] = float(val)
 
     # -- Lookups -----------------------------------------------------------
 
     def _get_ef(self, code: str) -> object:
-        EF_OVERRIDES = {
-            "PWRWASWTE00": EF_MAP["PWRWAS"],
-            "PWRNGACCH11": EF_MAP["PWRNGA"],
-            "IRFNGACGP00": EF_MAP["PWRNGA"],
-            "IBMNGACGP00": EF_MAP["PWRNGA"],
-        }
         if code in EF_OVERRIDES:
             return EF_OVERRIDES[code]
 
@@ -355,9 +357,7 @@ class VTSGPWRConverter(BaseConverter):
             sol = self._sol_data.get(code, {})
             invcost = sol.get("invcost", {})
             years = sorted(
-                yr
-                for yr, v in invcost.items()
-                if not (isinstance(v, float) and np.isnan(v))
+                yr for yr, v in invcost.items() if not (isinstance(v, float) and np.isnan(v))
             )
             if not years:
                 years = [2018]
@@ -370,11 +370,7 @@ class VTSGPWRConverter(BaseConverter):
         valid: list[tuple[int, object]] = []
         for yr in self._cap_year_headers:
             v = cap_by_year.get(yr)
-            if (
-                v is not None
-                and not (isinstance(v, float) and np.isnan(v))
-                and v != 0
-            ):
+            if v is not None and not (isinstance(v, float) and np.isnan(v)) and v != 0:
                 valid.append((int(yr), v))
 
         if not valid:
@@ -398,9 +394,7 @@ class VTSGPWRConverter(BaseConverter):
         ef = self._get_ef(code)
         afa = self._convert_afa(db["afa"])
         commodity = self._get_commodity(code)
-        comm_share = COMMODITY_SHARE_OVERRIDES.get(
-            code, 1 if commodity != MISSING else MISSING
-        )
+        comm_share = COMMODITY_SHARE_OVERRIDES.get(code, 1 if commodity != MISSING else MISSING)
         interp = INTERPOLATION_OVERRIDES.get(code, MISSING)
         bound = BOUND_OVERRIDES.get(code, db["bound"])
 
@@ -410,27 +404,19 @@ class VTSGPWRConverter(BaseConverter):
         else:
             efficiency = COGEN_ELEC_EFF.get(
                 code,
-                raw_eff
-                if not (isinstance(raw_eff, float) and np.isnan(raw_eff))
-                else MISSING,
+                raw_eff if not (isinstance(raw_eff, float) and np.isnan(raw_eff)) else MISSING,
             )
 
         raw_hr = db["heat_rate"]
         heat_rate: object = (
             MISSING
             if code in SOLAR_PROCESSES
-            else (
-                raw_hr
-                if not (isinstance(raw_hr, float) and np.isnan(raw_hr))
-                else MISSING
-            )
+            else (raw_hr if not (isinstance(raw_hr, float) and np.isnan(raw_hr)) else MISSING)
         )
 
         raw_lt = db["lifetime"]
         lifetime: object = (
-            int(raw_lt)
-            if not (isinstance(raw_lt, float) and np.isnan(raw_lt))
-            else MISSING
+            int(raw_lt) if not (isinstance(raw_lt, float) and np.isnan(raw_lt)) else MISSING
         )
 
         if code in NO_CAPACITY_PROCS:
@@ -440,14 +426,6 @@ class VTSGPWRConverter(BaseConverter):
         else:
             cap_type = MISSING
 
-        UC_RHSRT_FIXED = {
-            "PWRSOLLPV00": {
-                2018: 0.0290451024544057,
-                2020: 0.0641013375821088,
-                2030: 0.870599786263404,
-                2050: 0.870599786263404,
-            },
-        }
         uc_rhsrt_by_year = UC_RHSRT_FIXED.get(code, {})
 
         rows: list[PowerRecord] = []
@@ -465,17 +443,11 @@ class VTSGPWRConverter(BaseConverter):
                 var_unit = "PJ (2018)"
 
             if code in SOLAR_PROCESSES:
-                ct = (
-                    str(bound)
-                    if isinstance(bound, str) and bound in ("FX", "UP")
-                    else MISSING
-                )
+                ct = str(bound) if isinstance(bound, str) and bound in ("FX", "UP") else MISSING
             else:
                 ct = cap_type
 
-            uc_val = (
-                self._pick_cost(uc_rhsrt_by_year, year) if uc_rhsrt_by_year else MISSING
-            )
+            uc_val = self._pick_cost(uc_rhsrt_by_year, year) if uc_rhsrt_by_year else MISSING
 
             r = PowerRecord(
                 **TRACEABILITY,

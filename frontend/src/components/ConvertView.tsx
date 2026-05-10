@@ -73,7 +73,7 @@ export function ConvertView({ onHandoffToImport }: ConvertViewProps) {
       const result = await convertVT({
         modelKey: selectedModel,
         sourceFile,
-        templateFile: useCustomTemplate ? templateFile ?? undefined : undefined,
+        templateFile: useCustomTemplate ? (templateFile ?? undefined) : undefined,
       });
       setStage({ kind: 'success', result });
     } catch (err) {
@@ -87,10 +87,7 @@ export function ConvertView({ onHandoffToImport }: ConvertViewProps) {
   };
 
   const canConvert =
-    !!selectedModel &&
-    !!sourceFile &&
-    (!useCustomTemplate || !!templateFile) &&
-    !isWorking;
+    !!selectedModel && !!sourceFile && (!useCustomTemplate || !!templateFile) && !isWorking;
 
   return (
     <div className="convert-view">
@@ -103,9 +100,7 @@ export function ConvertView({ onHandoffToImport }: ConvertViewProps) {
         </div>
 
         {modelsError && (
-          <div className="status-error-message">
-            Unable to load model list. {modelsError}
-          </div>
+          <div className="status-error-message">Unable to load model list. {modelsError}</div>
         )}
 
         {models.length > 0 && (
@@ -139,9 +134,7 @@ export function ConvertView({ onHandoffToImport }: ConvertViewProps) {
       <section className="convert-card">
         <div className="convert-card-header">
           <h3 className="convert-card-title">Step 2 · Upload VT source workbook</h3>
-          <span className="convert-card-meta">
-            Excel workbook (.xlsx, .xlsm, .xls)
-          </span>
+          <span className="convert-card-meta">Excel workbook (.xlsx, .xlsm, .xls)</span>
         </div>
 
         {sourceFile ? (
@@ -300,7 +293,5 @@ function TemplatePicker({
   onPick: (file: File | undefined) => void;
   disabled: boolean;
 }) {
-  return (
-    <FileUpload onFileSelected={(file) => onPick(file)} disabled={disabled} />
-  );
+  return <FileUpload onFileSelected={(file) => onPick(file)} disabled={disabled} />;
 }

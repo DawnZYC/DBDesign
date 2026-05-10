@@ -14,46 +14,45 @@ from openpyxl.utils import get_column_letter
 
 from app.converters.base_model import MISSING, PowerRecord
 
-
 POWER_COL_ORDER = [
-    "wp6_title",           # A
-    "data_owner",          # B
-    "data_provider",       # C
-    "data_source",         # D
-    "data_source_desc",    # E
-    "data_user",           # F
-    "usage_purpose",       # G
-    "process_code",        # H
-    "description",         # I
-    "geography",           # J
-    "year",                # K
-    "start_year",          # L
-    "lifetime",            # M
-    "grade",               # N
-    "ef",                  # O
-    "ef_unit",             # P
-    "currency",            # Q
-    "capex",               # R
-    "capex_unit",          # S
-    "fixed_opex",          # T
-    "fixed_opex_unit",     # U
-    "variable_opex",       # V
+    "wp6_title",  # A
+    "data_owner",  # B
+    "data_provider",  # C
+    "data_source",  # D
+    "data_source_desc",  # E
+    "data_user",  # F
+    "usage_purpose",  # G
+    "process_code",  # H
+    "description",  # I
+    "geography",  # J
+    "year",  # K
+    "start_year",  # L
+    "lifetime",  # M
+    "grade",  # N
+    "ef",  # O
+    "ef_unit",  # P
+    "currency",  # Q
+    "capex",  # R
+    "capex_unit",  # S
+    "fixed_opex",  # T
+    "fixed_opex_unit",  # U
+    "variable_opex",  # V
     "variable_opex_unit",  # W
-    "tax_cost",            # X
-    "sub_cost",            # Y
-    "efficiency",          # Z
-    "tech_efficiency",     # AA
-    "commodity_share",     # AB
-    "commodity",           # AC
-    "commodity_demand",    # AD
+    "tax_cost",  # X
+    "sub_cost",  # Y
+    "efficiency",  # Z
+    "tech_efficiency",  # AA
+    "commodity_share",  # AB
+    "commodity",  # AC
+    "commodity_demand",  # AD
     "interpolation_rule",  # AE
-    "afa",                 # AF
-    "heat_rate",           # AG
-    "capacity",            # AH
-    "capacity_type",       # AI
-    "constraint",          # AJ
-    "uc_rhsrt",            # AK
-    "uc_rhsrt_note",       # AL
+    "afa",  # AF
+    "heat_rate",  # AG
+    "capacity",  # AH
+    "capacity_type",  # AI
+    "constraint",  # AJ
+    "uc_rhsrt",  # AK
+    "uc_rhsrt_note",  # AL
 ]
 
 # Rows 1-9 are header/metadata rows preserved from the template.

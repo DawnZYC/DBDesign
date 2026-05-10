@@ -14,15 +14,15 @@ import shutil
 import tempfile
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
-from app.converters.engine import convert as run_convert, get_available_models
+from app.converters.engine import convert as run_convert
+from app.converters.engine import get_available_models
 from app.schemas import ConvertModelInfo, ConvertResult
-
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class ConversionArtefact:
     model_key: str
     source_file_name: str
     template_file_name: str
-    created_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
 
 
 _cache_lock = Lock()
@@ -125,9 +125,7 @@ async def create_conversion(
     vt_file: UploadFile = File(..., description="VT source workbook to convert."),
     ecotea_template: UploadFile | None = File(
         default=None,
-        description=(
-            "Optional EcoTEA template; if omitted the bundled template is used."
-        ),
+        description=("Optional EcoTEA template; if omitted the bundled template is used."),
     ),
 ) -> ConvertResult:
     vt_bytes = await vt_file.read()
@@ -224,7 +222,5 @@ def download_conversion(token: str):
     return FileResponse(
         path=str(artefact.output_path),
         filename=artefact.download_name,
-        media_type=(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ),
+        media_type=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
     )

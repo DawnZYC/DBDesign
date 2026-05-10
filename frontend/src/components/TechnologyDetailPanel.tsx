@@ -183,9 +183,7 @@ function YearRow({ year }: { year: TechnologyYearOut }) {
         {year.efficiency_text ? (
           <div className="year-cell-pair">
             <span>{year.efficiency_text}</span>
-            {year.efficiency_unit && (
-              <span className="year-cell-unit">{year.efficiency_unit}</span>
-            )}
+            {year.efficiency_unit && <span className="year-cell-unit">{year.efficiency_unit}</span>}
           </div>
         ) : (
           <span className="year-cell-empty">—</span>

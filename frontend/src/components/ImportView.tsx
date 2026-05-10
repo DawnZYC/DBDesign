@@ -3,22 +3,10 @@ import { ConflictReviewModal } from './ConflictReviewModal';
 import { FileUpload } from './FileUpload';
 import { ImportResultPanel } from './ImportResultPanel';
 import { SheetPicker } from './SheetPicker';
-import {
-  importFromConversion,
-  previewExcel,
-  previewFromConversion,
-  uploadExcel,
-} from '../api';
-import type {
-  ConflictResolveResponse,
-  ConvertResult,
-  FilePreview,
-  ImportResult,
-} from '../types';
+import { importFromConversion, previewExcel, previewFromConversion, uploadExcel } from '../api';
+import type { ConflictResolveResponse, ConvertResult, FilePreview, ImportResult } from '../types';
 
-type Source =
-  | { kind: 'file'; file: File }
-  | { kind: 'token'; token: string; fileName: string };
+type Source = { kind: 'file'; file: File } | { kind: 'token'; token: string; fileName: string };
 
 type Stage =
   | { kind: 'idle' }
@@ -43,17 +31,11 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
   const consumedTokens = useRef<Set<string>>(new Set());
 
-  const beginPreviewFromToken = async (
-    token: string,
-    fileName: string,
-    defaultNote?: string,
-  ) => {
+  const beginPreviewFromToken = async (token: string, fileName: string, defaultNote?: string) => {
     setStage({ kind: 'previewing', fileName });
     try {
       const preview = await previewFromConversion(token);
-      const selected = new Set(
-        preview.sheets.filter((s) => s.is_known).map((s) => s.sheet_name),
-      );
+      const selected = new Set(preview.sheets.filter((s) => s.is_known).map((s) => s.sheet_name));
       setStage({
         kind: 'picking',
         source: { kind: 'token', token, fileName },
@@ -90,9 +72,7 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
     setStage({ kind: 'previewing', fileName: file.name });
     try {
       const preview = await previewExcel(file);
-      const selected = new Set(
-        preview.sheets.filter((s) => s.is_known).map((s) => s.sheet_name),
-      );
+      const selected = new Set(preview.sheets.filter((s) => s.is_known).map((s) => s.sheet_name));
       setStage({
         kind: 'picking',
         source: { kind: 'file', file },
@@ -119,8 +99,7 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
       return;
     }
 
-    const fileName =
-      stage.source.kind === 'file' ? stage.source.file.name : stage.source.fileName;
+    const fileName = stage.source.kind === 'file' ? stage.source.file.name : stage.source.fileName;
 
     setStage({
       kind: 'importing',
@@ -181,8 +160,7 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
   };
 
   const isWorking = stage.kind === 'previewing' || stage.kind === 'importing';
-  const showHandoffBanner =
-    stage.kind === 'picking' && stage.source.kind === 'token';
+  const showHandoffBanner = stage.kind === 'picking' && stage.source.kind === 'token';
 
   return (
     <div className="import-view">
@@ -190,15 +168,9 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
         <div className="handoff-banner">
           <div>
             <strong>Loaded from Convert step.</strong>{' '}
-            <span className="handoff-banner-meta">
-              File: {stage.source.fileName}
-            </span>
+            <span className="handoff-banner-meta">File: {stage.source.fileName}</span>
           </div>
-          <button
-            type="button"
-            className="handoff-banner-clear"
-            onClick={handleReset}
-          >
+          <button type="button" className="handoff-banner-clear" onClick={handleReset}>
             Use a different file
           </button>
         </div>

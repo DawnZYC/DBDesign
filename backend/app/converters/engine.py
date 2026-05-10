@@ -13,10 +13,8 @@ To register a new model:
 from __future__ import annotations
 
 import logging
-from typing import Type
 
 from app.converters.ecotea_writer import write_output
-
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +45,7 @@ def get_available_models() -> list[dict[str, str]]:
     return [{"key": key, **meta} for key, meta in MODEL_METADATA.items()]
 
 
-def _build_registry() -> dict[str, Type]:
+def _build_registry() -> dict[str, type]:
     """Lazily import and return ``{key: converter_class}`` mappings.
 
     Wrapped in a helpful error so a missing ``pandas`` install surfaces as a

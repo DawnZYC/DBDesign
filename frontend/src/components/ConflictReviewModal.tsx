@@ -77,12 +77,20 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
           <div>
             <h2>Conflict review</h2>
             <p className="modal-subtitle">
-              These rows have a sheet name that disagrees with column A. Choose the value to
-              trust for each group.
+              These rows have a sheet name that disagrees with column A. Choose the value to trust
+              for each group.
             </p>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d="M6 6l12 12" />
               <path d="M18 6L6 18" />
             </svg>
@@ -119,7 +127,14 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                         <span className="versus-label">Sheet</span>
                         <span className="versus-value">{group.sheet_name}</span>
                         <span className="versus-arrow" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
                             <path d="M5 12h14" />
                             <path d="M13 6l6 6-6 6" />
                           </svg>
@@ -130,7 +145,14 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                         <span className="versus-label">Column A</span>
                         <span className="versus-value">{group.a_column_value ?? '—'}</span>
                         <span className="versus-arrow" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
                             <path d="M5 12h14" />
                             <path d="M13 6l6 6-6 6" />
                           </svg>

@@ -125,9 +125,7 @@ class ConvertModelInfo(BaseModel):
 class ConvertResult(BaseModel):
     """Successful conversion response."""
 
-    download_token: str = Field(
-        ..., description="Opaque token used to fetch the converted file."
-    )
+    download_token: str = Field(..., description="Opaque token used to fetch the converted file.")
     download_name: str
     row_count: int
     sheet_name: str

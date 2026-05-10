@@ -120,11 +120,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
         </select>
       </div>
 
-      {error && (
-        <div className="tech-list-error">
-          Unable to load technologies. {error}
-        </div>
-      )}
+      {error && <div className="tech-list-error">Unable to load technologies. {error}</div>}
 
       {loading && data === null && <div className="tech-loading">Loading technologies</div>}
 
@@ -137,13 +133,9 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
           {data.items.map((it) => {
             const isSelected = selectedId === it.technology_id;
             const yearRange =
-              it.year_min != null && it.year_max != null
-                ? `${it.year_min} – ${it.year_max}`
-                : '—';
+              it.year_min != null && it.year_max != null ? `${it.year_min} – ${it.year_max}` : '—';
             const lifetime =
-              it.technology_lifetime_years != null
-                ? `${it.technology_lifetime_years} yr`
-                : '—';
+              it.technology_lifetime_years != null ? `${it.technology_lifetime_years} yr` : '—';
             return (
               <li
                 key={it.technology_id}

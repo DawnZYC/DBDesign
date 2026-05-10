@@ -5,10 +5,7 @@ import { ImportView } from './components/ImportView';
 import { checkHealth } from './api';
 import type { ConvertResult } from './types';
 
-type HealthState =
-  | { status: 'checking' }
-  | { status: 'ok' }
-  | { status: 'error' };
+type HealthState = { status: 'checking' } | { status: 'ok' } | { status: 'error' };
 
 type Tab = 'convert' | 'import' | 'browse';
 
@@ -59,7 +56,9 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar" aria-label="Workflow steps">
         <div className="sidebar-brand">
-          <div className="brand-mark" aria-hidden="true">EW</div>
+          <div className="brand-mark" aria-hidden="true">
+            EW
+          </div>
           <div className="brand-text">
             <div className="brand-title">EcoTEA WP1</div>
             <div className="brand-subtitle">Technology &amp; Cost Database</div>
@@ -104,15 +103,11 @@ function App() {
           <div>
             <div className="page-eyebrow">{STEPS.find((s) => s.id === activeTab)?.index}</div>
             <h1 className="page-title">{STEPS.find((s) => s.id === activeTab)?.title}</h1>
-            <p className="page-description">
-              {STEPS.find((s) => s.id === activeTab)?.description}
-            </p>
+            <p className="page-description">{STEPS.find((s) => s.id === activeTab)?.description}</p>
           </div>
         </header>
 
-        {activeTab === 'convert' && (
-          <ConvertView onHandoffToImport={handleHandoffToImport} />
-        )}
+        {activeTab === 'convert' && <ConvertView onHandoffToImport={handleHandoffToImport} />}
         {activeTab === 'import' && (
           <ImportView
             handoff={pendingConversion}
