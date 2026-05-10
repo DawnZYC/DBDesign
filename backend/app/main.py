@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import browse, health, imports
+from app.routers import browse, convert, health, imports
 
 settings = get_settings()
 
@@ -32,6 +32,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(convert.router)
 app.include_router(imports.router)
 app.include_router(browse.router)
 

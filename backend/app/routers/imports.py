@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.routers.convert import get_artefact as get_conversion_artefact
 from app.schemas import (
     ConflictListResponse,
     ConflictResolution,
@@ -122,6 +123,71 @@ async def create_import(
         ) from exc
 
     return result
+
+
+@router.post(
+    "/preview/from-conversion",
+    response_model=FilePreview,
+    summary="Preview a previously converted EcoTEA workbook by token (no re-upload).",
+)
+def preview_from_conversion(
+    token: str = Query(..., description="Token returned by POST /api/convert."),
+) -> FilePreview:
+    artefact = get_conversion_artefact(token)
+    file_bytes = artefact.output_path.read_bytes()
+    try:
+        return preview_excel(file_bytes=file_bytes, file_name=artefact.download_name)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Preview from conversion failed")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to read the converted workbook: {exc!s}",
+        ) from exc
+
+
+@router.post(
+    "/from-conversion",
+    response_model=ImportResult,
+    status_code=status.HTTP_201_CREATED,
+    summary="Import a previously converted EcoTEA workbook by token (no re-upload).",
+)
+def import_from_conversion(
+    token: str = Query(..., description="Token returned by POST /api/convert."),
+    imported_by: str | None = Form(default=None),
+    note: str | None = Form(default=None),
+    sheets: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+) -> ImportResult:
+    artefact = get_conversion_artefact(token)
+    file_bytes = artefact.output_path.read_bytes()
+
+    selected_sheets: list[str] | None = None
+    if sheets:
+        selected_sheets = [s.strip() for s in sheets.split(",") if s.strip()]
+
+    try:
+        return import_excel(
+            db,
+            file_bytes=file_bytes,
+            file_name=artefact.download_name,
+            imported_by=imported_by,
+            note=note,
+            selected_sheets=selected_sheets,
+        )
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception("Import from conversion failed (database error)")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database write failed: {exc!s}",
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.exception("Import from conversion failed (unknown error)")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Import failed: {exc!s}",
+        ) from exc
 
 
 @router.get(

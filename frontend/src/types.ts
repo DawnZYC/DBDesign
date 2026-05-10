@@ -167,3 +167,25 @@ export interface TechnologyDetail {
 export interface ApiError {
   detail: string;
 }
+
+// =============================================================================
+// Convert (VT -> EcoTEA)
+// =============================================================================
+export interface ConvertModelInfo {
+  key: string;
+  label: string;
+  sector: string;
+  description: string | null;
+}
+
+export interface ConvertResult {
+  download_token: string;
+  download_name: string;
+  row_count: number;
+  sheet_name: string;
+  model_key: string;
+  source_file_name: string;
+  template_file_name: string;
+  bytes: number;
+  created_at: string; // ISO datetime
+}

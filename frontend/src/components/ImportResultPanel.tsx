@@ -12,18 +12,18 @@ export function ImportResultPanel({ result, onReviewConflicts }: ImportResultPan
   return (
     <section className="result">
       <header className="result-header">
-        <h2>Import Complete ✓</h2>
+        <h2>Import complete</h2>
         <span className="batch-id">Batch #{result.import_batch_id}</span>
       </header>
 
       {hasPending && (
         <div className="pending-banner">
           <div>
-            <strong>{result.rows_pending} rows</strong> were held for sector conflict review
+            <strong>{result.rows_pending} rows</strong> are pending sector conflict review
           </div>
           {onReviewConflicts && (
             <button type="button" className="btn-primary" onClick={onReviewConflicts}>
-              Review
+              Review now
             </button>
           )}
         </div>
@@ -35,7 +35,7 @@ export function ImportResultPanel({ result, onReviewConflicts }: ImportResultPan
           <dd>{result.file_name}</dd>
         </div>
         <div>
-          <dt>Imported At</dt>
+          <dt>Imported at</dt>
           <dd>{importedAt}</dd>
         </div>
         <div>
@@ -43,19 +43,19 @@ export function ImportResultPanel({ result, onReviewConflicts }: ImportResultPan
           <dd>{(result.duration_ms / 1000).toFixed(2)} s</dd>
         </div>
         <div>
-          <dt>Rows Imported</dt>
+          <dt>Rows imported</dt>
           <dd className="num-ok">{result.rows_imported.toLocaleString()}</dd>
         </div>
         <div>
-          <dt>Rows Skipped</dt>
+          <dt>Rows skipped</dt>
           <dd>{result.rows_skipped.toLocaleString()}</dd>
         </div>
         <div>
-          <dt>Pending Review</dt>
+          <dt>Pending review</dt>
           <dd className={hasPending ? 'num-warn' : ''}>{result.rows_pending.toLocaleString()}</dd>
         </div>
         <div>
-          <dt>Quality Issues</dt>
+          <dt>Quality issues</dt>
           <dd className={result.issues > 0 ? 'num-warn' : ''}>{result.issues.toLocaleString()}</dd>
         </div>
       </dl>
@@ -64,7 +64,7 @@ export function ImportResultPanel({ result, onReviewConflicts }: ImportResultPan
         <thead>
           <tr>
             <th>Sheet</th>
-            <th className="ralign">Total Rows</th>
+            <th className="ralign">Total rows</th>
             <th className="ralign">Imported</th>
             <th className="ralign">Skipped</th>
             <th className="ralign">Pending</th>

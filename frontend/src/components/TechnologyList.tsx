@@ -70,23 +70,34 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
       setPage(1);
     };
 
+  const totalLabel = data
+    ? `${data.total.toLocaleString()} ${data.total === 1 ? 'technology' : 'technologies'}`
+    : '';
+
   return (
     <section className="tech-list">
-      <header className="tech-list-filters">
+      <header className="panel-head">
+        <h3>Technologies</h3>
+        <span className="panel-count">{totalLabel}</span>
+      </header>
+
+      <div className="tech-list-filters">
         <input
           type="text"
-          placeholder="Search technology code or description..."
+          placeholder="Search by code or description"
           value={search}
           onChange={(e) => handleFilterChange(setSearch)(e.target.value)}
           className="filter-input"
+          aria-label="Search technologies"
         />
         <select
           value={sectorId}
           onChange={(e) =>
             handleFilterChange(setSectorId)(e.target.value === '' ? '' : Number(e.target.value))
           }
+          aria-label="Filter by sector"
         >
-          <option value="">All Sectors</option>
+          <option value="">All sectors</option>
           {sectors.map((s) => (
             <option key={s.sector_id} value={s.sector_id}>
               {s.sector_name}
@@ -98,88 +109,89 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
           onChange={(e) =>
             handleFilterChange(setGeographyId)(e.target.value === '' ? '' : Number(e.target.value))
           }
+          aria-label="Filter by geography"
         >
-          <option value="">All Geographies</option>
+          <option value="">All geographies</option>
           {geographies.map((g) => (
             <option key={g.geography_id} value={g.geography_id}>
               {g.geography_code}
             </option>
           ))}
         </select>
-      </header>
+      </div>
 
-      {error && (
-        <div className="tech-list-error">
-          <strong>Failed to load:</strong>
-          {error}
-        </div>
+      {error && <div className="tech-list-error">Unable to load technologies. {error}</div>}
+
+      {loading && data === null && <div className="tech-loading">Loading technologies</div>}
+
+      {!loading && data?.items.length === 0 && (
+        <div className="tech-empty">No technologies match the current filters.</div>
       )}
 
-      <div className="tech-list-table-wrap">
-        <table className="tech-table">
-          <thead>
-            <tr>
-              <th>Technology Code</th>
-              <th>Sector</th>
-              <th>Geography</th>
-              <th>Description</th>
-              <th className="ralign">Lifetime</th>
-              <th className="ralign">Year Range</th>
-              <th className="ralign">Rows</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && data === null && (
-              <tr>
-                <td colSpan={7} className="tech-table-loading">
-                  Loading...
-                </td>
-              </tr>
-            )}
-            {data?.items.length === 0 && (
-              <tr>
-                <td colSpan={7} className="tech-table-empty">
-                  No matching technologies
-                </td>
-              </tr>
-            )}
-            {data?.items.map((it) => (
-              <tr
+      {data && data.items.length > 0 && (
+        <ul className="tech-cards">
+          {data.items.map((it) => {
+            const isSelected = selectedId === it.technology_id;
+            const yearRange =
+              it.year_min != null && it.year_max != null ? `${it.year_min} – ${it.year_max}` : '—';
+            const lifetime =
+              it.technology_lifetime_years != null ? `${it.technology_lifetime_years} yr` : '—';
+            return (
+              <li
                 key={it.technology_id}
-                className={selectedId === it.technology_id ? 'selected' : ''}
+                className={`tech-card ${isSelected ? 'selected' : ''}`}
                 onClick={() => onSelect(it.technology_id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect(it.technology_id);
+                  }
+                }}
               >
-                <td className="tech-code">{it.technology_code}</td>
-                <td>{it.sector_name}</td>
-                <td>{it.geography_code}</td>
-                <td className="tech-desc" title={it.technology_description ?? ''}>
-                  {it.technology_description ?? '—'}
-                </td>
-                <td className="ralign">
-                  {it.technology_lifetime_years ?? '—'}
-                  {it.technology_lifetime_years != null && ' yr'}
-                </td>
-                <td className="ralign">
-                  {it.year_min != null && it.year_max != null
-                    ? `${it.year_min}–${it.year_max}`
-                    : '—'}
-                </td>
-                <td className="ralign">{it.year_count}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                <div className="tech-card-top">
+                  <span className="tech-card-code" title={it.technology_code}>
+                    {it.technology_code}
+                  </span>
+                  <span className="tech-card-tags">
+                    <span className="tag tag-sector">{it.sector_code}</span>
+                    <span className="tag tag-geo">{it.geography_code}</span>
+                    {it.grade && <span className="tag tag-grade">Grade {it.grade}</span>}
+                  </span>
+                </div>
+                <p className="tech-card-desc" title={it.technology_description ?? ''}>
+                  {it.technology_description ?? 'No description provided'}
+                </p>
+                <div className="tech-card-stats">
+                  <span className="tech-card-stat">
+                    <span className="tech-card-stat-label">Lifetime</span>
+                    <span className="tech-card-stat-value">{lifetime}</span>
+                  </span>
+                  <span className="tech-card-stat">
+                    <span className="tech-card-stat-label">Year range</span>
+                    <span className="tech-card-stat-value">{yearRange}</span>
+                  </span>
+                  <span className="tech-card-stat">
+                    <span className="tech-card-stat-label">Records</span>
+                    <span className="tech-card-stat-value">{it.year_count}</span>
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <footer className="tech-list-pager">
         <span className="pager-info">
-          {data ? `${data.total} total` : '—'}
-          {loading && data !== null && ' · Loading...'}
+          {data ? `Page ${page} of ${totalPages}` : ''}
+          {loading && data !== null ? ' · refreshing' : ''}
         </span>
         <div className="pager-buttons">
           <button
             type="button"
-            className="btn-secondary pager-btn"
+            className="pager-btn"
             disabled={page <= 1 || loading}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
@@ -190,7 +202,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
           </span>
           <button
             type="button"
-            className="btn-secondary pager-btn"
+            className="pager-btn"
             disabled={page >= totalPages || loading}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >

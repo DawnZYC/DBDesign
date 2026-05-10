@@ -111,6 +111,32 @@ class HealthResponse(BaseModel):
 
 
 # =============================================================================
+# Convert (VT -> EcoTEA)
+# =============================================================================
+class ConvertModelInfo(BaseModel):
+    """Public metadata for a registered VT-to-EcoTEA converter."""
+
+    key: str = Field(..., description="Stable identifier passed back to /api/convert.")
+    label: str
+    sector: str
+    description: str | None = None
+
+
+class ConvertResult(BaseModel):
+    """Successful conversion response."""
+
+    download_token: str = Field(..., description="Opaque token used to fetch the converted file.")
+    download_name: str
+    row_count: int
+    sheet_name: str
+    model_key: str
+    source_file_name: str
+    template_file_name: str
+    bytes: int = Field(..., description="Size of the produced workbook in bytes.")
+    created_at: datetime
+
+
+# =============================================================================
 # Browse
 # =============================================================================
 class SectorOut(BaseModel):
