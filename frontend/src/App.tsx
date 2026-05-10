@@ -5,10 +5,16 @@ import { checkHealth } from './api';
 
 type HealthState =
   | { status: 'checking' }
-  | { status: 'ok'; database: string }
-  | { status: 'error'; message: string };
+  | { status: 'ok' }
+  | { status: 'error' };
 
 type Tab = 'import' | 'browse';
+
+const HEALTH_LABEL: Record<HealthState['status'], string> = {
+  checking: 'Connecting',
+  ok: 'Online',
+  error: 'Service unavailable',
+};
 
 function App() {
   const [health, setHealth] = useState<HealthState>({ status: 'checking' });
@@ -16,15 +22,18 @@ function App() {
 
   useEffect(() => {
     checkHealth()
-      .then((res) => setHealth({ status: 'ok', database: res.database }))
-      .catch((err) => setHealth({ status: 'error', message: (err as Error).message }));
+      .then(() => setHealth({ status: 'ok' }))
+      .catch(() => setHealth({ status: 'error' }));
   }, []);
 
   return (
     <div className="app">
       <header className="app-header">
-        <h1>EcoTEA WP1</h1>
-        <nav className="tab-nav">
+        <div className="app-brand">
+          <h1>EcoTEA WP1</h1>
+          <span className="app-subtitle">Technology &amp; Cost Database</span>
+        </div>
+        <nav className="tab-nav" aria-label="Primary">
           <button
             type="button"
             className={`tab ${activeTab === 'import' ? 'active' : ''}`}
@@ -40,10 +49,14 @@ function App() {
             Browse Data
           </button>
         </nav>
-        <span className={`health-pill health-${health.status}`}>
-          {health.status === 'checking' && 'Checking backend...'}
-          {health.status === 'ok' && `Backend OK · DB ${health.database}`}
-          {health.status === 'error' && `Backend error: ${health.message}`}
+        <span
+          className={`health-indicator health-${health.status}`}
+          role="status"
+          aria-live="polite"
+          title={HEALTH_LABEL[health.status]}
+        >
+          <span className="health-dot" aria-hidden="true" />
+          {HEALTH_LABEL[health.status]}
         </span>
       </header>
 
@@ -51,15 +64,6 @@ function App() {
         {activeTab === 'import' && <ImportView />}
         {activeTab === 'browse' && <BrowseView />}
       </main>
-
-      <footer className="app-footer">
-        <a href="/api/health" target="_blank" rel="noreferrer">
-          /api/health
-        </a>
-        <a href="http://localhost:8000/docs" target="_blank" rel="noreferrer">
-          API Docs
-        </a>
-      </footer>
     </div>
   );
 }

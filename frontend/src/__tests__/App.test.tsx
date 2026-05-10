@@ -31,8 +31,8 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /Browse Data/i })).toBeInTheDocument();
   });
 
-  it('shows backend health status after the health check resolves', async () => {
+  it('reports an online status once the health check resolves', async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Backend OK/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Online/i)).toBeInTheDocument());
   });
 });

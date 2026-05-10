@@ -48,7 +48,7 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
       onClick={() => !disabled && inputRef.current?.click()}
       role="button"
       tabIndex={0}
-      aria-label="Select or drag an Excel file"
+      aria-label="Select or drop an Excel file"
     >
       <input
         ref={inputRef}
@@ -59,12 +59,16 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
         hidden
       />
       <div className="drop-icon" aria-hidden="true">
-        📂
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 16V4" />
+          <path d="M7 9l5-5 5 5" />
+          <path d="M5 20h14" />
+        </svg>
       </div>
       <div className="drop-text">
-        <strong>Click to choose</strong> or <strong>drag a .xlsx file here</strong>
+        <strong>Click to choose a file</strong> or drag it here
       </div>
-      <div className="drop-hint">.xlsx / .xlsm only, max 50 MB per file</div>
+      <div className="drop-hint">Excel workbook (.xlsx or .xlsm), up to 50&nbsp;MB</div>
     </div>
   );
 }

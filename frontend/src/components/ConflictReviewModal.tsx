@@ -75,19 +75,22 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <header className="modal-header">
           <div>
-            <h2>Conflict Review</h2>
+            <h2>Conflict review</h2>
             <p className="modal-subtitle">
-              Rows where the sheet name conflicts with column A were held. Choose which value to use
-              for each group.
+              These rows have a sheet name that disagrees with column A. Choose the value to
+              trust for each group.
             </p>
           </div>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
-            ✕
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 6l12 12" />
+              <path d="M18 6L6 18" />
+            </svg>
           </button>
         </header>
 
         <div className="modal-body">
-          {loading && <div className="modal-empty">Loading...</div>}
+          {loading && <div className="modal-empty">Loading conflicts</div>}
 
           {!loading && error && (
             <div className="modal-error">
@@ -97,7 +100,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
           )}
 
           {!loading && !error && groups && groups.length === 0 && (
-            <div className="modal-empty">No conflicts are pending review ✓</div>
+            <div className="modal-empty">No conflicts pending review.</div>
           )}
 
           {!loading && groups && groups.length > 0 && (
@@ -113,15 +116,25 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
 
                     <div className="conflict-versus">
                       <div className="versus-side">
-                        <span className="versus-label">Sheet Name</span>
+                        <span className="versus-label">Sheet</span>
                         <span className="versus-value">{group.sheet_name}</span>
-                        <span className="versus-arrow">→</span>
+                        <span className="versus-arrow" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 12h14" />
+                            <path d="M13 6l6 6-6 6" />
+                          </svg>
+                        </span>
                         <span className="versus-sector">{group.sheet_sector_code ?? '—'}</span>
                       </div>
                       <div className="versus-side">
                         <span className="versus-label">Column A</span>
                         <span className="versus-value">{group.a_column_value ?? '—'}</span>
-                        <span className="versus-arrow">→</span>
+                        <span className="versus-arrow" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M5 12h14" />
+                            <path d="M13 6l6 6-6 6" />
+                          </svg>
+                        </span>
                         <span className="versus-sector">
                           {group.a_column_sector_code ?? 'Unresolved'}
                         </span>
@@ -129,12 +142,12 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                     </div>
 
                     <div className="conflict-rows-list">
-                      Affected rows:
+                      Affected rows:&nbsp;
                       {group.rows
                         .slice(0, 12)
                         .map((r) => `R${r.excel_row_number}`)
                         .join(', ')}
-                      {group.rows.length > 12 && ` ... ${group.rows.length} rows total`}
+                      {group.rows.length > 12 && ` and ${group.rows.length - 12} more`}
                     </div>
 
                     <div className="decision-row">
@@ -177,7 +190,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
 
         <footer className="modal-footer">
           <span className="modal-meta">
-            {groups?.length ?? 0} groups · {totalRows} rows pending
+            {groups?.length ?? 0} groups &middot; {totalRows} rows pending
           </span>
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>
@@ -189,7 +202,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
               onClick={handleSubmit}
               disabled={submitting || loading || !groups || groups.length === 0 || error !== null}
             >
-              {submitting ? 'Submitting...' : `Apply Decisions (${totalRows} rows)`}
+              {submitting ? 'Applying' : `Apply decisions (${totalRows} rows)`}
             </button>
           </div>
         </footer>

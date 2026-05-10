@@ -80,7 +80,7 @@ export function ImportView() {
         `Resolved ${response.resolved} rows; ${response.failed} rows failed: ${response.failure_reasons.join('; ')}`,
       );
     } else {
-      setReviewMessage(`Resolved ${response.resolved} rows ✓`);
+      setReviewMessage(`Resolved ${response.resolved} rows successfully.`);
     }
     if (stage.kind === 'success') {
       const newPending = Math.max(stage.result.rows_pending - response.resolved, 0);
@@ -110,7 +110,7 @@ export function ImportView() {
                 type="text"
                 value={importedBy}
                 onChange={(e) => setImportedBy(e.target.value)}
-                placeholder="Example: zyc"
+                placeholder="Your name"
                 disabled={isWorking}
               />
             </label>
@@ -122,7 +122,7 @@ export function ImportView() {
                 type="text"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Example: Power sheet sample row import"
+                placeholder="Brief description of this batch"
                 disabled={isWorking}
               />
             </label>
@@ -135,7 +135,7 @@ export function ImportView() {
         <section className="status uploading">
           <div className="spinner" aria-hidden="true" />
           <div>
-            Reading the sheet list from <code>{stage.fileName}</code>...
+            Reading the sheet list from <code>{stage.fileName}</code>
           </div>
         </section>
       )}
@@ -150,7 +150,7 @@ export function ImportView() {
           />
           <div className="action-row">
             <button type="button" className="btn-secondary" onClick={handleReset}>
-              Choose Another File
+              Choose another file
             </button>
             <button
               type="button"
@@ -158,7 +158,7 @@ export function ImportView() {
               onClick={handleImport}
               disabled={stage.selected.size === 0}
             >
-              Import {stage.selected.size} Selected Sheets
+              Import {stage.selected.size} selected sheet{stage.selected.size === 1 ? '' : 's'}
             </button>
           </div>
         </>
@@ -168,7 +168,7 @@ export function ImportView() {
         <section className="status uploading">
           <div className="spinner" aria-hidden="true" />
           <div>
-            Importing {stage.sheetCount} sheets from <code>{stage.fileName}</code>...
+            Importing {stage.sheetCount} sheets from <code>{stage.fileName}</code>
           </div>
         </section>
       )}
@@ -176,9 +176,9 @@ export function ImportView() {
       {stage.kind === 'error' && (
         <section className="status error">
           <strong>{stage.canRetry ? 'Preview failed' : 'Import failed'}</strong>
-          <pre>{stage.message}</pre>
+          <p className="status-error-message">{stage.message}</p>
           <button type="button" onClick={handleReset}>
-            Retry
+            Try again
           </button>
         </section>
       )}
@@ -188,7 +188,7 @@ export function ImportView() {
           <ImportResultPanel result={stage.result} onReviewConflicts={() => setReviewing(true)} />
           {reviewMessage && <div className="review-message">{reviewMessage}</div>}
           <button className="reset-btn" type="button" onClick={handleReset}>
-            Import Another File
+            Import another file
           </button>
         </>
       )}
