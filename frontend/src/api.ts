@@ -3,6 +3,8 @@ import type {
   ConflictListResponse,
   ConflictResolution,
   ConflictResolveResponse,
+  ConvertModelInfo,
+  ConvertResult,
   FilePreview,
   Geography,
   ImportResult,
@@ -141,4 +143,66 @@ export async function checkHealth(): Promise<{ status: string; database: string 
   const response = await fetch(`${API_BASE}/health`);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return (await response.json()) as { status: string; database: string };
+}
+
+// ---------------------------------------------------------------------------
+// Convert (VT -> EcoTEA)
+// ---------------------------------------------------------------------------
+export async function listConvertModels(): Promise<ConvertModelInfo[]> {
+  const response = await fetch(`${API_BASE}/convert/models`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as ConvertModelInfo[];
+}
+
+export async function convertVT(args: {
+  modelKey: string;
+  sourceFile: File;
+  templateFile?: File;
+}): Promise<ConvertResult> {
+  const formData = new FormData();
+  formData.append('model_key', args.modelKey);
+  formData.append('vt_file', args.sourceFile);
+  if (args.templateFile) {
+    formData.append('ecotea_template', args.templateFile);
+  }
+  const response = await fetch(`${API_BASE}/convert`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as ConvertResult;
+}
+
+/** Build the absolute URL for the converted file download endpoint. */
+export function conversionDownloadUrl(token: string): string {
+  return `${API_BASE}/convert/download/${encodeURIComponent(token)}`;
+}
+
+export async function previewFromConversion(token: string): Promise<FilePreview> {
+  const response = await fetch(
+    `${API_BASE}/imports/preview/from-conversion?token=${encodeURIComponent(token)}`,
+    { method: 'POST' },
+  );
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as FilePreview;
+}
+
+export async function importFromConversion(args: {
+  token: string;
+  importedBy?: string;
+  note?: string;
+  sheets?: string[];
+}): Promise<ImportResult> {
+  const formData = new FormData();
+  if (args.importedBy) formData.append('imported_by', args.importedBy);
+  if (args.note) formData.append('note', args.note);
+  if (args.sheets && args.sheets.length > 0) {
+    formData.append('sheets', args.sheets.join(','));
+  }
+  const response = await fetch(
+    `${API_BASE}/imports/from-conversion?token=${encodeURIComponent(args.token)}`,
+    { method: 'POST', body: formData },
+  );
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as ImportResult;
 }

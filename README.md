@@ -1,8 +1,14 @@
-# EcoTEA WP1 Excel to PostgreSQL Import Tool
+# EcoTEA WP1 Workbench
 
-Imports EcoTEA multi-sheet Excel files (10 sectors x 38 columns) into a normalized 15-table PostgreSQL schema.
+End-to-end workbench that takes a Singapore VT model file all the way into a queryable database. The web app is organised as three sequential steps in a left sidebar:
 
-- Backend: Python 3.11+ / FastAPI / SQLAlchemy 2 / openpyxl
+1. **Convert** — map a VT_SG_PWR / VT_SG_PRI source workbook into a unified EcoTEA workbook.
+2. **Import** — load the EcoTEA workbook into the PostgreSQL schema (15 tables, 38 columns).
+3. **Browse** — search, filter and inspect imported technologies, including yearly costs, performance, capacity and output commodities.
+
+After a successful conversion, the produced workbook is cached on the backend; clicking **Send to import** in the Convert step hands the file to the Import step without re-uploading it.
+
+- Backend: Python 3.13 / FastAPI / SQLAlchemy 2 / openpyxl / pandas
 - Frontend: React 18 / Vite / TypeScript
 - Database: local PostgreSQL instance
 
@@ -19,9 +25,20 @@ DBDesign/
 │   │   ├── database.py                  # SQLAlchemy engine and session
 │   │   ├── models.py                    # ORM models for the 15 tables
 │   │   ├── schemas.py                   # API Pydantic schemas
+│   │   ├── assets/
+│   │   │   └── ecotea_template.xlsx     # Bundled EcoTEA template used by Convert
+│   │   ├── converters/                  # VT -> EcoTEA conversion engine
+│   │   │   ├── base_model.py
+│   │   │   ├── ecotea_writer.py
+│   │   │   ├── engine.py
+│   │   │   └── models/
+│   │   │       ├── vt_sg_pwr.py
+│   │   │       └── vt_sg_pri.py
 │   │   ├── routers/
 │   │   │   ├── health.py                # GET /api/health
-│   │   │   └── imports.py               # POST /api/imports
+│   │   │   ├── convert.py               # POST /api/convert (VT -> EcoTEA)
+│   │   │   ├── imports.py               # POST /api/imports (+ /from-conversion handoff)
+│   │   │   └── browse.py                # GET /api/technologies, /sectors, /geographies
 │   │   └── services/
 │   │       ├── value_cleaner.py         # Placeholder, formula-error, and mixed-text cleaning
 │   │       └── excel_importer.py        # Main import logic
@@ -84,14 +101,23 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The header has two tabs:
+Open http://localhost:5173. The sidebar offers three numbered steps:
 
-- Import Data: drop `EcoTEA Endo WP1.xlsx`, select sheets, import, review the summary, and resolve conflicts if any are held.
-- Browse Data: filter and page through the technology list by sector, geography, or search, then select a row to view all yearly parameters such as CAPEX, OPEX, efficiency, capacity, and commodities.
+- **01 Convert** — pick a source model (VT_SG_PWR or VT_SG_PRI), upload the VT workbook (the EcoTEA template is bundled, but you can supply a custom one), then convert. After success you can download the produced workbook or click **Send to import** to hand it directly to the next step.
+- **02 Import** — drop `EcoTEA Endo WP1.xlsx` (or accept the converted workbook from step 01), select sheets, import, review the summary, and resolve conflicts if any are held.
+- **03 Browse** — filter and page through the technology list by sector, geography, or search, then select a row to view all yearly parameters such as CAPEX, OPEX, efficiency, capacity, and commodities.
+
+### Convert Flow
+
+1. Choose the source model — converters are registered in `backend/app/converters/engine.py`.
+2. Drop the VT source workbook (`.xlsx`, `.xlsm` or `.xls`).
+3. Optionally supply your own EcoTEA template; otherwise the bundled `assets/ecotea_template.xlsx` is used.
+4. Click **Convert workbook**. The backend caches the produced file and returns a download token.
+5. Either download the file or hand it off to the importer (no re-upload required).
 
 ### Import Flow
 
-1. Select or drag in an `.xlsx` file.
+1. Select or drag in an `.xlsx` file (or accept a Convert handoff).
 2. The backend preview returns sheet names, known-sector status, and data-row counts.
 3. The frontend shows a checkbox list of sheets, with all known sheets selected by default.
 4. The user changes the selected sheets if needed.
