@@ -22,7 +22,10 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: ${{ github.repository_owner }}/dbdesign
+  # GHCR requires image names to be all-lowercase. github.repository_owner
+  # ("DawnZYC") preserves casing and would cause `docker push` to fail with
+  # "name must be lowercase". Hardcode the lowercased namespace.
+  IMAGE_NAMESPACE: dawnzyc/dbdesign
 
 jobs:
   build:
