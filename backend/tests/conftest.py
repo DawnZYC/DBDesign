@@ -17,8 +17,8 @@ os.environ.setdefault("ALLOWED_ORIGINS", "http://localhost:5173")
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
+
 
 # PostgreSQL JSONB has no native SQLite representation, but for in-memory
 # tests we want the schema to build anyway. Teach the SQLite type compiler
@@ -44,9 +44,9 @@ SQLiteTypeCompiler.visit_big_integer = _visit_BIGINT
 SQLiteTypeCompiler.visit_SMALLINT = _visit_SMALLINT
 SQLiteTypeCompiler.visit_small_integer = _visit_SMALLINT
 
+from app import models  # noqa: E402,F401  # populate Base.metadata
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
-from app import models  # noqa: E402,F401  # populate Base.metadata
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from app.converters.base_model import MISSING
 from app.converters.models import vt_sg_pri
@@ -53,9 +52,7 @@ class TestStaticHelpers:
 
     def test_read_year_vals_skips_nan_and_out_of_bounds(self):
         df = pd.DataFrame([[10, 20, 30, np.nan]])
-        result = VTSGPRIConverter._read_year_vals(
-            df, 0, {2020: 0, 2025: 2, 2030: 3, 2040: 99}
-        )
+        result = VTSGPRIConverter._read_year_vals(df, 0, {2020: 0, 2025: 2, 2030: 3, 2040: 99})
         # NaN at 2030 is excluded; col 99 is out of bounds.
         assert result == {2020: 10, 2025: 30}
 
@@ -151,7 +148,24 @@ def _build_import_sheet() -> pd.DataFrame:
         ]
     )
     # A row that should be skipped (placeholder).
-    rows.append([None, None, "*", None, None, None, None, None, np.nan, np.nan, None, np.nan, np.nan, np.nan])
+    rows.append(
+        [
+            None,
+            None,
+            "*",
+            None,
+            None,
+            None,
+            None,
+            None,
+            np.nan,
+            np.nan,
+            None,
+            np.nan,
+            np.nan,
+            np.nan,
+        ]
+    )
     # Non-IMP prefix - skipped.
     rows.append(
         [

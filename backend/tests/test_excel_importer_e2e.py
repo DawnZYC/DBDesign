@@ -11,11 +11,9 @@ from decimal import Decimal
 from typing import Any
 
 import openpyxl
-import pytest
 
 from app import models
 from app.services.excel_importer import import_excel
-
 
 # ---------------------------------------------------------------------------
 # Workbook builder
@@ -189,9 +187,7 @@ class TestImportExcelHappyPath:
             }
         ]
         wb_bytes = _build_workbook({"Power": rows})
-        result = import_excel(
-            db_session, file_bytes=wb_bytes, file_name="errors.xlsx"
-        )
+        result = import_excel(db_session, file_bytes=wb_bytes, file_name="errors.xlsx")
         assert result.rows_imported == 1
         assert result.issues >= 1
 
@@ -210,9 +206,7 @@ class TestImportExcelHappyPath:
             }
         ]
         wb_bytes = _build_workbook({"Power": rows})
-        result = import_excel(
-            db_session, file_bytes=wb_bytes, file_name="conflict.xlsx"
-        )
+        result = import_excel(db_session, file_bytes=wb_bytes, file_name="conflict.xlsx")
         assert result.rows_pending == 1
         assert result.rows_imported == 0
         # No technology_process row should have been written.
@@ -229,9 +223,7 @@ class TestImportExcelHappyPath:
             {"H": "TECH2", "I": "real", "J": "SG", "K": 2020, "AC": "ELC"},
         ]
         wb_bytes = _build_workbook({"Power": rows})
-        result = import_excel(
-            db_session, file_bytes=wb_bytes, file_name="mixed.xlsx"
-        )
+        result = import_excel(db_session, file_bytes=wb_bytes, file_name="mixed.xlsx")
         assert result.rows_imported == 1
         assert result.rows_skipped >= 1
 
@@ -291,9 +283,7 @@ class TestImportExcelHappyPath:
 
         # Only one technology_year for (REUSE_TECH, 2020) and EF should be the latest.
         tech = (
-            db_session.query(models.TechnologyProcess)
-            .filter_by(technology_code="REUSE_TECH")
-            .one()
+            db_session.query(models.TechnologyProcess).filter_by(technology_code="REUSE_TECH").one()
         )
         years = (
             db_session.query(models.TechnologyYear)

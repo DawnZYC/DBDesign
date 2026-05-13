@@ -9,7 +9,6 @@ from datetime import datetime
 import openpyxl
 import pytest
 
-from app import models
 from app.services import excel_importer
 from app.services.excel_importer import (
     DECISION_SKIP,
@@ -78,9 +77,7 @@ class TestNormalizeSheetFilter:
         assert result == {"Power", "Industry"}
 
     def test_deduplicates(self):
-        result = _normalize_sheet_filter(
-            ["Power", "Power", "Industry"], ["Power", "Industry"]
-        )
+        result = _normalize_sheet_filter(["Power", "Power", "Industry"], ["Power", "Industry"])
         assert result == {"Power", "Industry"}
 
     def test_logs_invalid_sheets(self, caplog):

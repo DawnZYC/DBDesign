@@ -15,9 +15,7 @@ from app import models
 def seeded_data(db_session, seeded_sectors):
     """Populate enough data to exercise the browse endpoints."""
     # SmallInteger PKs don't autoincrement on SQLite — assign explicitly.
-    existing_geo = (
-        db_session.query(models.Geography).filter_by(geography_code="SG").one_or_none()
-    )
+    existing_geo = db_session.query(models.Geography).filter_by(geography_code="SG").one_or_none()
     if existing_geo is None:
         next_geo_id = (db_session.query(models.Geography).count() or 0) + 1
         geo = models.Geography(
@@ -124,9 +122,7 @@ class TestTechnologyList:
         response = client.get("/api/technologies?page_size=99999")
         assert response.status_code == 422
 
-    def test_filter_by_unknown_geography_returns_empty(
-        self, client: TestClient, seeded_data
-    ):
+    def test_filter_by_unknown_geography_returns_empty(self, client: TestClient, seeded_data):
         response = client.get("/api/technologies?geography_id=99999")
         assert response.status_code == 200
         assert response.json()["items"] == []

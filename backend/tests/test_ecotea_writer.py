@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 import openpyxl
-import pytest
 
 from app.converters.base_model import MISSING, PowerRecord
 from app.converters.ecotea_writer import (
@@ -95,9 +93,7 @@ class TestWriteOutput:
         output = tmp_path / "out.xlsx"
         _make_template(template)
 
-        write_output(
-            [PowerRecord(process_code="HELLO")], str(template), str(output)
-        )
+        write_output([PowerRecord(process_code="HELLO")], str(template), str(output))
         wb = openpyxl.load_workbook(output)
         ws = wb["Power"]
         # Row 9 should still contain the column labels from the template.

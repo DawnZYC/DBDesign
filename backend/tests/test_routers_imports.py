@@ -5,7 +5,6 @@ from __future__ import annotations
 from io import BytesIO
 
 import openpyxl
-import pytest
 from fastapi.testclient import TestClient
 
 

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 from app.converters import engine
 from app.converters.base_model import PowerRecord
 
@@ -81,14 +79,16 @@ class TestConvertHappyPath:
                 fh.write(b"OK")
             return output_path
 
-        with patch.object(engine, "_build_registry", return_value={"VT_SG_PWR": _StubConverter}):
-            with patch.object(engine, "write_output", side_effect=fake_writer):
-                result = engine.convert(
-                    model_name="VT_SG_PWR",
-                    vt_file_path=str(tmp_path / "src.xlsx"),
-                    template_path=str(tmp_path / "tmpl.xlsx"),
-                    output_path=str(out),
-                )
+        with (
+            patch.object(engine, "_build_registry", return_value={"VT_SG_PWR": _StubConverter}),
+            patch.object(engine, "write_output", side_effect=fake_writer),
+        ):
+            result = engine.convert(
+                model_name="VT_SG_PWR",
+                vt_file_path=str(tmp_path / "src.xlsx"),
+                template_path=str(tmp_path / "tmpl.xlsx"),
+                output_path=str(out),
+            )
 
         assert result["success"] is True
         assert result["row_count"] == 1
@@ -122,9 +122,7 @@ class TestConvertFailurePaths:
         assert any("Missing expected sheet" in e for e in result["errors"])
 
     def test_converter_raises_generic(self, tmp_path):
-        with patch.object(
-            engine, "_build_registry", return_value={"VT_SG_PWR": _RaisingConverter}
-        ):
+        with patch.object(engine, "_build_registry", return_value={"VT_SG_PWR": _RaisingConverter}):
             result = engine.convert(
                 model_name="VT_SG_PWR",
                 vt_file_path=str(tmp_path / "src.xlsx"),

@@ -7,8 +7,6 @@ exercise the logic in isolation and run quickly.
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from app.services.value_cleaner import (

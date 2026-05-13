@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from app.converters.base_model import MISSING
 from app.converters.models import vt_sg_pwr

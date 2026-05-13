@@ -6,10 +6,8 @@ from io import BytesIO
 from unittest.mock import patch
 
 import openpyxl
-import pytest
 from fastapi.testclient import TestClient
 
-from app.converters.base_model import PowerRecord
 from app.routers import convert as convert_router
 
 
