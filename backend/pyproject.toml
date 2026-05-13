@@ -53,6 +53,7 @@ addopts = [
     "--cov=app",
     "--cov-report=term-missing",
     "--cov-report=xml:coverage.xml",
+    "--cov-report=html:htmlcov",
 ]
 markers = [
     "integration: tests that require a real PostgreSQL instance",
