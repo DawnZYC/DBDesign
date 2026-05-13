@@ -123,7 +123,8 @@ class TestTechnologyList:
         assert response.status_code == 422
 
     def test_filter_by_unknown_geography_returns_empty(self, client: TestClient, seeded_data):
-        response = client.get("/api/technologies?geography_id=99999")
+        # 9999 must be within SMALLINT range (max 32767) but unlikely to exist.
+        response = client.get("/api/technologies?geography_id=9999")
         assert response.status_code == 200
         assert response.json()["items"] == []
 
@@ -143,5 +144,6 @@ class TestTechnologyDetail:
         assert any(y["data_year"] == 2020 for y in body["years"])
 
     def test_missing_returns_404(self, client: TestClient, seeded_data):
+        # technology_id is BigInteger in PG so big numbers are fine here.
         response = client.get("/api/technologies/9999999")
         assert response.status_code == 404
