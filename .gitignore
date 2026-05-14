@@ -27,6 +27,11 @@ build/
 .pnpm-debug.log
 *.tsbuildinfo
 
+# Test coverage reports (generated artifacts, never commit)
+coverage/
+**/coverage/
+lcov.info
+
 # =============================================================================
 # IDE / Editors
 # =============================================================================
