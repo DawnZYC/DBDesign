@@ -8,12 +8,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('../api', () => ({
-  previewExcel:          vi.fn(),
-  uploadExcel:           vi.fn(),
-  listConflicts:         vi.fn(),
-  resolveConflicts:      vi.fn(),
+  previewExcel: vi.fn(),
+  uploadExcel: vi.fn(),
+  listConflicts: vi.fn(),
+  resolveConflicts: vi.fn(),
   previewFromConversion: vi.fn(),
-  importFromConversion:  vi.fn(),
+  importFromConversion: vi.fn(),
 }));
 
 import {
@@ -30,37 +30,51 @@ import type { ConvertResult, FilePreview, ImportResult } from '../types';
 const mockPreview: FilePreview = {
   file_name: 'test.xlsx',
   sheets: [
-    { sheet_name: 'ELEC',  is_known: true,  sector_code: 'ELEC',  data_rows: 100 },
-    { sheet_name: 'TRANS', is_known: true,  sector_code: 'TRANS', data_rows: 50  },
-    { sheet_name: 'NOTES', is_known: false, sector_code: null,    data_rows: 0   },
+    { sheet_name: 'ELEC', is_known: true, sector_code: 'ELEC', data_rows: 100 },
+    { sheet_name: 'TRANS', is_known: true, sector_code: 'TRANS', data_rows: 50 },
+    { sheet_name: 'NOTES', is_known: false, sector_code: null, data_rows: 0 },
   ],
 };
 
 const mockImportResult: ImportResult = {
   import_batch_id: 7,
-  file_name:       'test.xlsx',
-  imported_at:     '2024-01-15T10:30:00.000Z',
-  rows_imported:   150,
-  rows_skipped:    0,
-  rows_pending:    0,
-  issues:          0,
+  file_name: 'test.xlsx',
+  imported_at: '2024-01-15T10:30:00.000Z',
+  rows_imported: 150,
+  rows_skipped: 0,
+  rows_pending: 0,
+  issues: 0,
   sheets: [
-    { sheet_name: 'ELEC',  rows_total: 100, rows_imported: 100, rows_skipped: 0, rows_pending: 0, issues: 0 },
-    { sheet_name: 'TRANS', rows_total: 50,  rows_imported: 50,  rows_skipped: 0, rows_pending: 0, issues: 0 },
+    {
+      sheet_name: 'ELEC',
+      rows_total: 100,
+      rows_imported: 100,
+      rows_skipped: 0,
+      rows_pending: 0,
+      issues: 0,
+    },
+    {
+      sheet_name: 'TRANS',
+      rows_total: 50,
+      rows_imported: 50,
+      rows_skipped: 0,
+      rows_pending: 0,
+      issues: 0,
+    },
   ],
   duration_ms: 800,
 };
 
 const mockHandoff: ConvertResult = {
-  download_token:     'tok-xyz',
-  download_name:      'converted.xlsx',
-  row_count:          80,
-  sheet_name:         'ELEC',
-  model_key:          'VT_ELEC',
-  source_file_name:   'vt_source.xlsx',
+  download_token: 'tok-xyz',
+  download_name: 'converted.xlsx',
+  row_count: 80,
+  sheet_name: 'ELEC',
+  model_key: 'VT_ELEC',
+  source_file_name: 'vt_source.xlsx',
   template_file_name: 'template.xlsx',
-  bytes:              10240,
-  created_at:         '2024-01-15T09:00:00Z',
+  bytes: 10240,
+  created_at: '2024-01-15T09:00:00Z',
 };
 
 function pickFile(name = 'test.xlsx') {
@@ -98,9 +112,7 @@ describe('ImportView — preview flow', () => {
     vi.mocked(previewExcel).mockImplementation(() => new Promise(() => {}));
     render(<ImportView />);
     pickFile();
-    await waitFor(() =>
-      expect(screen.getByText(/reading the sheet list/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/reading the sheet list/i)).toBeInTheDocument());
   });
 
   it('transitions to the sheet-picking stage after a successful preview', async () => {
@@ -143,9 +155,7 @@ describe('ImportView — sheet picking and import', () => {
   it('pre-selects known sheets and shows the import button', async () => {
     await reachPickingStage();
     // Both ELEC and TRANS are known → both pre-selected → button says "Import 2 selected sheets"
-    expect(
-      screen.getByRole('button', { name: /import 2 selected sheet/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /import 2 selected sheet/i })).toBeInTheDocument();
   });
 
   it('disables the import button when no sheets are selected', async () => {
@@ -196,9 +206,7 @@ describe('ImportView — sheet picking and import', () => {
 describe('ImportView — handoff from Convert step', () => {
   it('shows the handoff banner and skips the file-upload step', async () => {
     render(<ImportView handoff={mockHandoff} onHandoffConsumed={vi.fn()} />);
-    await waitFor(() =>
-      expect(screen.getByText(/loaded from convert step/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/loaded from convert step/i)).toBeInTheDocument());
     // Banner renders "File: converted.xlsx" in a span — match with regex
     expect(screen.getByText(/converted\.xlsx/i)).toBeInTheDocument();
   });

@@ -4,20 +4,18 @@ import { SheetPicker } from '../components/SheetPicker';
 import type { SheetPreview } from '../types';
 
 const sheets: SheetPreview[] = [
-  { sheet_name: 'ELEC', is_known: true,  sector_code: 'ELEC',  data_rows: 100 },
-  { sheet_name: 'TRANS', is_known: true, sector_code: 'TRANS', data_rows: 50  },
-  { sheet_name: 'NOTES', is_known: false, sector_code: null,   data_rows: 0   },
+  { sheet_name: 'ELEC', is_known: true, sector_code: 'ELEC', data_rows: 100 },
+  { sheet_name: 'TRANS', is_known: true, sector_code: 'TRANS', data_rows: 50 },
+  { sheet_name: 'NOTES', is_known: false, sector_code: null, data_rows: 0 },
 ];
 
 function renderPicker(selected: Set<string>, onChange = vi.fn()) {
-  return { onChange, ...render(
-    <SheetPicker
-      fileName="test.xlsx"
-      sheets={sheets}
-      selected={selected}
-      onChange={onChange}
-    />,
-  )};
+  return {
+    onChange,
+    ...render(
+      <SheetPicker fileName="test.xlsx" sheets={sheets} selected={selected} onChange={onChange} />,
+    ),
+  };
 }
 
 describe('SheetPicker', () => {
@@ -57,7 +55,7 @@ describe('SheetPicker', () => {
   it('reflects pre-selected sheets as checked', () => {
     renderPicker(new Set(['ELEC']));
     const checkboxes = screen.getAllByRole('checkbox');
-    expect(checkboxes[1]).toBeChecked();   // ELEC
+    expect(checkboxes[1]).toBeChecked(); // ELEC
     expect(checkboxes[2]).not.toBeChecked(); // TRANS
   });
 

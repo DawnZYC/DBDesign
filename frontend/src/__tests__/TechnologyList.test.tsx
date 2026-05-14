@@ -5,8 +5,8 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('../api', () => ({
-  listSectors:      vi.fn(),
-  listGeographies:  vi.fn(),
+  listSectors: vi.fn(),
+  listGeographies: vi.fn(),
   listTechnologies: vi.fn(),
 }));
 
@@ -15,7 +15,7 @@ import { TechnologyList } from '../components/TechnologyList';
 import type { Sector, Geography, TechnologyListResponse } from '../types';
 
 const sectors: Sector[] = [
-  { sector_id: 1, sector_code: 'ELEC',  sector_name: 'Electricity' },
+  { sector_id: 1, sector_code: 'ELEC', sector_name: 'Electricity' },
   { sector_id: 2, sector_code: 'TRANS', sector_name: 'Transport' },
 ];
 
@@ -26,18 +26,18 @@ const geographies: Geography[] = [
 
 const makeTechResponse = (total = 1): TechnologyListResponse => ({
   items: Array.from({ length: Math.min(total, 20) }, (_, i) => ({
-    technology_id:           i + 1,
-    technology_code:         `TECH_${i + 1}`,
-    technology_description:  `Technology ${i + 1}`,
-    sector_code:             'ELEC',
-    sector_name:             'Electricity',
-    geography_code:          'SGP',
-    technology_start_year:   2020,
+    technology_id: i + 1,
+    technology_code: `TECH_${i + 1}`,
+    technology_description: `Technology ${i + 1}`,
+    sector_code: 'ELEC',
+    sector_name: 'Electricity',
+    geography_code: 'SGP',
+    technology_start_year: 2020,
     technology_lifetime_years: 25,
-    grade:                   'A',
-    year_count:              5,
-    year_min:                2020,
-    year_max:                2024,
+    grade: 'A',
+    year_count: 5,
+    year_min: 2020,
+    year_max: 2024,
   })),
   total,
   page: 1,
@@ -76,9 +76,7 @@ describe('TechnologyList', () => {
   it('shows an empty-state message when no technologies match', async () => {
     vi.mocked(listTechnologies).mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 });
     render(<TechnologyList onSelect={vi.fn()} selectedId={null} />);
-    await waitFor(() =>
-      expect(screen.getByText(/no technologies match/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/no technologies match/i)).toBeInTheDocument());
   });
 
   it('shows an error message when the API call fails', async () => {

@@ -13,41 +13,41 @@ import { TechnologyDetailPanel } from '../components/TechnologyDetailPanel';
 import type { TechnologyDetail } from '../types';
 
 const mockDetail: TechnologyDetail = {
-  technology_id:              1,
-  technology_code:            'COAL_PP',
-  technology_description:     'Coal power plant',
-  sector_code:                'ELEC',
-  sector_name:                'Electricity',
-  geography_code:             'SGP',
-  technology_start_year:      2020,
-  technology_lifetime_years:  30,
-  grade:                      'A',
+  technology_id: 1,
+  technology_code: 'COAL_PP',
+  technology_description: 'Coal power plant',
+  sector_code: 'ELEC',
+  sector_name: 'Electricity',
+  geography_code: 'SGP',
+  technology_start_year: 2020,
+  technology_lifetime_years: 30,
+  grade: 'A',
   years: [
     {
       technology_year_id: 10,
-      data_year:          2020,
-      raw_row_id:         null,
-      emission_factor:    '0.85',
+      data_year: 2020,
+      raw_row_id: null,
+      emission_factor: '0.85',
       emission_factor_unit: 'tCO2/MWh',
-      base_currency:      'USD',
-      capex:              '1200',
-      capex_unit:         'USD/kW',
-      fixed_opex:         '30',
-      fixed_opex_unit:    'USD/kW/yr',
-      variable_opex:      '5',
+      base_currency: 'USD',
+      capex: '1200',
+      capex_unit: 'USD/kW',
+      fixed_opex: '30',
+      fixed_opex_unit: 'USD/kW/yr',
+      variable_opex: '5',
       variable_opex_unit: 'USD/MWh',
-      tax_cost:           null,
-      subsidy_cost:       null,
-      efficiency_value:   '0.38',
-      efficiency_text:    '38%',
-      efficiency_unit:    '%',
+      tax_cost: null,
+      subsidy_cost: null,
+      efficiency_value: '0.38',
+      efficiency_text: '38%',
+      efficiency_unit: '%',
       technology_efficiency: null,
       capacity_to_activity_factor: null,
-      heat_rate:          null,
-      capacity_value:     null,
+      heat_rate: null,
+      capacity_value: null,
       capacity_bound_type: null,
       constraint_details: [],
-      commodities:        [],
+      commodities: [],
     },
   ],
 };
@@ -107,9 +107,7 @@ describe('TechnologyDetailPanel', () => {
     const { rerender } = render(<TechnologyDetailPanel technologyId={1} />);
     await waitFor(() => screen.getByText('COAL_PP'));
     rerender(<TechnologyDetailPanel technologyId={2} />);
-    await waitFor(() =>
-      expect(vi.mocked(getTechnology)).toHaveBeenCalledWith(2),
-    );
+    await waitFor(() => expect(vi.mocked(getTechnology)).toHaveBeenCalledWith(2));
   });
 
   it('resets to placeholder when technologyId changes to null', async () => {

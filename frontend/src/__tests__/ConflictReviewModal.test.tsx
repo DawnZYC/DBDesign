@@ -5,7 +5,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('../api', () => ({
-  listConflicts:    vi.fn(),
+  listConflicts: vi.fn(),
   resolveConflicts: vi.fn(),
 }));
 
@@ -17,11 +17,11 @@ const conflictResponse: ConflictListResponse = {
   total_pending: 3,
   groups: [
     {
-      group_id:            'grp-1',
-      sheet_name:          'ELEC',
-      sheet_sector_code:   'ELEC',
-      a_column_value:      'TRANS',
-      a_column_sector_code:'TRANS',
+      group_id: 'grp-1',
+      sheet_name: 'ELEC',
+      sheet_sector_code: 'ELEC',
+      a_column_value: 'TRANS',
+      a_column_sector_code: 'TRANS',
       rows: [
         { raw_row_id: 10, excel_row_number: 5 },
         { raw_row_id: 11, excel_row_number: 6 },
@@ -130,18 +130,14 @@ describe('ConflictReviewModal', () => {
   it('shows an error when listConflicts fails', async () => {
     vi.mocked(listConflicts).mockRejectedValueOnce(new Error('Server unavailable'));
     render(<ConflictReviewModal onClose={vi.fn()} onResolved={vi.fn()} />);
-    await waitFor(() =>
-      expect(screen.getByText(/failed to load/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/failed to load/i)).toBeInTheDocument());
     expect(screen.getByText('Server unavailable')).toBeInTheDocument();
   });
 
   it('shows "No conflicts pending" when the API returns an empty group list', async () => {
     vi.mocked(listConflicts).mockResolvedValueOnce({ total_pending: 0, groups: [] });
     render(<ConflictReviewModal onClose={vi.fn()} onResolved={vi.fn()} />);
-    await waitFor(() =>
-      expect(screen.getByText(/no conflicts pending/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/no conflicts pending/i)).toBeInTheDocument());
   });
 
   it('calls resolveConflicts with SKIP for a group where the SKIP radio was chosen', async () => {

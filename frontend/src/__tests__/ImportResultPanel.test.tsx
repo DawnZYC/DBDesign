@@ -83,8 +83,22 @@ describe('ImportResultPanel', () => {
     const result: ImportResult = {
       ...baseResult,
       sheets: [
-        { sheet_name: 'ELEC',  rows_total: 100, rows_imported: 90, rows_skipped: 5, rows_pending: 5, issues: 1 },
-        { sheet_name: 'TRANS', rows_total: 50,  rows_imported: 50, rows_skipped: 0, rows_pending: 0, issues: 0 },
+        {
+          sheet_name: 'ELEC',
+          rows_total: 100,
+          rows_imported: 90,
+          rows_skipped: 5,
+          rows_pending: 5,
+          issues: 1,
+        },
+        {
+          sheet_name: 'TRANS',
+          rows_total: 50,
+          rows_imported: 50,
+          rows_skipped: 0,
+          rows_pending: 0,
+          issues: 0,
+        },
       ],
     };
     render(<ImportResultPanel result={result} />);

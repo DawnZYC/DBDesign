@@ -17,19 +17,19 @@ import { ConvertView } from '../components/ConvertView';
 import type { ConvertModelInfo, ConvertResult } from '../types';
 
 const models: ConvertModelInfo[] = [
-  { key: 'VT_ELEC',  label: 'VT Electricity', sector: 'ELEC',  description: 'Electricity model' },
-  { key: 'VT_TRANS', label: 'VT Transport',    sector: 'TRANS', description: null },
+  { key: 'VT_ELEC', label: 'VT Electricity', sector: 'ELEC', description: 'Electricity model' },
+  { key: 'VT_TRANS', label: 'VT Transport', sector: 'TRANS', description: null },
 ];
 
 const mockResult: ConvertResult = {
   download_token: 'tok-abc123',
-  download_name:  'output.xlsx',
-  row_count:       50,
-  sheet_name:      'ELEC',
-  model_key:       'VT_ELEC',
-  source_file_name:   'source.xlsx',
+  download_name: 'output.xlsx',
+  row_count: 50,
+  sheet_name: 'ELEC',
+  model_key: 'VT_ELEC',
+  source_file_name: 'source.xlsx',
   template_file_name: 'template.xlsx',
-  bytes:     20480,
+  bytes: 20480,
   created_at: '2024-01-15T10:00:00Z',
 };
 
@@ -58,23 +58,30 @@ describe('ConvertView', () => {
     render(<ConvertView onHandoffToImport={vi.fn()} />);
     await waitFor(() => screen.getByRole('radio', { name: /VT_ELEC/i }));
     expect(screen.getByRole('radio', { name: /VT_ELEC/i })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: /VT_TRANS/i })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('radio', { name: /VT_TRANS/i })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
   });
 
   it('switches the selected model when a different one is clicked', async () => {
     render(<ConvertView onHandoffToImport={vi.fn()} />);
     await waitFor(() => screen.getByRole('radio', { name: /VT_TRANS/i }));
     fireEvent.click(screen.getByRole('radio', { name: /VT_TRANS/i }));
-    expect(screen.getByRole('radio', { name: /VT_TRANS/i })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('radio', { name: /VT_ELEC/i })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('radio', { name: /VT_TRANS/i })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('radio', { name: /VT_ELEC/i })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
   });
 
   it('shows an error banner when listConvertModels fails', async () => {
     vi.mocked(listConvertModels).mockRejectedValueOnce(new Error('Network error'));
     render(<ConvertView onHandoffToImport={vi.fn()} />);
-    await waitFor(() =>
-      expect(screen.getByText(/unable to load model list/i)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/unable to load model list/i)).toBeInTheDocument());
   });
 
   it('"Convert workbook" button is disabled before a source file is selected', async () => {
