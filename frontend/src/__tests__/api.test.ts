@@ -173,17 +173,13 @@ describe('listGeographies', () => {
 
 describe('listTechnologies', () => {
   it('omits the querystring when no filters are passed', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      mockResponse({ items: [], total: 0, page: 1, page_size: 50 }),
-    );
+    fetchSpy.mockResolvedValueOnce(mockResponse({ items: [], total: 0, page: 1, page_size: 50 }));
     await api.listTechnologies();
     expect(fetchSpy).toHaveBeenCalledWith('/api/technologies');
   });
 
   it('builds the querystring from supplied filters', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      mockResponse({ items: [], total: 0, page: 2, page_size: 25 }),
-    );
+    fetchSpy.mockResolvedValueOnce(mockResponse({ items: [], total: 0, page: 2, page_size: 25 }));
     await api.listTechnologies({
       sector_id: 1,
       geography_id: 2,
@@ -202,9 +198,7 @@ describe('listTechnologies', () => {
   });
 
   it('treats sector_id=0 as a real filter, not as missing', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      mockResponse({ items: [], total: 0, page: 1, page_size: 50 }),
-    );
+    fetchSpy.mockResolvedValueOnce(mockResponse({ items: [], total: 0, page: 1, page_size: 50 }));
     await api.listTechnologies({ sector_id: 0 });
     const url = fetchSpy.mock.calls[0][0] as string;
     expect(url).toContain('sector_id=0');
@@ -332,9 +326,7 @@ describe('previewFromConversion', () => {
   it('url-encodes the token', async () => {
     fetchSpy.mockResolvedValueOnce(mockResponse({ file_name: 'x', sheets: [] }));
     await api.previewFromConversion('a/b c');
-    expect(fetchSpy.mock.calls[0][0]).toBe(
-      '/api/imports/preview/from-conversion?token=a%2Fb%20c',
-    );
+    expect(fetchSpy.mock.calls[0][0]).toBe('/api/imports/preview/from-conversion?token=a%2Fb%20c');
   });
 });
 
