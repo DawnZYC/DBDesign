@@ -216,11 +216,14 @@ def _make_data_by_df(processes: list[dict]) -> pd.DataFrame:
     # Row 0 – unused
     rows.append([None] * n_cols)
 
-    # Row 1 – year headers
-    header: list[object] = [None] * n_cols
-    header[8] = 2018.0  # invcost
-    header[15] = 2018.0  # fixom
-    header[22] = 2018.0  # varom
+    # Row 1 – year headers.
+    # Unused slots MUST be np.nan (not None) so _parse_data_by's
+    # `isinstance(v, float) and np.isnan(v)` guard correctly skips them.
+    # None is not a float, so it passes the guard and causes float(None) → TypeError.
+    header: list[object] = [np.nan] * n_cols
+    header[8] = 2018.0  # invcost year 1
+    header[15] = 2018.0  # fixom year 1
+    header[22] = 2018.0  # varom year 1
     header[29] = 2018.0  # cap year 1
     header[30] = 2020.0  # cap year 2
     rows.append(header)
