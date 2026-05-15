@@ -77,7 +77,6 @@ jobs:
           provenance: false
 
       - name: Trivy vulnerability scan
-#        uses: aquasecurity/trivy-action@0.28.0
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}-${{ matrix.component }}@${{ steps.build.outputs.digest }}
