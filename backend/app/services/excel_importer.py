@@ -917,20 +917,20 @@ def resolve_pending_conflicts(
                 f"raw_row_id={item.raw_row_id}: 未知 decision '{item.decision}'"
             )
             continue
+        # 用 savepoint 做行级回滚，避免单行失败时把已成功的行一并回滚
+        savepoint = db.begin_nested()
         try:
             _resolve_single_conflict(
                 db, raw_row_id=item.raw_row_id, decision=item.decision
             )
+            savepoint.commit()
             resolved += 1
         except Exception as exc:  # noqa: BLE001
+            savepoint.rollback()
             failed += 1
             failure_reasons.append(f"raw_row_id={item.raw_row_id}: {exc!s}")
-            db.rollback()
 
-    if resolved > 0 and failed == 0:
-        db.commit()
-    elif resolved > 0 and failed > 0:
-        # 部分成功也提交（已 rollback 的失败项不会有副作用）
+    if resolved > 0:
         db.commit()
 
     return ConflictResolveResponse(

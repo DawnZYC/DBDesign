@@ -251,9 +251,16 @@ def _resolve_group_by(
 # 执行
 # -----------------------------------------------------------------------------
 def _execute(db: Session, params: QueryParams) -> QueryResult:
+    effective_limit = min(params.limit, MAX_LIMIT)
+    # 多取 1 行探测是否被截断，避免恰好等于 limit 时误判
     stmt, _ = _build_query(params)
+    stmt = stmt.limit(effective_limit + 1)
     rows = db.execute(stmt).mappings().all()
     rows_list = [dict(r) for r in rows]
+
+    truncated = len(rows_list) > effective_limit
+    if truncated:
+        rows_list = rows_list[:effective_limit]   # 去掉多取的那 1 行
 
     # 单位推断（取众数）
     unit: str | None = None
@@ -261,8 +268,6 @@ def _execute(db: Session, params: QueryParams) -> QueryResult:
         units = [r.get("unit") for r in rows_list if r.get("unit")]
         if units:
             unit = max(set(units), key=units.count)
-
-    truncated = len(rows_list) >= min(params.limit, MAX_LIMIT)
 
     # SQL 摘要（人类可读）
     summary_parts = [f"metric={params.metric}", f"agg={params.aggregation}"]

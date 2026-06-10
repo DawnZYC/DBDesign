@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowseView } from './components/BrowseView';
 import { ImportView } from './components/ImportView';
+import { ChatPage } from './pages/ChatPage';
 import { checkHealth } from './api';
 
 type HealthState =
@@ -8,11 +9,12 @@ type HealthState =
   | { status: 'ok'; database: string }
   | { status: 'error'; message: string };
 
-type Tab = 'import' | 'browse';
+type Tab = 'chat' | 'import' | 'browse';
 
 function App() {
   const [health, setHealth] = useState<HealthState>({ status: 'checking' });
-  const [activeTab, setActiveTab] = useState<Tab>('import');
+  // M4: 默认进入 AI 助手（原来是 'import'）
+  const [activeTab, setActiveTab] = useState<Tab>('chat');
 
   useEffect(() => {
     checkHealth()
@@ -23,21 +25,28 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>EcoTEA WP1</h1>
+        <h1>SG-TIMES</h1>
         <nav className="tab-nav">
           <button
             type="button"
-            className={`tab ${activeTab === 'import' ? 'active' : ''}`}
-            onClick={() => setActiveTab('import')}
+            className={`tab ${activeTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chat')}
           >
-            导入数据
+            AI 助手
           </button>
           <button
             type="button"
             className={`tab ${activeTab === 'browse' ? 'active' : ''}`}
             onClick={() => setActiveTab('browse')}
           >
-            浏览数据
+            数据浏览
+          </button>
+          <button
+            type="button"
+            className={`tab ${activeTab === 'import' ? 'active' : ''}`}
+            onClick={() => setActiveTab('import')}
+          >
+            数据接入
           </button>
         </nav>
         <span className={`health-pill health-${health.status}`}>
@@ -48,8 +57,9 @@ function App() {
       </header>
 
       <main className="app-main">
-        {activeTab === 'import' && <ImportView />}
+        {activeTab === 'chat' && <ChatPage />}
         {activeTab === 'browse' && <BrowseView />}
+        {activeTab === 'import' && <ImportView />}
       </main>
 
       <footer className="app-footer">

@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 定位到 backend/.env，无论从哪个目录启动 uvicorn 都能找到
+_ENV_FILE = Path(__file__).parent.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -69,8 +73,28 @@ class Settings(BaseSettings):
         description="Chroma collection 名（领域术语库）",
     )
 
+    # -------------------------------------------------------------------------
+    # Agent 编排（M3）
+    #   LangGraph 4-Agent 图（Planner → SQL → Interpreter → Visualizer）
+    # -------------------------------------------------------------------------
+    agent_max_retries: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="SQL 节点失败后回 Planner 的最大重试次数",
+    )
+    agent_node_timeout: int = Field(
+        default=30,
+        ge=5,
+        description="单个 Agent 节点的超时秒数",
+    )
+    agent_trace_enabled: bool = Field(
+        default=False,
+        description="是否开启 LangSmith trace（需配置 LANGCHAIN_API_KEY）",
+    )
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE),       # 绝对路径，不依赖启动目录
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

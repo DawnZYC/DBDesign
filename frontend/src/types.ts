@@ -167,3 +167,61 @@ export interface TechnologyDetail {
 export interface ApiError {
   detail: string;
 }
+
+// =============================================================================
+// Chat / AI 助手（M4）
+// =============================================================================
+
+/** SSE 事件中 tool_call 的数据结构 */
+export interface ToolCallEvent {
+  tool: string;
+  args: Record<string, unknown>;
+}
+
+/** SSE 事件中 tool_result 的数据结构 */
+export interface ToolResultEvent {
+  tool: string;
+  row_count?: number;
+  truncated?: boolean;
+  metric?: string;
+  sql_summary?: string;
+}
+
+/** LangGraph 节点名称 */
+export type AgentNode = 'planner' | 'sql_gen' | 'interpreter' | 'visualizer';
+
+/** 单条对话消息（用户或 AI） */
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  /** 消息文本（用户消息 / AI 流式拼接文本） */
+  content: string;
+  /** Planner 步骤列表（assistant only） */
+  plan?: string[];
+  /** 工具调用列表（assistant only） */
+  toolCalls?: ToolCallEvent[];
+  /** 工具返回列表（assistant only，与 toolCalls 按顺序对应） */
+  toolResults?: ToolResultEvent[];
+  /** ECharts option（assistant only，Visualizer 输出） */
+  chartSpec?: Record<string, unknown>;
+  /** 当前活跃节点（streaming 时显示） */
+  currentNode?: AgentNode;
+  /** 消息状态 */
+  status?: 'streaming' | 'done' | 'error';
+  /** 错误信息（status === 'error' 时） */
+  errorMessage?: string;
+}
+
+/** GET /api/raw-rows/{id} 响应 */
+export interface RawRowDetail {
+  raw_row_id: number;
+  source_sheet_name: string;
+  excel_row_number: number;
+  raw_cells: Record<string, unknown>;
+  import_batch: {
+    import_batch_id: number;
+    file_name: string;
+    imported_at: string;
+    note: string | null;
+  };
+}

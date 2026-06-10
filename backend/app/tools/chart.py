@@ -140,6 +140,11 @@ def recommend_chart(
     (without dataset; the frontend binds rows), and which columns should be
     used as x/group dimensions.
     """
+    # LangChain 在 invoke → args_schema.model_validate → model_dump 后再传参，
+    # 嵌套 Pydantic 模型会被还原为 dict；在这里防御性地做类型转换。
+    if isinstance(data_shape, dict):
+        data_shape = DataShape(**data_shape)
+
     chart_type = _decide_chart_type(data_shape, intent or "")
     skeleton = _skeleton_for(chart_type, data_shape.metric_unit)
     dims = _suggest_dimensions(data_shape, chart_type)

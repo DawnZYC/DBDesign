@@ -1,76 +1,167 @@
-# EcoTEA WP1 — Excel → PostgreSQL 导入工具
+# SG-TIMES Multi-Agent 智能分析平台
 
-把 EcoTEA 的多 sheet Excel 文件（10 个行业 × 38 列）按规范化的 15 张表 schema 导入本地 PostgreSQL。
+> 原 EcoTEA WP1 数据导入工具的升级版。研究员通过自然语言对话，驱动四节点 LangGraph 流水线完成跨年份、跨情景的数据查询与可视化，完整保留原有数据导入 / 冲突复核 / 浏览视图功能。
 
-- **后端**：Python 3.11+ / FastAPI / SQLAlchemy 2 / openpyxl
-- **前端**：React 18 / Vite / TypeScript
-- **数据库**：PostgreSQL（本地实例）
+---
+
+## 里程碑进度
+
+| 里程碑 | 内容 | 状态 |
+|--------|------|------|
+| **M0** | LLM Provider 抽象层（OpenAI / DeepSeek / Qwen / Anthropic 热切换） | ✅ 完成 |
+| **M1** | ChromaDB 领域词汇 RAG（sentence-transformers 本地 Embedding） | ✅ 完成 |
+| **M2** | 6 类 Function-Calling 工具（run_sql / stat_analysis / recommend_chart 等） | ✅ 完成 |
+| **M3** | LangGraph 四 Agent 图 + SSE 流式后端（`POST /api/chat/stream`） | ✅ 完成 |
+| **M4** | Chat 前端（打字机流 / ECharts 图表 / 工具调用 Trace / 源单元格反查） | ✅ 完成 |
+| **M5** | Schema-Mapping Agent + 冲突复核 UI 改造 | 🚧 规划中 |
+| **M6** | Docker Compose + GitHub Actions CI + eval 黄金问题集 | 🚧 规划中 |
+
+---
+
+## 技术栈
+
+### 后端（Python 3.11+）
+
+| 类别 | 技术 |
+|------|------|
+| Web 框架 | FastAPI 0.115 + sse-starlette |
+| ORM / 数据库 | SQLAlchemy 2.0、psycopg v3、PostgreSQL 16 |
+| Agent 编排 | LangGraph 0.2.62（StateGraph，4 节点流水线） |
+| LLM | langchain-core 0.3.29 / langchain-openai / langchain-anthropic |
+| 向量库 | ChromaDB + sentence-transformers（本地 Embedding，零成本） |
+| 数据校验 | Pydantic v2 / pydantic-settings |
+| 文件解析 | openpyxl 3.1 |
+
+### 前端（Node 20+）
+
+| 类别 | 技术 |
+|------|------|
+| 框架 | React 18 + TypeScript 5 + Vite 5 |
+| 图表 | ECharts（via echarts-for-react） |
+| SSE 流 | 原生 fetch + ReadableStream 手动解析 |
+| Markdown | react-markdown + remark-gfm |
+
+---
 
 ## 项目结构
 
 ```
 DBDesign/
 ├── sql/
-│   └── 001_init_schema.sql              # 15 张表的 DDL（含约束/索引/sector 预置数据）
-├── backend/                             # FastAPI 服务
+│   └── 001_init_schema.sql          # 15 张表 DDL（含约束 / 索引 / sector 预置数据）
+├── backend/
 │   ├── app/
-│   │   ├── main.py                      # FastAPI 入口
-│   │   ├── config.py                    # .env 配置
-│   │   ├── database.py                  # SQLAlchemy engine + session
-│   │   ├── models.py                    # 15 张表 ORM
-│   │   ├── schemas.py                   # API Pydantic schema
+│   │   ├── main.py                  # FastAPI 入口，挂载所有 router
+│   │   ├── config.py                # pydantic-settings，从 .env 加载配置
+│   │   ├── database.py              # SQLAlchemy engine + session 工厂
+│   │   ├── models.py                # 15 张表 ORM
+│   │   ├── schemas.py               # API Pydantic schema
+│   │   ├── llm/
+│   │   │   └── provider.py          # LLM 工厂（OpenAI / DeepSeek / Qwen / Anthropic）
+│   │   ├── rag/                     # ChromaDB 向量检索（M1）
+│   │   ├── tools/                   # Function-Calling 工具实现（M2）
+│   │   │   ├── sql_runner.py        # run_sql：安全执行 SELECT + 截断保护
+│   │   │   ├── stat_analysis.py     # 统计分析工具
+│   │   │   ├── chart.py             # recommend_chart：图表类型推荐
+│   │   │   └── ...
+│   │   ├── agents/                  # LangGraph 四 Agent 图（M3）
+│   │   │   ├── graph.py             # StateGraph 定义 + 条件边
+│   │   │   ├── state.py             # AgentState TypedDict
+│   │   │   ├── planner.py           # Planner：意图理解 → 执行计划
+│   │   │   ├── sql_agent.py         # SQL Agent：生成并执行 SQL
+│   │   │   ├── interpreter.py       # Interpreter：流式文本解读（astream）
+│   │   │   └── visualizer.py        # Visualizer：生成 ECharts spec
 │   │   ├── routers/
-│   │   │   ├── health.py                # GET /api/health
-│   │   │   └── imports.py               # POST /api/imports
+│   │   │   ├── health.py            # GET /api/health
+│   │   │   ├── imports.py           # POST /api/imports（导入 / 冲突复核）
+│   │   │   ├── browse.py            # GET /api/technologies, /api/sectors 等
+│   │   │   ├── chat.py              # POST /api/chat/stream（SSE，M3）
+│   │   │   ├── raw_rows.py          # GET /api/raw-rows/{id}（反查源单元格，M4）
+│   │   │   └── rag.py               # RAG 相关端点（M1）
 │   │   └── services/
-│   │       ├── value_cleaner.py         # 占位符 / 公式错误 / 混合文本清洗
-│   │       └── excel_importer.py        # 主导入逻辑
+│   │       ├── excel_importer.py    # Excel 导入主逻辑（含 savepoint 行级回滚）
+│   │       └── value_cleaner.py     # 占位符 / 公式错误 / 混合文本清洗
 │   ├── requirements.txt
-│   ├── .env.example
-│   └── README.md
-├── frontend/                            # React + Vite + TS 单页
-│   ├── src/...
-│   ├── package.json
-│   ├── vite.config.ts
-│   └── README.md
-├── EcoTEA_WP1_ER_Diagram_v2.html        # 设计文档（可视化）
-├── EcoTEA_Design_Review.html
-├── EcoTEA_Sample_Row_Mapping.html
+│   └── .env                         # 本地配置（不入 git）
+├── frontend/
+│   ├── src/
+│   │   ├── api.ts                   # 所有后端调用（含 SSE streamChat）
+│   │   ├── types.ts                 # 全局 TypeScript 类型
+│   │   ├── pages/
+│   │   │   └── ChatPage.tsx         # AI 助手 Chat 界面（M4）
+│   │   └── chat/
+│   │       ├── useStreamChat.ts     # SSE 流管理 hook
+│   │       ├── MessageList.tsx      # 消息列表（含 Markdown 渲染）
+│   │       ├── MessageBubble.tsx    # 单条消息气泡
+│   │       ├── ToolCallTrace.tsx    # 工具调用 Trace 展开面板
+│   │       └── ChartBubble.tsx      # ECharts 图表气泡
+│   ├── vite.config.ts               # SSE 代理配置（no-buffer）
+│   └── package.json
+├── others/
+│   └── PlanReadme.md                # 完整改造路线图
 └── README.md（本文件）
 ```
 
-## 端到端启动
+---
+
+## 快速启动
 
 ### 1. 准备 PostgreSQL
 
-假设你本地已经有 PG（用户 `postgres`，端口 5432）。新建一个数据库：
-
 ```bash
-psql -U postgres -c "CREATE DATABASE ecotea;"
-psql -U postgres -d ecotea -f sql/001_init_schema.sql
+# 新建数据库（替换为你自己的用户名）
+psql -U zyc -c "CREATE DATABASE ecotea;"
+psql -U zyc -d ecotea -f sql/001_init_schema.sql
 ```
 
-预期输出最后一行：`COMMIT`。`sector` 表会自动预置 10 行（POWER…INFOCOMM）。
+执行成功后最后一行为 `COMMIT`，`sector` 表自动预置 10 行行业数据。
 
-### 2. 启动后端
+### 2. 配置环境变量
 
 ```bash
 cd backend
+cp .env.example .env   # 若无 .env.example 则直接编辑 .env
+```
 
-conda activate excelagent          # 你的 conda 环境
+`.env` 最小配置（其余字段保持默认即可）：
+
+```env
+# 数据库连接
+DATABASE_URL=postgresql+psycopg://zyc:123456@localhost:5432/ecotea
+
+# LLM（主 provider）
+LLM_PROVIDER=openai
+LLM_MODEL=                    # 留空使用默认 gpt-4o-mini
+OPENAI_API_KEY=sk-...         # 填入你的 OpenAI API Key
+
+# 可选：切换国产模型（取消注释任意一项）
+# LLM_PROVIDER=deepseek
+# DEEPSEEK_API_KEY=...
+
+# Embedding（默认本地，零成本）
+EMBEDDING_PROVIDER=huggingface
+
+# CORS
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+### 3. 启动后端
+
+```bash
+cd backend
+conda activate excelagent       # 或：python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env               # 按需修改 DATABASE_URL
-
+# 必须在 backend/ 目录下启动，否则 .env 路径解析异常
 uvicorn app.main:app --reload --port 8000
 ```
 
-> 不用 conda 也可：`python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+启动后验证：
 
 - API 文档：http://localhost:8000/docs
 - 健康检查：http://localhost:8000/api/health → 应返回 `{"status":"ok","database":"ok"}`
 
-### 3. 启动前端
+### 4. 启动前端
 
 ```bash
 cd frontend
@@ -78,78 +169,125 @@ npm install
 npm run dev
 ```
 
-打开 http://localhost:5173 ，顶部有两个标签：
+打开 http://localhost:5173，包含三个标签页：
 
-- **导入数据**：拖入 `EcoTEA Endo WP1.xlsx` → 选 sheet → 导入 → 看摘要 → 有冲突就「去复核」逐项确认。
-- **浏览数据**：技术列表（行业/地区/搜索筛选 + 分页）→ 点某条 → 右侧出现该技术全年份的所有参数（CAPEX、OPEX、效率、容量、commodity 等）。
+- **AI 助手**：自然语言对话，驱动 4-Agent 流水线查询 / 可视化
+- **导入数据**：拖入 Excel → 选 sheet → 导入 → 冲突复核
+- **浏览数据**：技术列表（行业 / 地区 / 关键词筛选 + 分页）
 
-### 导入流程（用户视角）
+---
 
-1. 选/拖入 .xlsx 文件
-2. 后端预览：返回 sheet 列表（包含 sheet 名 / 是否已知行业 / 数据行数）
-3. 前端展示带 checkbox 的 sheet 列表，默认全部勾上已知 sheet
-4. 用户取消 / 勾选要导入的 sheet
-5. 点击导入 → 仅导入勾选的 sheet
-6. 看汇总结果
+## 四 Agent 流水线
+
+```
+用户提问
+    │
+    ▼
+┌─────────┐   执行计划   ┌───────────┐   QueryParams   ┌─────────────┐
+│ Planner │ ──────────► │ SQL Agent │ ──────────────► │ Interpreter │
+│  意图理解 │             │ SQL 生成/执行│                │  流式文本解读 │
+└─────────┘             └───────────┘                 └──────┬──────┘
+                              │                              │ interpretation
+                              │ sql_result                   ▼
+                              │                       ┌────────────┐
+                              └──────────────────────► │ Visualizer │
+                                                       │ ECharts 生成│
+                                                       └────────────┘
+```
+
+所有阶段通过 `POST /api/chat/stream` 以 SSE 实时推送给前端，共 8 种事件类型：
+
+| 事件 | 含义 |
+|------|------|
+| `agent_start` | 某节点开始执行 |
+| `agent_end` | 某节点执行完毕 |
+| `plan` | Planner 输出的执行步骤列表 |
+| `tool_call` | SQL Agent 发起工具调用 |
+| `tool_result` | 工具调用返回结果摘要 |
+| `token` | Interpreter 流式输出的单个 token（打字机效果） |
+| `chart` | Visualizer 输出的完整 ECharts spec |
+| `error` | 局部错误（流仍继续） |
+| `done` | 流结束信号（含 trace_id） |
+
+---
+
+## API 参考
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/health` | 健康检查 |
+| `POST` | `/api/chat/stream` | AI 对话（SSE 流式） |
+| `GET` | `/api/raw-rows/{id}` | 反查源 Excel 单元格 |
+| `POST` | `/api/imports/preview` | 预览 Excel sheet 列表（不入库） |
+| `POST` | `/api/imports` | 上传 Excel 并触发导入 |
+| `GET` | `/api/imports/conflicts` | 列出待复核冲突 |
+| `POST` | `/api/imports/conflicts/resolve` | 提交冲突复核结果 |
+| `GET` | `/api/sectors` | 所有行业 |
+| `GET` | `/api/geographies` | 所有地区 |
+| `GET` | `/api/technologies` | 技术列表（支持分页 / 筛选） |
+| `GET` | `/api/technologies/{id}` | 技术详情 |
+
+---
+
+## LLM Provider 切换
+
+修改 `.env` 中的两个字段即可热切换，无需改代码：
+
+```env
+# OpenAI（默认）
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+OPENAI_API_KEY=sk-...
+
+# DeepSeek（OpenAI 兼容）
+LLM_PROVIDER=deepseek
+LLM_MODEL=deepseek-chat
+DEEPSEEK_API_KEY=...
+
+# 通义千问（DashScope）
+LLM_PROVIDER=qwen
+LLM_MODEL=qwen-plus
+DASHSCOPE_API_KEY=...
+
+# Anthropic Claude（独立 SDK）
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-3-5-haiku-latest
+ANTHROPIC_API_KEY=...
+```
+
+---
 
 ## 数据清洗规则
 
-代码集中在 `backend/app/services/value_cleaner.py`：
+代码位于 `backend/app/services/value_cleaner.py`：
 
 | 输入 | 处理 | 是否写 data_quality_issue |
-|---|---|---|
+|------|------|--------------------------|
 | `'-'` / `'NA'` / 空字符串 / 空白 | → `NULL` | 否 |
-| `#VALUE!` / `#REF!` / `#DIV/0!` / `#N/A` 等 | 主表 → `NULL` | **是**（含原值 + 行号 + 列号） |
-| `0.497` 这类纯数字 | 直接存 | 否 |
-| `'COP: 3.91'` / `'13.33 km/litre'` | 拆为 `_value` + `_text` + `_unit` | 否（仅限 efficiency 列） |
-| `'PWRBMS+PWACOA'` / `'20%+80%'` | 按 `+` 拆成多条 `technology_year_commodity`（保 `commodity_order`） | 否 |
-| sheet 名 ≠ A 列值（Agri/Building 异常） | sector 取 sheet 名；A 列原值留在 `traceability_record.wp_title_raw` | 否 |
+| `#VALUE!` / `#REF!` / `#DIV/0!` 等 | 主表 → `NULL` | **是**（含原值 + 行号 + 列号） |
+| `0.497` 纯数字 | 直接存 | 否 |
+| `'COP: 3.91'` / `'13.33 km/litre'` | 拆为 `_value` + `_text` + `_unit` | 否（efficiency 列） |
+| `'PWRBMS+PWACOA'` / `'20%+80%'` | 按 `+` 拆成多条 `technology_year_commodity` | 否 |
 
-## 验证已导入
-
-```sql
--- 最近一次批次概况
-SELECT import_batch_id, file_name, imported_at, imported_by
-FROM   import_batch
-ORDER  BY imported_at DESC
-LIMIT  5;
-
--- 各 sheet 写了多少条 raw_excel_row
-SELECT source_sheet_name, COUNT(*) AS rows
-FROM   raw_excel_row
-WHERE  import_batch_id = (SELECT MAX(import_batch_id) FROM import_batch)
-GROUP  BY source_sheet_name
-ORDER  BY source_sheet_name;
-
--- 异常列表（#VALUE! 等）
-SELECT source_sheet_name, excel_row_number, excel_column,
-       issue_type, original_value, issue_message
-FROM   data_quality_issue
-ORDER  BY issue_id DESC
-LIMIT  20;
-
--- 多商品行（应能看到 PWRBMS / PWACOA 各占一行）
-SELECT ty.data_year, tp.technology_code, c.commodity_code,
-       tyc.commodity_order, tyc.commodity_share_value, tyc.commodity_share_text
-FROM   technology_year_commodity tyc
-JOIN   technology_year ty ON ty.technology_year_id = tyc.technology_year_id
-JOIN   technology_process tp ON tp.technology_id   = ty.technology_id
-JOIN   commodity c            ON c.commodity_id    = tyc.commodity_id
-WHERE  tp.technology_code = 'PWRBMCSTP00'
-ORDER  BY ty.data_year, tyc.commodity_order;
-```
+---
 
 ## 常见问题
 
-**psql: 连接被拒** → 确认 PG 服务在跑：`pg_isready -h localhost -p 5432`。
-**前端报 `Failed to fetch`** → 后端没起 / 起在别的端口；右上角 health pill 会显示具体错误。
-**PostgreSQL 用户名密码不是 postgres/postgres** → 改 `backend/.env` 的 `DATABASE_URL`。
-**重复导入同一文件** → 不会爆唯一约束；sector / commodity / technology_process / technology_year 全部走 upsert，新批次只多出一份 `import_batch` + `raw_excel_row`。
+**`role "postgres" does not exist`** → 修改 `.env` 的 `DATABASE_URL`，改为你本机实际的 PG 用户名。
 
-## 设计参考
+**AI 助手没有任何输出** → 检查两点：① 后端 `.env` 中 `OPENAI_API_KEY` 字段是否正确填入（不是 `LLM_MODEL`）；② Vite 代理必须从 `frontend/` 目录执行 `npm run dev`，SSE 代理配置已在 `vite.config.ts` 中设置。
 
-打开下面三份 HTML 在浏览器看可视化设计：
+**pip install 冲突** → 确保使用 `requirements.txt` 中锁定的版本，核心约束：`langgraph==0.2.62` 要求 `langchain-core>=0.3.29`，不兼容 `0.3.0–0.3.22` 区间。
 
-- `EcoTEA_WP1_ER_Diagram_v2.html` — 修正版 ER 图（15 张表 + 5 处变更标记）
-- `EcoTEA_Design_Review.html` — 用实际 Excel 数据对您 15 张表设计的核查报告
-- `EcoTEA_Sample_Row_Mapping.html` — 单行 Power 数据从 Excel → 数据库的填表演示
+**前端报 `Failed to fetch`** → 确认后端已在 8000 端口启动，且必须在 `backend/` 目录下执行 `uvicorn`（pydantic-settings 从相对路径加载 `.env`）。
+
+**重复导入同一文件** → 不会报错；sector / commodity / technology_process / technology_year 全部走 upsert，仅新增一份 `import_batch` + `raw_excel_row` 记录。
+
+---
+
+## 设计文档
+
+- `others/PlanReadme.md` — 完整改造路线图（M0–M6 技术决策 + 实施细节）
+- `EcoTEA_WP1_ER_Diagram_v2.html` — 修正版 ER 图（15 张表 + 变更标记）
+- `EcoTEA_Design_Review.html` — 实际数据对 schema 的核查报告
+- `EcoTEA_Sample_Row_Mapping.html` — 单行 Power 数据 Excel → 数据库填表演示
