@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.routers import browse, convert, health, imports
+from app.routers import agent as agent_router
 
 settings = get_settings()
 
@@ -35,6 +36,7 @@ app.include_router(health.router)
 app.include_router(convert.router)
 app.include_router(imports.router)
 app.include_router(browse.router)
+app.include_router(agent_router.router)
 
 
 @app.get("/", include_in_schema=False)

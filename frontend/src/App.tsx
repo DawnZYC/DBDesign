@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowseView } from './components/BrowseView';
+import { ChatView } from './components/ChatView';
 import { ConvertView } from './components/ConvertView';
 import { ImportView } from './components/ImportView';
 import { checkHealth } from './api';
@@ -7,7 +8,7 @@ import type { ConvertResult } from './types';
 
 type HealthState = { status: 'checking' } | { status: 'ok' } | { status: 'error' };
 
-type Tab = 'convert' | 'import' | 'browse';
+type Tab = 'convert' | 'import' | 'browse' | 'chat';
 
 const HEALTH_LABEL: Record<HealthState['status'], string> = {
   checking: 'Connecting',
@@ -33,6 +34,12 @@ const STEPS: Array<{ id: Tab; index: string; title: string; description: string 
     index: '03',
     title: 'Browse',
     description: 'Search and inspect technology records.',
+  },
+  {
+    id: 'chat',
+    index: '04',
+    title: 'Chat',
+    description: 'AI-powered energy data analysis.',
   },
 ];
 
@@ -98,14 +105,16 @@ function App() {
         </div>
       </aside>
 
-      <main className="app-main">
-        <header className="page-header">
-          <div>
-            <div className="page-eyebrow">{STEPS.find((s) => s.id === activeTab)?.index}</div>
-            <h1 className="page-title">{STEPS.find((s) => s.id === activeTab)?.title}</h1>
-            <p className="page-description">{STEPS.find((s) => s.id === activeTab)?.description}</p>
-          </div>
-        </header>
+      <main className={`app-main${activeTab === 'chat' ? ' app-main--chat' : ''}`}>
+        {activeTab !== 'chat' && (
+          <header className="page-header">
+            <div>
+              <div className="page-eyebrow">{STEPS.find((s) => s.id === activeTab)?.index}</div>
+              <h1 className="page-title">{STEPS.find((s) => s.id === activeTab)?.title}</h1>
+              <p className="page-description">{STEPS.find((s) => s.id === activeTab)?.description}</p>
+            </div>
+          </header>
+        )}
 
         {activeTab === 'convert' && <ConvertView onHandoffToImport={handleHandoffToImport} />}
         {activeTab === 'import' && (
@@ -115,6 +124,7 @@ function App() {
           />
         )}
         {activeTab === 'browse' && <BrowseView />}
+        {activeTab === 'chat' && <ChatView />}
       </main>
     </div>
   );

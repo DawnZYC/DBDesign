@@ -21,6 +21,18 @@ class Settings(BaseSettings):
     )
     log_level: str = Field(default="INFO", description="Log level.")
 
+    # AI Agent / LLM settings
+    dashscope_api_key: str = Field(default="", description="DashScope API key for Qwen models.")
+    llm_base_url: str = Field(
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        description="OpenAI-compatible base URL for LLM.",
+    )
+    llm_model: str = Field(default="qwen-plus", description="LLM model name.")
+
+    # ChromaDB settings
+    chroma_host: str = Field(default="chromadb", description="ChromaDB HTTP host.")
+    chroma_port: int = Field(default=8001, description="ChromaDB HTTP port.")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

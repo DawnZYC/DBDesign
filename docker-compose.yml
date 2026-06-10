@@ -29,6 +29,21 @@ services:
       timeout: 3s
       retries: 10
 
+  chromadb:
+    image: chromadb/chroma:latest
+    environment:
+      ANONYMIZED_TELEMETRY: "false"
+      IS_PERSISTENT: "TRUE"
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8000' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   backend:
     build:
       context: ./backend
@@ -36,10 +51,20 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ecotea
       ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
       LOG_LEVEL: INFO
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      LLM_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+      LLM_MODEL: qwen3.7-plus
+      CHROMA_HOST: chromadb
+      CHROMA_PORT: 8000
+      HF_HOME: /tmp/hf_cache
+      TRANSFORMERS_CACHE: /tmp/hf_cache
+      SENTENCE_TRANSFORMERS_HOME: /tmp/st_cache
     ports:
       - "8000:8000"
     depends_on:
       db:
+        condition: service_healthy
+      chromadb:
         condition: service_healthy
 
   frontend:
@@ -52,3 +77,4 @@ services:
 
 volumes:
   pg_data:
+  chroma_data:

@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(psql --version)",
+      "Bash(pg_isready)",
+      "Bash(psql *)",
+      "Bash(pip3 show *)",
+      "Bash(pip3 list *)",
+      "Bash(python3 -m pip list)",
+      "Bash(/Users/fanyazhuoting/Documents/AStar/DBDesign/backend/.venv/bin/pip list *)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload)",
+      "Bash(echo \"Backend PID: $!\")",
+      "Bash(curl -s http://localhost:8000/api/health)",
+      "Bash(npm run *)",
+      "Bash(echo \"Frontend PID: $!\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(npm install *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -o /dev/null -w \"Frontend HTTP: %{http_code}\\\\n\" http://localhost:5173)",
+      "Bash(lsof -ti:8000)",
+      "Bash(.venv/bin/pip show *)",
+      "Bash(curl -s \"http://localhost:8000/api/health?check_llm=true\")"
+    ]
+  }
+}
