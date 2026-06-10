@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
+import { ColumnMappingReview } from './ColumnMappingReview';
 import { ConflictReviewModal } from './ConflictReviewModal';
 import { FileUpload } from './FileUpload';
 import { ImportResultPanel } from './ImportResultPanel';
 import { SheetPicker } from './SheetPicker';
 import { importFromConversion, previewExcel, previewFromConversion, uploadExcel } from '../api';
-import type { ConflictResolveResponse, ConvertResult, FilePreview, ImportResult } from '../types';
+import type {
+  ColumnOverrides,
+  ConflictResolveResponse,
+  ConvertResult,
+  FilePreview,
+  ImportResult,
+} from '../types';
 
 type Source = { kind: 'file'; file: File } | { kind: 'token'; token: string; fileName: string };
 
@@ -27,6 +34,8 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
   const [stage, setStage] = useState<Stage>({ kind: 'idle' });
   const [importedBy, setImportedBy] = useState('');
   const [note, setNote] = useState('');
+  // M5: user-confirmed column alignment ({sheet: {source column: canonical column}}).
+  const [columnOverrides, setColumnOverrides] = useState<ColumnOverrides>({});
   const [reviewing, setReviewing] = useState(false);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
   const consumedTokens = useRef<Set<string>>(new Set());
@@ -109,12 +118,18 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
 
     try {
       const sheets = Array.from(stage.selected);
+      // M5: only send overrides for sheets actually selected for import.
+      const overrides: ColumnOverrides = {};
+      for (const name of sheets) {
+        if (columnOverrides[name]) overrides[name] = columnOverrides[name];
+      }
       const result =
         stage.source.kind === 'file'
           ? await uploadExcel(stage.source.file, {
               importedBy: importedBy.trim() || undefined,
               note: note.trim() || undefined,
               sheets,
+              columnOverrides: overrides,
             })
           : await importFromConversion({
               token: stage.source.token,
@@ -250,6 +265,14 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
             sheets={stage.preview.sheets}
             selected={stage.selected}
             onChange={handleSelectionChange}
+          />
+          {/* M5: column-alignment review for sheets whose layout differs from the template. */}
+          <ColumnMappingReview
+            mappings={stage.preview.sheets
+              .filter((s) => s.is_known && s.column_mapping && !s.column_mapping.layout_is_standard)
+              .map((s) => s.column_mapping!)}
+            standardFields={stage.preview.standard_fields ?? []}
+            onChange={setColumnOverrides}
           />
           <div className="action-row">
             <button type="button" className="btn-secondary" onClick={handleReset}>

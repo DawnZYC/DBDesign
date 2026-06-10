@@ -20,8 +20,14 @@ def _build_workbook(sheets: dict[str, list[list[object]]]) -> bytes:
     """Build an EcoTEA-shaped workbook from {sheet_name: rows}.
 
     Rows are written starting at row 1; the importer treats row 10 and beyond
-    as data rows.
+    as data rows. Row 2 is then overwritten with the canonical EcoTEA header
+    labels so the M5 schema-mapping layer recognizes the layout as standard
+    (fast path, positional import), matching pre-M5 test semantics.
     """
+    from openpyxl.utils import column_index_from_string
+
+    from app.agents.schema_mapper import STANDARD_FIELDS
+
     wb = openpyxl.Workbook()
     # Remove the default sheet.
     default = wb.active
@@ -31,6 +37,9 @@ def _build_workbook(sheets: dict[str, list[list[object]]]) -> bytes:
         for r_idx, row in enumerate(rows, start=1):
             for c_idx, value in enumerate(row, start=1):
                 ws.cell(row=r_idx, column=c_idx, value=value)
+        # Canonical row-2 headers (fast path for the M5 column-alignment layer).
+        for spec in STANDARD_FIELDS:
+            ws.cell(row=2, column=column_index_from_string(spec.column), value=spec.label)
     buf = BytesIO()
     wb.save(buf)
     return buf.getvalue()

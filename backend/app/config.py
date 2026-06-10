@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 定位到 backend/.env，无论从哪个目录启动 uvicorn 都能找到
+_ENV_FILE = Path(__file__).parent.parent / ".env"
 
 
 class Settings(BaseSettings):
     """Global settings. Every field can be overridden by environment variables."""
 
+    # -------------------------------------------------------------------------
+    # 基础设施
+    # -------------------------------------------------------------------------
     database_url: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/ecotea",
         description="SQLAlchemy database URL; psycopg v3 is recommended.",
@@ -21,10 +28,77 @@ class Settings(BaseSettings):
     )
     log_level: str = Field(default="INFO", description="Log level.")
 
+    # -------------------------------------------------------------------------
+    # LLM Provider 抽象层（M0）
+    #   主 provider 用 openai；可切到 deepseek / qwen / moonshot / zhipu / anthropic
+    #   注册表见 app/llm/provider.py::PROVIDER_REGISTRY
+    # -------------------------------------------------------------------------
+    llm_provider: str = Field(
+        default="openai",
+        description="主 LLM provider 名（openai/deepseek/qwen/moonshot/zhipu/anthropic）",
+    )
+    llm_model: str | None = Field(
+        default=None,
+        description="模型名；为空时使用 provider 默认值",
+    )
+    llm_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+    llm_timeout_seconds: int = Field(default=60, ge=1)
+    llm_max_tokens: int | None = Field(default=None)
+
+    # 各 provider 的 API key（按需配置，不用的留空）
+    openai_api_key: str | None = Field(default=None)
+    deepseek_api_key: str | None = Field(default=None)
+    dashscope_api_key: str | None = Field(default=None, description="通义千问 / Qwen")
+    moonshot_api_key: str | None = Field(default=None)
+    zhipu_api_key: str | None = Field(default=None, description="智谱 GLM")
+    anthropic_api_key: str | None = Field(default=None)
+
+    # -------------------------------------------------------------------------
+    # RAG / 向量库（M1）
+    #   embedding 走 LangChain Embeddings 抽象，注册表见 app/rag/embeddings.py
+    # -------------------------------------------------------------------------
+    embedding_provider: str = Field(
+        default="huggingface",
+        description="embedding provider 名 (huggingface/openai/qwen)",
+    )
+    embedding_model: str | None = Field(
+        default=None,
+        description="embedding 模型名；为空时用 provider 默认值",
+    )
+    chroma_persist_dir: str = Field(
+        default="./chroma_data",
+        description="ChromaDB 持久化目录",
+    )
+    chroma_collection_name: str = Field(
+        default="domain_glossary",
+        description="Chroma collection 名（领域术语库）",
+    )
+
+    # -------------------------------------------------------------------------
+    # Agent 编排（M3）
+    #   LangGraph 4-Agent 图（Planner → SQL → Interpreter → Visualizer）
+    # -------------------------------------------------------------------------
+    agent_max_retries: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="SQL 节点失败后回 Planner 的最大重试次数",
+    )
+    agent_node_timeout: int = Field(
+        default=30,
+        ge=5,
+        description="单个 Agent 节点的超时秒数",
+    )
+    agent_trace_enabled: bool = Field(
+        default=False,
+        description="是否开启 LangSmith trace（需配置 LANGCHAIN_API_KEY）",
+    )
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE),  # 绝对路径，不依赖启动目录
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     @property

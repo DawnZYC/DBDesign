@@ -16,10 +16,19 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
+# INSTALL_ML=true bakes in local-embedding deps (sentence-transformers) using
+# the CPU-only torch wheel to keep the image lean. Set to "false" for an even
+# smaller image when using cloud embedding providers (OpenAI / DashScope).
+ARG INSTALL_ML=true
+
+COPY requirements.txt requirements-ml.txt ./
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install -r requirements.txt
+    && /opt/venv/bin/pip install -r requirements.txt \
+    && if [ "$INSTALL_ML" = "true" ]; then \
+         /opt/venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu \
+         && /opt/venv/bin/pip install -r requirements-ml.txt; \
+       fi
 
 # ---------------------------------------------------------------------------
 # Stage 2: runtime — slim image, only the venv and app code
@@ -40,6 +49,13 @@ COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
 COPY app ./app
+# Seed scripts + domain knowledge so RAG can be seeded inside the container:
+#   docker compose exec backend python seed_commodities.py && python seed_rag.py
+COPY seed_commodities.py seed_rag.py domain_knowledge.md ./
+
+# Writable ChromaDB persistence dir (mounted as a volume by docker-compose).
+RUN mkdir -p /app/chroma_data && chown -R app:app /app/chroma_data
+ENV CHROMA_PERSIST_DIR=/app/chroma_data
 
 USER app
 

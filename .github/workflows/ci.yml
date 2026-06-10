@@ -78,8 +78,13 @@ jobs:
           done
 
       - name: Run tests
+        # Unit tests run on in-memory SQLite (conftest default). Do NOT point
+        # DATABASE_URL at the PG service here: the SQLite-oriented fixtures
+        # (tests/_db_fixture.py) rebuild simplified tables on the shared engine
+        # and would clobber the real schema. PG 17 schema validity is covered
+        # by the dedicated "DB schema check" job.
         env:
-          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/ecotea
+          DATABASE_URL: "sqlite+pysqlite:///:memory:"
           ALLOWED_ORIGINS: http://localhost:5173
         run: pytest
 

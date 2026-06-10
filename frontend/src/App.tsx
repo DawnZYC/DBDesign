@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { BrowseView } from './components/BrowseView';
 import { ConvertView } from './components/ConvertView';
 import { ImportView } from './components/ImportView';
+import { ChatPage } from './pages/ChatPage';
 import { checkHealth } from './api';
 import type { ConvertResult } from './types';
 
 type HealthState = { status: 'checking' } | { status: 'ok' } | { status: 'error' };
 
-type Tab = 'convert' | 'import' | 'browse';
+type Tab = 'chat' | 'convert' | 'import' | 'browse';
 
 const HEALTH_LABEL: Record<HealthState['status'], string> = {
   checking: 'Connecting',
@@ -17,20 +18,26 @@ const HEALTH_LABEL: Record<HealthState['status'], string> = {
 
 const STEPS: Array<{ id: Tab; index: string; title: string; description: string }> = [
   {
-    id: 'convert',
+    id: 'chat',
     index: '01',
+    title: 'AI Assistant',
+    description: 'Ask in natural language; agents query, interpret, and chart.',
+  },
+  {
+    id: 'convert',
+    index: '02',
     title: 'Convert',
     description: 'Map VT model files to the unified EcoTEA workbook.',
   },
   {
     id: 'import',
-    index: '02',
+    index: '03',
     title: 'Import',
     description: 'Load EcoTEA workbooks into the database.',
   },
   {
     id: 'browse',
-    index: '03',
+    index: '04',
     title: 'Browse',
     description: 'Search and inspect technology records.',
   },
@@ -38,7 +45,7 @@ const STEPS: Array<{ id: Tab; index: string; title: string; description: string 
 
 function App() {
   const [health, setHealth] = useState<HealthState>({ status: 'checking' });
-  const [activeTab, setActiveTab] = useState<Tab>('convert');
+  const [activeTab, setActiveTab] = useState<Tab>('chat');
   const [pendingConversion, setPendingConversion] = useState<ConvertResult | null>(null);
 
   useEffect(() => {
@@ -60,7 +67,7 @@ function App() {
             EW
           </div>
           <div className="brand-text">
-            <div className="brand-title">EcoTEA WP1</div>
+            <div className="brand-title">SG-TIMES</div>
             <div className="brand-subtitle">Technology &amp; Cost Database</div>
           </div>
         </div>
@@ -107,6 +114,7 @@ function App() {
           </div>
         </header>
 
+        {activeTab === 'chat' && <ChatPage />}
         {activeTab === 'convert' && <ConvertView onHandoffToImport={handleHandoffToImport} />}
         {activeTab === 'import' && (
           <ImportView

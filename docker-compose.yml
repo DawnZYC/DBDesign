@@ -36,8 +36,23 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ecotea
       ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
       LOG_LEVEL: INFO
+      # --- LLM / RAG (M0-M3). Values come from the shell or a root .env file
+      #     next to this compose file; unset values fall back to defaults. ---
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_MODEL: ${LLM_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-huggingface}
+      CHROMA_PERSIST_DIR: /app/chroma_data
     ports:
       - "8000:8000"
+    volumes:
+      # ChromaDB persistence survives container rebuilds.
+      - chroma_data:/app/chroma_data
     depends_on:
       db:
         condition: service_healthy
@@ -52,3 +67,4 @@ services:
 
 volumes:
   pg_data:
+  chroma_data:

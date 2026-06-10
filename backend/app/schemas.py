@@ -8,6 +8,45 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ColumnSuggestionOut(BaseModel):
+    """Single-column mapping suggestion for the M5 column-alignment review UI."""
+
+    excel_column: str = Field(..., description="Column letter in the uploaded Excel.")
+    excel_header: str = Field(default="", description="Raw header text of the column.")
+    target_field: str | None = Field(default=None, description="Matched standard field name.")
+    target_column: str | None = Field(
+        default=None, description="Canonical column letter of the matched field."
+    )
+    confidence: float = Field(default=0.0, description="Match confidence in [0, 1].")
+    status: str = Field(
+        ...,
+        description="auto (>=0.9, applied) / review (0.6-0.9, needs human) / unmatched (<0.6).",
+    )
+    reasoning: str = Field(default="")
+
+
+class SheetColumnMapping(BaseModel):
+    """M5 column-alignment result for one sheet."""
+
+    sheet_name: str
+    layout_is_standard: bool = Field(
+        ..., description="True when headers match the canonical template (fast path)."
+    )
+    suggestions: list[ColumnSuggestionOut] = Field(default_factory=list)
+    auto_count: int = 0
+    review_count: int = Field(default=0, description="Low-confidence columns needing review.")
+    unmatched_count: int = 0
+
+
+class StandardFieldInfo(BaseModel):
+    """Standard field metadata for the frontend column-mapping dropdown."""
+
+    field: str
+    column: str
+    label: str
+    description: str
+
+
 class SheetPreview(BaseModel):
     """Single sheet entry in a file preview."""
 
@@ -17,6 +56,10 @@ class SheetPreview(BaseModel):
     )
     sector_code: str | None = Field(default=None, description="Mapped sector_code.")
     data_rows: int = Field(..., description="Non-empty data rows from row 10 onward.")
+    column_mapping: SheetColumnMapping | None = Field(
+        default=None,
+        description="M5 column alignment; None for unknown sheets or standard layout.",
+    )
 
 
 class FilePreview(BaseModel):
@@ -24,6 +67,12 @@ class FilePreview(BaseModel):
 
     file_name: str
     sheets: list[SheetPreview]
+    needs_column_review: bool = Field(
+        default=False, description="True when any sheet needs column-alignment review."
+    )
+    standard_fields: list[StandardFieldInfo] = Field(
+        default_factory=list, description="All 38 standard fields for the dropdown."
+    )
 
 
 class ImportSheetSummary(BaseModel):
@@ -35,6 +84,10 @@ class ImportSheetSummary(BaseModel):
     rows_skipped: int = Field(default=0, description="Empty or invalid rows skipped.")
     rows_pending: int = Field(default=0, description="Rows pending conflict review.")
     issues: int = Field(default=0, description="New data_quality_issue rows.")
+    column_warnings: list[str] = Field(
+        default_factory=list,
+        description="M5 column-alignment warnings; empty means the fast path was used.",
+    )
 
 
 class ImportResult(BaseModel):
@@ -53,6 +106,10 @@ class ImportResult(BaseModel):
     issues: int
     sheets: list[ImportSheetSummary]
     duration_ms: int
+    column_warnings: list[str] = Field(
+        default_factory=list,
+        description="Aggregated M5 column-alignment warnings, prefixed with the sheet name.",
+    )
 
 
 class ConflictRow(BaseModel):
@@ -103,11 +160,41 @@ class ConflictResolveResponse(BaseModel):
     failure_reasons: list[str] = Field(default_factory=list)
 
 
+class LLMHealth(BaseModel):
+    """Health info for the LLM subsystem (M0)."""
+
+    provider: str
+    model: str | None = None
+    configured: bool = Field(..., description="Whether the active provider has an API key.")
+    ok: bool = Field(default=False, description="Whether the last connectivity test succeeded.")
+    latency_ms: int | None = None
+    error: str | None = None
+
+
 class HealthResponse(BaseModel):
     """Health check response."""
 
     status: str = "ok"
     database: str = Field(..., description="Database connection status.")
+    llm: LLMHealth | None = Field(default=None, description="LLM abstraction layer status.")
+
+
+class ProviderInfo(BaseModel):
+    """Metadata for one LLM provider (GET /api/llm/providers)."""
+
+    name: str
+    display_name: str
+    adapter: str
+    default_model: str
+    base_url: str | None
+    docs_url: str | None
+    configured: bool
+    is_active: bool
+
+
+class ProvidersResponse(BaseModel):
+    active: str
+    providers: list[ProviderInfo]
 
 
 # =============================================================================

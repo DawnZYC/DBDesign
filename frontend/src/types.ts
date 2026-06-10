@@ -1,18 +1,54 @@
 /**
- * Type definitions kept in sync with backend schemas.py.
+ * 与后端 schemas.py 保持一致的类型定义。
  */
+
+// ---- M5: Schema-Mapping 列对齐 ----
+export type ColumnMappingStatus = 'auto' | 'review' | 'unmatched';
+
+export interface ColumnSuggestion {
+  excel_column: string;
+  excel_header: string;
+  target_field: string | null;
+  target_column: string | null;
+  confidence: number;
+  status: ColumnMappingStatus;
+  reasoning: string;
+}
+
+export interface SheetColumnMapping {
+  sheet_name: string;
+  layout_is_standard: boolean;
+  suggestions: ColumnSuggestion[];
+  auto_count: number;
+  review_count: number;
+  unmatched_count: number;
+}
+
+export interface StandardFieldInfo {
+  field: string;
+  column: string;
+  label: string;
+  description: string;
+}
 
 export interface SheetPreview {
   sheet_name: string;
   is_known: boolean;
   sector_code: string | null;
   data_rows: number;
+  /** M5 列对齐结果；标准布局 / 未知 sheet / 旧后端为 null 或缺省 */
+  column_mapping?: SheetColumnMapping | null;
 }
 
 export interface FilePreview {
   file_name: string;
   sheets: SheetPreview[];
+  needs_column_review?: boolean;
+  standard_fields?: StandardFieldInfo[];
 }
+
+/** 列对齐复核结果：{sheet: {陌生列: 标准列}}，回传给导入接口的 column_overrides。 */
+export type ColumnOverrides = Record<string, Record<string, string>>;
 
 export interface ImportSheetSummary {
   sheet_name: string;
@@ -21,6 +57,8 @@ export interface ImportSheetSummary {
   rows_skipped: number;
   rows_pending: number;
   issues: number;
+  /** M5 列对齐警告（自动对齐启用 / 低置信列被丢弃等），空数组表示快路径 */
+  column_warnings?: string[];
 }
 
 export interface ImportResult {
@@ -33,6 +71,8 @@ export interface ImportResult {
   issues: number;
   sheets: ImportSheetSummary[];
   duration_ms: number;
+  /** 全文件 M5 列对齐警告汇总（带 sheet 前缀） */
+  column_warnings?: string[];
 }
 
 export interface ConflictRow {
@@ -69,7 +109,7 @@ export interface ConflictResolveResponse {
 }
 
 // =============================================================================
-// Browse
+// 浏览
 // =============================================================================
 export interface Sector {
   sector_id: number;
@@ -169,8 +209,63 @@ export interface ApiError {
 }
 
 // =============================================================================
-// Convert (VT -> EcoTEA)
+// Chat / AI 助手（M4）
 // =============================================================================
+
+/** SSE 事件中 tool_call 的数据结构 */
+export interface ToolCallEvent {
+  tool: string;
+  args: Record<string, unknown>;
+}
+
+/** SSE 事件中 tool_result 的数据结构 */
+export interface ToolResultEvent {
+  tool: string;
+  row_count?: number;
+  truncated?: boolean;
+  metric?: string;
+  sql_summary?: string;
+}
+
+/** LangGraph 节点名称 */
+export type AgentNode = 'planner' | 'sql_gen' | 'interpreter' | 'visualizer';
+
+/** 单条对话消息（用户或 AI） */
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  /** 消息文本（用户消息 / AI 流式拼接文本） */
+  content: string;
+  /** Planner 步骤列表（assistant only） */
+  plan?: string[];
+  /** 工具调用列表（assistant only） */
+  toolCalls?: ToolCallEvent[];
+  /** 工具返回列表（assistant only，与 toolCalls 按顺序对应） */
+  toolResults?: ToolResultEvent[];
+  /** ECharts option（assistant only，Visualizer 输出） */
+  chartSpec?: Record<string, unknown>;
+  /** 当前活跃节点（streaming 时显示） */
+  currentNode?: AgentNode;
+  /** 消息状态 */
+  status?: 'streaming' | 'done' | 'error';
+  /** 错误信息（status === 'error' 时） */
+  errorMessage?: string;
+}
+
+/** GET /api/raw-rows/{id} 响应 */
+export interface RawRowDetail {
+  raw_row_id: number;
+  source_sheet_name: string;
+  excel_row_number: number;
+  raw_cells: Record<string, unknown>;
+  import_batch: {
+    import_batch_id: number;
+    file_name: string;
+    imported_at: string;
+    note: string | null;
+  };
+}
+// ---- Convert (VT -> EcoTEA, from main) ----
 export interface ConvertModelInfo {
   key: string;
   label: string;

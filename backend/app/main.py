@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import browse, convert, health, imports
+from app.routers import browse, chat, convert, health, imports, rag, raw_rows
 
 settings = get_settings()
 
@@ -18,9 +18,13 @@ logging.basicConfig(
 )
 
 app = FastAPI(
-    title="EcoTEA WP1 Import API",
-    description="Import EcoTEA Excel data into a PostgreSQL schema with 15 tables.",
-    version="0.1.0",
+    title="SG-TIMES Multi-Agent Analysis Platform",
+    description=(
+        "EcoTEA WP1 data import tool + LangGraph 4-agent analysis system.\n\n"
+        "Natural-language query -> SQL execution -> interpretation -> ECharts "
+        "visualization (SSE streaming), plus VT-to-EcoTEA workbook conversion."
+    ),
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -32,9 +36,12 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
-app.include_router(convert.router)
+app.include_router(convert.router)  # VT -> EcoTEA workbook conversion (from main)
 app.include_router(imports.router)
 app.include_router(browse.router)
+app.include_router(rag.router)  # M1: POST /api/rag/search
+app.include_router(chat.router)  # M3: POST /api/chat/stream (SSE)
+app.include_router(raw_rows.router)  # M4: GET /api/raw-rows/{id} (chart cell trace)
 
 
 @app.get("/", include_in_schema=False)

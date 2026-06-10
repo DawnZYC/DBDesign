@@ -1,190 +1,255 @@
-# EcoTEA WP1 Workbench
+# SG-TIMES Multi-Agent 智能分析平台
 
-End-to-end workbench that takes a Singapore VT model file all the way into a queryable database. The web app is organised as three sequential steps in a left sidebar:
+> 原 EcoTEA WP1 数据导入工具的升级版。研究员通过自然语言对话，驱动四节点 LangGraph 流水线完成跨年份、跨情景的数据查询与可视化；同时提供 VT 模型文件转换（Convert）、数据导入（含 Schema-Mapping 列对齐）与数据浏览的完整工作流。
 
-1. **Convert** — map a VT_SG_PWR / VT_SG_PRI source workbook into a unified EcoTEA workbook.
-2. **Import** — load the EcoTEA workbook into the PostgreSQL schema (15 tables, 38 columns).
-3. **Browse** — search, filter and inspect imported technologies, including yearly costs, performance, capacity and output commodities.
+---
 
-After a successful conversion, the produced workbook is cached on the backend; clicking **Send to import** in the Convert step hands the file to the Import step without re-uploading it.
+## 里程碑进度
 
-- Backend: Python 3.13 / FastAPI / SQLAlchemy 2 / openpyxl / pandas
-- Frontend: React 18 / Vite / TypeScript
-- Database: local PostgreSQL instance
+| 里程碑 | 内容 | 状态 |
+|--------|------|------|
+| **M0** | LLM Provider 抽象层（OpenAI / DeepSeek / Qwen / Moonshot / 智谱 / Anthropic 热切换） | ✅ 完成 |
+| **M1** | ChromaDB 领域词汇 RAG（sentence-transformers 本地 Embedding，可切云端） | ✅ 完成 |
+| **M2** | 6 类 Function-Calling 工具（terminology / unit_convert / run_sql / emission / forecast / chart） | ✅ 完成 |
+| **M3** | LangGraph 四 Agent 图 + SSE 流式后端（`POST /api/chat/stream`） | ✅ 完成 |
+| **M4** | Chat 前端（打字机流 / ECharts 图表 / 工具调用 Trace / 源单元格反查） | ✅ 完成 |
+| **M5** | Schema-Mapping Agent（列对齐 + 置信度三档 + 质量门槛 + 人工复核 UI） | ✅ 完成 |
+| **M6** | Docker Compose + GitHub Actions CI + eval 黄金问题集 | ✅ 完成 |
+| **Convert** | VT 模型文件 → EcoTEA 标准工作簿转换（来自 main 分支） | ✅ 完成 |
 
-## Project Structure
+---
 
-```text
-DBDesign/
-├── sql/
-│   └── 001_init_schema.sql              # DDL for 15 tables, including constraints, indexes, and sector seed data
-├── backend/                             # FastAPI service
-│   ├── app/
-│   │   ├── main.py                      # FastAPI entry point
-│   │   ├── config.py                    # .env configuration
-│   │   ├── database.py                  # SQLAlchemy engine and session
-│   │   ├── models.py                    # ORM models for the 15 tables
-│   │   ├── schemas.py                   # API Pydantic schemas
-│   │   ├── assets/
-│   │   │   └── ecotea_template.xlsx     # Bundled EcoTEA template used by Convert
-│   │   ├── converters/                  # VT -> EcoTEA conversion engine
-│   │   │   ├── base_model.py
-│   │   │   ├── ecotea_writer.py
-│   │   │   ├── engine.py
-│   │   │   └── models/
-│   │   │       ├── vt_sg_pwr.py
-│   │   │       └── vt_sg_pri.py
-│   │   ├── routers/
-│   │   │   ├── health.py                # GET /api/health
-│   │   │   ├── convert.py               # POST /api/convert (VT -> EcoTEA)
-│   │   │   ├── imports.py               # POST /api/imports (+ /from-conversion handoff)
-│   │   │   └── browse.py                # GET /api/technologies, /sectors, /geographies
-│   │   └── services/
-│   │       ├── value_cleaner.py         # Placeholder, formula-error, and mixed-text cleaning
-│   │       └── excel_importer.py        # Main import logic
-│   ├── requirements.txt
-│   ├── .env.example
-│   └── README.md
-├── frontend/                            # React + Vite + TypeScript SPA
-│   ├── src/...
-│   ├── package.json
-│   ├── vite.config.ts
-│   └── README.md
-├── EcoTEA_WP1_ER_Diagram_v2.html        # Visual design document
-├── EcoTEA_Design_Review.html
-├── EcoTEA_Sample_Row_Mapping.html
-└── README.md
-```
+## 界面：四步工作流
 
-## End-to-End Startup
+打开 http://localhost:5173，左侧边栏四个步骤：
 
-### 1. Prepare PostgreSQL
+| 步骤 | 功能 |
+|------|------|
+| **01 AI Assistant** | 自然语言对话，驱动 4-Agent 流水线查询 / 可视化（默认页） |
+| **02 Convert** | 上传 VT 模型文件（VT_SG_PWR / VT_SG_PRI），转换为 EcoTEA 标准工作簿，可一键交接到 Import |
+| **03 Import** | 拖入 Excel → 选 sheet → M5 列对齐复核（表头非标准时） → 导入 → sector 冲突复核 |
+| **04 Browse** | 技术列表（行业 / 地区 / 关键词筛选 + 分页）+ 年份参数详情 |
 
-Assuming you already have local PostgreSQL running with user `postgres` on port 5432, create the database:
+---
+
+## 技术栈
+
+### 后端（Python 3.11+）
+
+| 类别 | 技术 |
+|------|------|
+| Web 框架 | FastAPI 0.115 + sse-starlette |
+| ORM / 数据库 | SQLAlchemy 2.0、psycopg v3、PostgreSQL 16+ |
+| Agent 编排 | LangGraph 0.2.62（StateGraph，4 节点流水线） |
+| LLM | langchain-core 0.3.29 / langchain-openai / langchain-anthropic |
+| 向量库 | ChromaDB + sentence-transformers（本地 Embedding，零成本，可切 OpenAI / DashScope） |
+| 数据校验 | Pydantic v2 / pydantic-settings |
+| 文件解析 | openpyxl 3.1（Convert 另用 pandas + xlrd） |
+| Lint / 测试 | ruff + pytest（345+ 用例，CI 强制） |
+
+> **依赖分两份**：`requirements.txt`（基础，CI / 云端 embedding 够用）+ `requirements-ml.txt`（本地 HuggingFace embedding 需要的 torch 系，~2GB）。
+
+### 前端（Node 20+）
+
+| 类别 | 技术 |
+|------|------|
+| 框架 | React 18 + TypeScript 5 + Vite 5 |
+| 图表 | ECharts（via echarts-for-react） |
+| SSE 流 | 原生 fetch + ReadableStream 手动解析 |
+| Markdown | react-markdown + remark-gfm |
+| 测试 | vitest + Testing Library（144 用例，CI 强制） |
+
+---
+
+## 快速启动（方式一：Docker，推荐）
 
 ```bash
-psql -U postgres -c "CREATE DATABASE ecotea;"
-psql -U postgres -d ecotea -f sql/001_init_schema.sql
+# 1. 在项目根目录放一个 .env（或导出环境变量），至少包含：
+#    OPENAI_API_KEY=sk-...
+# 2. 一键起 postgres + backend + frontend：
+docker compose up -d --build
+
+# 3. 首次启动后，在容器内灌字典与 RAG 知识库：
+docker compose exec backend python seed_commodities.py
+docker compose exec backend python seed_rag.py
 ```
 
-The final expected output is `COMMIT`. The `sector` table is seeded with 10 rows from POWER through INFOCOMM.
+- 前端：http://localhost:5173（nginx 已配置 SSE 不缓冲，AI 流式正常）
+- API 文档：http://localhost:8000/docs
+- 建表 SQL 在 Postgres 容器首次启动时自动执行；ChromaDB 数据持久化在 `chroma_data` volume
 
-### 2. Start the Backend
+## 快速启动（方式二：本地开发）
+
+### 1. 准备 PostgreSQL
+
+```bash
+psql -U <你的用户名> -c "CREATE DATABASE ecotea;"
+psql -U <你的用户名> -d ecotea -f sql/001_init_schema.sql
+```
+
+### 2. 配置环境变量
 
 ```bash
 cd backend
-
-conda activate excelagent
-pip install -r requirements.txt
-
-cp .env.example .env               # Edit DATABASE_URL as needed.
-
-uvicorn app.main:app --reload --port 8000
+cp .env.example .env
 ```
 
-Without conda, you can use:
+`.env` 最小配置：
+
+```env
+DATABASE_URL=postgresql+psycopg://<用户名>:<密码>@localhost:5432/ecotea
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+EMBEDDING_PROVIDER=huggingface
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+### 3. 启动后端
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt -r requirements-ml.txt   # 本地 embedding 需要 ml 包
+python seed_commodities.py && python seed_rag.py          # 首次：灌字典 + RAG
+uvicorn app.main:app --reload --port 8000                 # 必须在 backend/ 目录下启动
 ```
 
-- API docs: http://localhost:8000/docs
-- Health check: http://localhost:8000/api/health, expected response `{"status":"ok","database":"ok"}`
-
-### 3. Start the Frontend
+### 4. 启动前端
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev      # 必须在 frontend/ 目录下，SSE 代理才生效
 ```
 
-Open http://localhost:5173. The sidebar offers three numbered steps:
+---
 
-- **01 Convert** — pick a source model (VT_SG_PWR or VT_SG_PRI), upload the VT workbook (the EcoTEA template is bundled, but you can supply a custom one), then convert. After success you can download the produced workbook or click **Send to import** to hand it directly to the next step.
-- **02 Import** — drop `EcoTEA Endo WP1.xlsx` (or accept the converted workbook from step 01), select sheets, import, review the summary, and resolve conflicts if any are held.
-- **03 Browse** — filter and page through the technology list by sector, geography, or search, then select a row to view all yearly parameters such as CAPEX, OPEX, efficiency, capacity, and commodities.
+## 四 Agent 流水线
 
-### Convert Flow
-
-1. Choose the source model — converters are registered in `backend/app/converters/engine.py`.
-2. Drop the VT source workbook (`.xlsx`, `.xlsm` or `.xls`).
-3. Optionally supply your own EcoTEA template; otherwise the bundled `assets/ecotea_template.xlsx` is used.
-4. Click **Convert workbook**. The backend caches the produced file and returns a download token.
-5. Either download the file or hand it off to the importer (no re-upload required).
-
-### Import Flow
-
-1. Select or drag in an `.xlsx` file (or accept a Convert handoff).
-2. The backend preview returns sheet names, known-sector status, and data-row counts.
-3. The frontend shows a checkbox list of sheets, with all known sheets selected by default.
-4. The user changes the selected sheets if needed.
-5. Clicking import imports only the selected sheets.
-6. The summary result is displayed.
-
-## Data Cleaning Rules
-
-The implementation is in `backend/app/services/value_cleaner.py`.
-
-| Input | Handling | Writes data_quality_issue |
-|---|---|---|
-| `'-'` / `'NA'` / empty string / whitespace | `NULL` | No |
-| `#VALUE!` / `#REF!` / `#DIV/0!` / `#N/A` and similar | Main table value becomes `NULL` | Yes, with original value, row number, and column |
-| Plain numbers such as `0.497` | Stored directly | No |
-| `'COP: 3.91'` / `'13.33 km/litre'` | Split into `_value`, `_text`, and `_unit` | No, limited to efficiency columns |
-| `'PWRBMS+PWACOA'` / `'20%+80%'` | Split by `+` into multiple `technology_year_commodity` rows, preserving `commodity_order` | No |
-| Sheet name differs from column A value, such as Agri/Building | Sector comes from the sheet name; raw column A value stays in `traceability_record.wp_title_raw` | No |
-
-## Verify Imported Data
-
-```sql
--- Most recent import batches.
-SELECT import_batch_id, file_name, imported_at, imported_by
-FROM   import_batch
-ORDER  BY imported_at DESC
-LIMIT  5;
-
--- raw_excel_row counts by sheet for the latest batch.
-SELECT source_sheet_name, COUNT(*) AS rows
-FROM   raw_excel_row
-WHERE  import_batch_id = (SELECT MAX(import_batch_id) FROM import_batch)
-GROUP  BY source_sheet_name
-ORDER  BY source_sheet_name;
-
--- Quality issue list, such as #VALUE!.
-SELECT source_sheet_name, excel_row_number, excel_column,
-       issue_type, original_value, issue_message
-FROM   data_quality_issue
-ORDER  BY issue_id DESC
-LIMIT  20;
-
--- Multi-commodity rows, expected to show PWRBMS / PWACOA as separate rows.
-SELECT ty.data_year, tp.technology_code, c.commodity_code,
-       tyc.commodity_order, tyc.commodity_share_value, tyc.commodity_share_text
-FROM   technology_year_commodity tyc
-JOIN   technology_year ty ON ty.technology_year_id = tyc.technology_year_id
-JOIN   technology_process tp ON tp.technology_id   = ty.technology_id
-JOIN   commodity c            ON c.commodity_id    = tyc.commodity_id
-WHERE  tp.technology_code = 'PWRBMCSTP00'
-ORDER  BY ty.data_year, tyc.commodity_order;
+```
+用户提问
+    │
+    ▼
+┌─────────┐   执行计划   ┌───────────┐   QueryParams   ┌─────────────┐
+│ Planner │ ──────────► │ SQL Agent │ ──────────────► │ Interpreter │
+│  意图理解 │             │ SQL 生成/执行│                │  流式文本解读 │
+└─────────┘             └───────────┘                 └──────┬──────┘
+                              │                              │ interpretation
+                              │ sql_result                   ▼
+                              │                       ┌────────────┐
+                              └──────────────────────► │ Visualizer │
+                                                       │ ECharts 生成│
+                                                       └────────────┘
 ```
 
-## FAQ
+SSE 事件：`agent_start` / `agent_end` / `plan` / `tool_call` / `tool_result` / `token` / `chart` / `error` / `done`。
 
-**psql: connection refused**: confirm PostgreSQL is running with `pg_isready -h localhost -p 5432`.
+图表数据点携带 `raw_row_id`，点击即可反查源 Excel 单元格（`GET /api/raw-rows/{id}`）。
 
-**Frontend shows `Failed to fetch`**: the backend is not running or is on another port. The health pill in the header shows the specific error.
+---
 
-**PostgreSQL username/password is not postgres/postgres**: update `DATABASE_URL` in `backend/.env`.
+## M5：Schema-Mapping 列对齐
 
-**Importing the same file multiple times**: uniqueness constraints are not violated. sector, commodity, technology_process, and technology_year use upsert behavior. Each new batch adds only one `import_batch` plus its `raw_excel_row` records.
+SG-TIMES 版本迭代会导致 Excel 列改名 / 换位。导入时：
 
-## Design References
+1. **快路径**：表头与标准模板一致 → 不调 Agent，按原硬编码列位导入（日常情况，零成本）
+2. **慢路径**：表头对不上 → Agent 给每列匹配建议 + 置信度（确定性后端默认零成本；`use_llm_mapping=true` 切 LLM 后端）
+   - ≥0.9 自动应用；0.6–0.9 进前端「列对齐复核」人工确认；<0.6 不导入
+3. **质量门槛**：核心列（technology_code / data_year）缺失或覆盖率 <50% → 拒绝导入（HTTP 422），提示走 preview 人工复核
+4. 低置信列写入 `data_quality_issue`，并通过 `ImportResult.column_warnings` 直接可见
 
-Open these HTML files in a browser to view the visual design references:
+---
 
-- `EcoTEA_WP1_ER_Diagram_v2.html`: revised ER diagram with 15 tables and 5 change markers
-- `EcoTEA_Design_Review.html`: review report using real Excel data against the 15-table design
-- `EcoTEA_Sample_Row_Mapping.html`: single Power row mapping from Excel to database
+## 评估（eval）
+
+```bash
+# 后端起好、数据导入后：
+python eval/runner.py                      # 22 个黄金问题，逐题打分
+python eval/runner.py --json report.json   # 机器可读报告
+```
+
+按关键词命中 / 工具调用 / 图表类型三个维度打分，通过率低于阈值（默认 80%）退出码非零，可挂 CI 非阻塞 job。
+
+---
+
+## API 参考
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/health` | 健康检查（`?check_llm=true` 真打 LLM 连通测试） |
+| `GET` | `/api/llm/providers` | 6 个 LLM provider 配置状态 |
+| `POST` | `/api/chat/stream` | AI 对话（SSE 流式） |
+| `GET` | `/api/raw-rows/{id}` | 反查源 Excel 单元格 |
+| `POST` | `/api/rag/search` | RAG 语义检索 |
+| `GET` | `/api/convert/models` | 可用 VT 转换器列表 |
+| `POST` | `/api/convert` | VT 文件 → EcoTEA 工作簿 |
+| `GET` | `/api/convert/download/{token}` | 下载转换产物 |
+| `POST` | `/api/imports/preview` | 预览 sheet 列表 + M5 列对齐建议（不入库） |
+| `POST` | `/api/imports` | 上传导入（支持 `column_overrides` / `use_llm_mapping`） |
+| `POST` | `/api/imports/preview/from-conversion` | 按 token 预览转换产物 |
+| `POST` | `/api/imports/from-conversion` | 按 token 导入转换产物 |
+| `GET` | `/api/imports/conflicts` | 列出待复核 sector 冲突 |
+| `POST` | `/api/imports/conflicts/resolve` | 提交冲突复核结果 |
+| `GET` | `/api/sectors` · `/api/geographies` · `/api/technologies` · `/api/technologies/{id}` | 浏览数据 |
+
+---
+
+## LLM Provider 切换
+
+改 `.env` 两个字段即可热切换：
+
+```env
+LLM_PROVIDER=openai      # openai / deepseek / qwen / moonshot / zhipu / anthropic
+LLM_MODEL=               # 留空用 provider 默认值
+OPENAI_API_KEY=sk-...    # 对应 provider 的 key
+```
+
+除 Anthropic 外全部走 OpenAI-compatible 协议（同一个 `ChatOpenAI` 类 + base_url），新增 provider ≈ 注册表加一行。
+
+---
+
+## CI / CD
+
+- `.github/workflows/ci.yml`：后端 ruff lint + format check + pytest（PG 17 service，带覆盖率）；前端 eslint + tsc + vitest + build
+- `.github/workflows/build-images.yml`：构建并推送 backend / frontend 镜像到 GHCR + Trivy 扫描
+- 后端镜像默认带 CPU-only torch（`--build-arg INSTALL_ML=false` 可进一步瘦身）
+- 详见 `CI_CD_SETUP.md`
+
+---
+
+## 数据清洗规则
+
+代码位于 `backend/app/services/value_cleaner.py`：
+
+| 输入 | 处理 | 是否写 data_quality_issue |
+|------|------|--------------------------|
+| `'-'` / `'NA'` / 空字符串 / 空白 | → `NULL` | 否 |
+| `#VALUE!` / `#REF!` / `#DIV/0!` 等 | 主表 → `NULL` | **是**（含原值 + 行号 + 列号） |
+| `0.497` 纯数字 | 直接存 | 否 |
+| `'COP: 3.91'` / `'13.33 km/litre'` | 拆为 `_value` + `_text` + `_unit` | 否（efficiency 列） |
+| `'PWRBMS+PWACOA'` / `'20%+80%'` | 按 `+` 拆成多条 `technology_year_commodity` | 否 |
+
+---
+
+## 常见问题
+
+**`role "postgres" does not exist`** → 修改 `.env` 的 `DATABASE_URL` 为本机实际 PG 用户名。
+
+**AI 助手没有任何输出** → ① 检查 `OPENAI_API_KEY` 是否填对；② 本地开发必须从 `frontend/` 目录跑 `npm run dev`（SSE 代理在 `vite.config.ts`）；Docker 部署的 SSE 不缓冲已在 `nginx.conf` 配好。
+
+**导入返回 422「列布局自动对齐被拒绝」** → 文件表头与标准模板差异过大（核心列没对上）。先调 `POST /api/imports/preview` 查看列对齐建议，人工确认后带 `column_overrides` 重新导入。
+
+**pip install 冲突** → 用 `requirements.txt` 锁定版本；`langgraph==0.2.62` 要求 `langchain-core>=0.3.29`。本地 embedding 另装 `requirements-ml.txt`（建议先装 CPU 版 torch：`pip install torch --index-url https://download.pytorch.org/whl/cpu`）。
+
+**前端报 `Failed to fetch`** → 后端是否在 8000 端口、且从 `backend/` 目录启动（`.env` 按相对路径加载）。
+
+**重复导入同一文件** → 不报错；字典与主表全部 upsert，仅新增一份 `import_batch` + `raw_excel_row`。
+
+---
+
+## 设计文档
+
+- `others/PlanReadme.md` — 完整改造路线图（M0–M6 技术决策 + 实施细节）
+- `CI_CD_SETUP.md` — CI/CD 流水线说明
+- `eval/golden_questions.yaml` — 评估黄金问题集
+- `others/EcoTEA_WP1_ER_Diagram_v2.html` — ER 图（15 张表）

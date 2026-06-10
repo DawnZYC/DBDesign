@@ -70,13 +70,22 @@ def _col_to_index(col: str) -> int:
 
 
 def _build_workbook(sheets: dict[str, list[dict[str, Any]]]) -> bytes:
-    """Build a workbook where each sheet has 9 header rows + rows from row 10."""
+    """Build a workbook where each sheet has 9 header rows + rows from row 10.
+
+    Row 2 carries the canonical EcoTEA header labels so the M5 schema-mapping
+    layer recognizes the layout as standard (fast path, positional import).
+    """
+    from app.agents.schema_mapper import STANDARD_FIELDS
+
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     for sheet_name, rows in sheets.items():
         ws = wb.create_sheet(title=sheet_name)
-        # Write 9 dummy header rows.
-        for r in range(1, 10):
+        # Canonical row-2 headers (fast path for the M5 column-alignment layer).
+        for spec in STANDARD_FIELDS:
+            ws.cell(row=2, column=_col_to_index(spec.column), value=spec.label)
+        # Dummy filler in the remaining header rows.
+        for r in (1, *range(3, 10)):
             ws.cell(row=r, column=1, value=f"hdr{r}")
         # Write data rows starting at row 10.
         for offset, row_dict in enumerate(rows):

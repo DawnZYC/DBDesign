@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.agents.schema_mapper import SchemaMappingRejected
 from app.database import get_db
 from app.routers.convert import get_artefact as get_conversion_artefact
 from app.schemas import (
@@ -56,13 +58,21 @@ def _validate_upload(file: UploadFile, file_bytes: bytes) -> None:
 )
 async def preview_import(
     file: UploadFile = File(..., description=".xlsx file to preview"),
+    use_llm_mapping: bool = Form(
+        default=False,
+        description="Whether M5 column alignment uses the LLM backend (deterministic by default).",
+    ),
 ) -> FilePreview:
-    """Read sheet names, row counts, and known mapping status for sheet selection."""
+    """Read sheet names, row counts, known mapping status, and M5 column-alignment suggestions."""
     file_bytes = await file.read()
     _validate_upload(file, file_bytes)
 
     try:
-        return preview_excel(file_bytes=file_bytes, file_name=file.filename or "upload.xlsx")
+        return preview_excel(
+            file_bytes=file_bytes,
+            file_name=file.filename or "upload.xlsx",
+            use_llm_mapping=use_llm_mapping,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.exception("Preview failed")
         raise HTTPException(
@@ -85,11 +95,30 @@ async def create_import(
         default=None,
         description="Comma-separated sheet names to import. Empty imports all known sheets.",
     ),
+    column_overrides: str | None = Form(
+        default=None,
+        description=(
+            "M5 column-alignment review result as a JSON string: "
+            "{sheet: {source column: canonical column}}. When given, it is applied as-is "
+            "and the Schema-Mapping Agent is not invoked."
+        ),
+    ),
+    auto_map_columns: bool = Form(
+        default=True,
+        description=(
+            "Whether to run the Schema-Mapping Agent automatically when there is no "
+            "override and headers differ from the canonical template."
+        ),
+    ),
+    use_llm_mapping: bool = Form(
+        default=False, description="Whether the Schema-Mapping Agent uses the LLM backend."
+    ),
     db: Session = Depends(get_db),
 ) -> ImportResult:
     """Receive an Excel file, write it to the database synchronously, and return a summary.
 
     Example sheets value: `Power,Industry` or `Power, Industry`; spaces are ignored.
+    Example column_overrides value: `{"Power": {"F": "R", "G": "T"}}`.
     """
     file_bytes = await file.read()
     _validate_upload(file, file_bytes)
@@ -97,6 +126,23 @@ async def create_import(
     selected_sheets: list[str] | None = None
     if sheets:
         selected_sheets = [s.strip() for s in sheets.split(",") if s.strip()]
+
+    overrides: dict[str, dict[str, str]] | None = None
+    if column_overrides:
+        try:
+            parsed = json.loads(column_overrides)
+            if not isinstance(parsed, dict):
+                raise ValueError("column_overrides must be a JSON object")
+            overrides = {
+                str(sheet): {str(k): str(v) for k, v in mapping.items()}
+                for sheet, mapping in parsed.items()
+                if isinstance(mapping, dict)
+            }
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to parse column_overrides: {exc!s}",
+            ) from exc
 
     try:
         result = import_excel(
@@ -106,7 +152,17 @@ async def create_import(
             imported_by=imported_by,
             note=note,
             selected_sheets=selected_sheets,
+            column_overrides=overrides,
+            auto_map_columns=auto_map_columns,
+            use_llm_mapping=use_llm_mapping,
         )
+    except SchemaMappingRejected as exc:
+        db.rollback()
+        logger.warning("Import rejected by the column-alignment quality gate: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         logger.exception("Import failed (database error)")
@@ -174,6 +230,15 @@ def import_from_conversion(
             note=note,
             selected_sheets=selected_sheets,
         )
+    except SchemaMappingRejected as exc:
+        db.rollback()
+        logger.warning(
+            "Import from conversion rejected by the column-alignment quality gate: %s", exc
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         logger.exception("Import from conversion failed (database error)")

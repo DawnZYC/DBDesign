@@ -1,14 +1,46 @@
+# --- Web 框架 ---
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
-sqlalchemy==2.0.36
+starlette==0.41.3
+python-multipart==0.0.20
+
+# --- DB / ORM ---
+sqlalchemy==2.0.35
 psycopg[binary]==3.2.3
+
+# --- 配置 / 校验 ---
 pydantic==2.10.3
 pydantic-settings==2.6.1
-python-multipart==0.0.20
-openpyxl==3.1.5
 python-dotenv==1.0.1
-starlette==0.41.3
-numpy>=1.26
+
+# --- Excel ---
+openpyxl==3.1.5
+
+# --- LLM 抽象层 (M0, 版本随 M3 联动升级) ---
+# langgraph==0.2.62 排除 langchain-core !=0.3.0..0.3.22，故整体升至 0.3.29+ 分支
+langchain==0.3.14
+langchain-core==0.3.29
+langchain-text-splitters==0.3.4
+langchain-openai==0.2.14        # OpenAI / DeepSeek / Qwen / Moonshot / 智谱（OpenAI 兼容）
+langchain-anthropic==0.3.0      # Anthropic（独立 SDK）
+openai>=1.58.1,<2               # langchain-openai 0.2.x 使用 openai 1.x；避免 pip 回溯到 2.x
+tiktoken==0.8.0                 # token 计数 / 费用估算
+
+# --- RAG / 向量库 (M1) ---
+# NOTE: local-embedding deps (sentence-transformers -> torch, ~2 GB) live in
+# requirements-ml.txt. Install them only where local HuggingFace embeddings
+# are actually used:  pip install -r requirements-ml.txt
+# Without them the app still boots; the embedding registry imports lazily.
+numpy==1.26.4
+chromadb==0.5.23                # 向量库（PersistentClient 模式）
+langchain-chroma==0.1.4         # Chroma 与 LangChain Embeddings 的桥接
+langchain-community==0.3.14     # DashScope (Qwen) 等国产 embedding
+
+# --- Agent 编排 / SSE (M3) ---
+langgraph==0.2.62               # LangGraph 状态图编排（节点 / 条件边 / checkpoint）
+sse-starlette==2.1.3            # FastAPI SSE 响应（StreamingResponse 替代）
+tenacity==9.0.0                 # Agent 节点失败重试（指数退避）
+
+# --- Convert (VT -> EcoTEA, from main) ---
 pandas>=2.1
 xlrd>=2.0
-

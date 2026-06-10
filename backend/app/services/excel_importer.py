@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.schemas import (
+    ColumnSuggestionOut,
     ConflictGroup,
     ConflictListResponse,
     ConflictResolution,
@@ -36,7 +37,9 @@ from app.schemas import (
     FilePreview,
     ImportResult,
     ImportSheetSummary,
+    SheetColumnMapping,
     SheetPreview,
+    StandardFieldInfo,
 )
 from app.services.value_cleaner import (
     clean_numeric,
@@ -101,12 +104,21 @@ def import_excel(
     imported_by: str | None = None,
     note: str | None = None,
     selected_sheets: list[str] | None = None,
+    column_overrides: dict[str, dict[str, str]] | None = None,
+    auto_map_columns: bool = True,
+    use_llm_mapping: bool = False,
 ) -> ImportResult:
     """Run one Excel import and return a summary.
 
     Args:
         selected_sheets: Import only these sheets by sheet name. None or empty imports
             all known sheets. Unknown sheet names are ignored and logged.
+        column_overrides: {sheet_name: {source column -> canonical column}} confirmed by
+            the user in the column-alignment review UI. Takes precedence over the agent.
+        auto_map_columns: When headers differ from the canonical template and no override
+            is given, whether to run the M5 Schema-Mapping Agent automatically.
+        use_llm_mapping: Whether the Schema-Mapping Agent uses the LLM backend
+            (deterministic fallback otherwise).
     """
 
     started = time.perf_counter()
@@ -133,6 +145,7 @@ def import_excel(
     total_skipped = 0
     total_pending = 0
     total_issues = 0
+    all_column_warnings: list[str] = []
 
     for sheet_name in workbook.sheetnames:
         if sheet_name not in SHEET_TO_SECTOR_CODE:
@@ -143,7 +156,26 @@ def import_excel(
             continue
 
         worksheet = workbook[sheet_name]
-        summary = _import_sheet(db, batch=batch, worksheet=worksheet, sheet_name=sheet_name)
+
+        # M5: decide whether this sheet needs column remapping (pre-import layer).
+        column_remap, column_warnings = _resolve_column_remap(
+            db,
+            worksheet=worksheet,
+            sheet_name=sheet_name,
+            column_overrides=column_overrides,
+            auto_map=auto_map_columns,
+            use_llm=use_llm_mapping,
+        )
+
+        summary = _import_sheet(
+            db,
+            batch=batch,
+            worksheet=worksheet,
+            sheet_name=sheet_name,
+            column_remap=column_remap,
+        )
+        summary.column_warnings = column_warnings
+        all_column_warnings.extend(f"[{sheet_name}] {w}" for w in column_warnings)
         sheet_summaries.append(summary)
         total_imported += summary.rows_imported
         total_skipped += summary.rows_skipped
@@ -163,7 +195,103 @@ def import_excel(
         issues=total_issues,
         sheets=sheet_summaries,
         duration_ms=duration_ms,
+        column_warnings=all_column_warnings,
     )
+
+
+# -----------------------------------------------------------------------------
+# M5: column remapping (pre-import layer)
+# -----------------------------------------------------------------------------
+def _resolve_column_remap(
+    db: Session,
+    *,
+    worksheet: Worksheet,
+    sheet_name: str,
+    column_overrides: dict[str, dict[str, str]] | None,
+    auto_map: bool,
+    use_llm: bool,
+) -> tuple[dict[str, str] | None, list[str]]:
+    """Return (source->canonical column remap or None for the fast path, warnings).
+
+    Precedence:
+      1. column_overrides[sheet] confirmed by the user in the review UI (no quality gate).
+      2. Headers match the canonical template -> None, original hard-coded fast path.
+      3. Otherwise run the Schema-Mapping Agent: high confidence is applied automatically,
+         low confidence is written to data_quality_issue and surfaced as warnings; missing
+         core columns or low coverage raises SchemaMappingRejected to refuse the import.
+    """
+    # Import lazily so the importer works in environments without LLM dependencies.
+    from app.agents import schema_mapper as sm
+
+    if column_overrides and sheet_name in column_overrides:
+        remap = {k: v for k, v in column_overrides[sheet_name].items() if v}
+        logger.info(
+            "Sheet %s uses a user-confirmed column mapping with %d columns",
+            sheet_name,
+            len(remap),
+        )
+        return remap or None, []
+
+    blobs = sm.extract_header_blobs(worksheet)
+    if sm.headers_match_canonical(blobs):
+        return None, []  # Fast path: canonical template, the agent is not involved.
+
+    if not auto_map:
+        logger.warning(
+            "Sheet %s has a non-canonical header layout but auto_map is off; "
+            "importing by original column positions",
+            sheet_name,
+        )
+        return None, [
+            "Headers differ from the canonical template and auto_map_columns is off; "
+            "imported by original column positions (may be misaligned)"
+        ]
+
+    mapping = sm.map_columns(blobs, use_llm=use_llm)
+    remap, needs_review = sm.build_remap(mapping)
+    logger.info(
+        "Sheet %s schema mapping: %d columns auto-aligned, %d low-confidence columns",
+        sheet_name,
+        len(remap),
+        len(needs_review),
+    )
+    # Quality gate: missing core columns / low coverage -> SchemaMappingRejected.
+    sm.validate_remap(remap, needs_review, sheet_name=sheet_name)
+
+    # Low-confidence columns are written to data_quality_issue (column-level, no raw_row_id)
+    # and surfaced as warnings so callers that skip the preview can still see them.
+    warnings: list[str] = [
+        f"Auto-aligned {len(remap)} columns "
+        "(headers differ from the canonical template; schema mapping was applied)"
+    ]
+    for s in needs_review:
+        msg = (
+            f"Column {s.excel_column} ('{s.excel_header}') tentatively matches field "
+            f"'{s.target_field}' with confidence {s.confidence}; the column was NOT "
+            "imported this time, please review manually"
+        )
+        warnings.append(msg)
+        db.add(
+            models.DataQualityIssue(
+                raw_row_id=None,
+                source_sheet_name=sheet_name,
+                excel_row_number=None,
+                excel_column=s.excel_column,
+                issue_type="schema_mapping_unconfident",
+                original_value=s.excel_header[:500] if s.excel_header else None,
+                issue_message=msg,
+            )
+        )
+    return remap or None, warnings
+
+
+def _apply_column_remap(cells: dict[str, Any], remap: dict[str, str]) -> dict[str, Any]:
+    """Move one row of cells from source column positions to canonical positions.
+
+    Columns not present in the remap are dropped (treated as unmatched, so downstream
+    hard-coded reads naturally get None).
+    """
+    return {std_col: cells.get(src_col) for src_col, std_col in remap.items()}
 
 
 # -----------------------------------------------------------------------------
@@ -175,6 +303,7 @@ def _import_sheet(
     batch: models.ImportBatch,
     worksheet: Worksheet,
     sheet_name: str,
+    column_remap: dict[str, str] | None = None,
 ) -> ImportSheetSummary:
     """Process all data rows in one sheet.
 
@@ -200,6 +329,12 @@ def _import_sheet(
     for excel_row_number in range(DATA_START_ROW, last_row + 1):
         cells = _read_row_as_dict(worksheet=worksheet, row_number=excel_row_number)
 
+        # M5: column remapping (pre-import layer). Move values from source column
+        # positions to canonical positions; all hard-coded logic below
+        # (inheritance / sector conflicts / _insert_*) then runs unchanged.
+        if column_remap:
+            cells = _apply_column_remap(cells, column_remap)
+
         # Skip fully empty rows.
         if all(is_placeholder(v) for v in cells.values()):
             rows_skipped += 1
@@ -222,8 +357,17 @@ def _import_sheet(
                 if not is_placeholder(cells.get(column))
             }
 
-        # 1) Write raw_excel_row with only values actually present in the row, not inherited values.
+        # 1) Write raw_excel_row with only values actually present in the row, not inherited
+        #    values. The chart cell-trace feature must show the user's real file layout, so
+        #    the ORIGINAL (un-remapped) cells are stored here.
         raw_cells_payload = _read_row_as_dict(worksheet=worksheet, row_number=excel_row_number)
+        # Explicit cells used for the sector-conflict check: after remapping, column A is
+        # the canonical sector column.
+        explicit_cells = (
+            _apply_column_remap(raw_cells_payload, column_remap)
+            if column_remap
+            else raw_cells_payload
+        )
         raw_row = models.RawExcelRow(
             import_batch_id=batch.import_batch_id,
             source_sheet_name=sheet_name,
@@ -237,7 +381,7 @@ def _import_sheet(
 
         # 2) Check sector conflicts using only explicit column A values in this row,
         #    excluding inherited values so continuation rows are not falsely flagged.
-        explicit_a_value = raw_cells_payload.get("A")
+        explicit_a_value = explicit_cells.get("A")
         a_sector_code = resolve_sector_from_text(explicit_a_value)
         if a_sector_code is not None and a_sector_code != sector.sector_code:
             # Conflict: do not write business tables yet; mark pending and record an issue.
@@ -971,25 +1115,116 @@ def _resolve_single_conflict(db: Session, *, raw_row_id: int, decision: str) -> 
     raw_row.normalized_status = STATUS_NORMALIZED
 
 
-def preview_excel(*, file_bytes: bytes, file_name: str) -> FilePreview:
-    """Parse only sheet names and row counts without writing to the database for sheet selection."""
+def preview_excel(
+    *, file_bytes: bytes, file_name: str, use_llm_mapping: bool = False
+) -> FilePreview:
+    """Parse sheet names, row counts, and M5 column-alignment suggestions without writing.
+
+    use_llm_mapping: whether column alignment uses the LLM backend (deterministic by
+    default, which keeps the preview fast and free).
+    """
     workbook = load_workbook(filename=BytesIO(file_bytes), data_only=True, read_only=True)
     previews: list[SheetPreview] = []
+    needs_review = False
     try:
         for sheet_name in workbook.sheetnames:
             worksheet = workbook[sheet_name]
             data_rows = _count_non_empty_data_rows(worksheet)
+            is_known = sheet_name in SHEET_TO_SECTOR_CODE
+            column_mapping = (
+                _build_sheet_column_mapping(
+                    worksheet, sheet_name=sheet_name, use_llm=use_llm_mapping
+                )
+                if is_known
+                else None
+            )
+            if column_mapping is not None and column_mapping.review_count > 0:
+                needs_review = True
             previews.append(
                 SheetPreview(
                     sheet_name=sheet_name,
-                    is_known=sheet_name in SHEET_TO_SECTOR_CODE,
+                    is_known=is_known,
                     sector_code=SHEET_TO_SECTOR_CODE.get(sheet_name),
                     data_rows=data_rows,
+                    column_mapping=column_mapping,
                 )
             )
     finally:
         workbook.close()
-    return FilePreview(file_name=file_name, sheets=previews)
+    return FilePreview(
+        file_name=file_name,
+        sheets=previews,
+        needs_column_review=needs_review,
+        standard_fields=_standard_field_infos(),
+    )
+
+
+def _standard_field_infos() -> list[StandardFieldInfo]:
+    from app.agents import schema_mapper as sm
+
+    return [
+        StandardFieldInfo(
+            field=spec.field,
+            column=spec.column,
+            label=spec.label,
+            description=spec.description,
+        )
+        for spec in sm.STANDARD_FIELDS
+    ]
+
+
+def _build_sheet_column_mapping(
+    worksheet: Worksheet, *, sheet_name: str, use_llm: bool
+) -> SheetColumnMapping | None:
+    """Compute M5 column-alignment suggestions for a known sheet (preview only, no writes)."""
+    from app.agents import schema_mapper as sm
+
+    blobs = sm.extract_header_blobs(worksheet)
+    if not blobs:
+        return None
+    if sm.headers_match_canonical(blobs):
+        return SheetColumnMapping(
+            sheet_name=sheet_name,
+            layout_is_standard=True,
+            suggestions=[],
+            auto_count=0,
+            review_count=0,
+            unmatched_count=0,
+        )
+
+    mapping = sm.map_columns(blobs, use_llm=use_llm)
+    suggestions: list[ColumnSuggestionOut] = []
+    auto = review = unmatched = 0
+    for s in mapping.suggestions:
+        spec = sm.FIELD_BY_NAME.get(s.target_field) if s.target_field else None
+        if s.target_field and s.confidence >= sm.AUTO_APPLY_THRESHOLD:
+            status_ = "auto"
+            auto += 1
+        elif s.target_field and s.confidence >= sm.REVIEW_THRESHOLD:
+            status_ = "review"
+            review += 1
+        else:
+            status_ = "unmatched"
+            unmatched += 1
+        suggestions.append(
+            ColumnSuggestionOut(
+                excel_column=s.excel_column,
+                excel_header=s.excel_header,
+                target_field=s.target_field if status_ != "unmatched" else None,
+                target_column=spec.column if (spec and status_ != "unmatched") else None,
+                confidence=round(s.confidence, 3),
+                status=status_,
+                reasoning=s.reasoning,
+            )
+        )
+    return SheetColumnMapping(
+        sheet_name=sheet_name,
+        layout_is_standard=False,
+        suggestions=suggestions,
+        auto_count=auto,
+        review_count=review,
+        unmatched_count=unmatched,
+    )
 
 
 # -----------------------------------------------------------------------------

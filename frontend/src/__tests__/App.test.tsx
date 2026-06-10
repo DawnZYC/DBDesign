@@ -24,17 +24,21 @@ vi.mock('../api', () => ({
   conversionDownloadUrl: (token: string) => `/api/convert/download/${token}`,
   previewFromConversion: vi.fn(),
   importFromConversion: vi.fn(),
+  // Chat / AI assistant (M4)
+  streamChat: vi.fn(() => new AbortController()),
+  fetchRawRow: vi.fn(),
 }));
 
 import App from '../App';
 
 describe('App', () => {
-  it('renders the brand and the three workflow steps in the sidebar', () => {
+  it('renders the brand and the four workflow steps in the sidebar', () => {
     render(<App />);
-    expect(screen.getByText(/EcoTEA WP1/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /01 Convert/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /02 Import/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /03 Browse/i })).toBeInTheDocument();
+    expect(screen.getByText(/SG-TIMES/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /01 AI Assistant/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /02 Convert/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /03 Import/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /04 Browse/i })).toBeInTheDocument();
   });
 
   it('reports an online status once the health check resolves', async () => {
