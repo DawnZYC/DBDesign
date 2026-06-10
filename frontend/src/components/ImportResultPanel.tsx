@@ -33,6 +33,19 @@ export function ImportResultPanel({ result, onReviewConflicts }: ImportResultPan
         </div>
       )}
 
+      {result.column_warnings?.length > 0 && (
+        <div className="pending-banner">
+          <div>
+            <strong>列对齐提醒</strong>（Schema-Mapping）
+            <ul className="column-warning-list">
+              {result.column_warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
       <dl className="result-meta">
         <div>
           <dt>文件</dt>

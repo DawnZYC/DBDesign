@@ -7,6 +7,46 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+# =============================================================================
+# Schema-Mapping (M5) — 列对齐
+# =============================================================================
+class ColumnSuggestionOut(BaseModel):
+    """单列的匹配建议（前端列对齐复核用）。"""
+
+    excel_column: str = Field(..., description="陌生 Excel 的列字母")
+    excel_header: str = Field(default="", description="该列表头原文")
+    target_field: str | None = Field(default=None, description="匹配到的标准字段名")
+    target_column: str | None = Field(default=None, description="该标准字段的标准列位")
+    confidence: float = Field(default=0.0, description="0-1 置信度")
+    status: str = Field(
+        ...,
+        description="auto（≥0.9 自动应用）/ review（0.6-0.9 待人工）/ unmatched（<0.6）",
+    )
+    reasoning: str = Field(default="")
+
+
+class SheetColumnMapping(BaseModel):
+    """单个 sheet 的列对齐结果。"""
+
+    sheet_name: str
+    layout_is_standard: bool = Field(
+        ..., description="表头是否与标准模板一致（True 则无需对齐，走快路径）"
+    )
+    suggestions: list[ColumnSuggestionOut] = Field(default_factory=list)
+    auto_count: int = 0
+    review_count: int = Field(default=0, description="低置信待人工复核的列数")
+    unmatched_count: int = 0
+
+
+class StandardFieldInfo(BaseModel):
+    """标准字段元信息（前端下拉选项用）。"""
+
+    field: str
+    column: str
+    label: str
+    description: str
+
+
 class SheetPreview(BaseModel):
     """文件预览中的单个 sheet 信息。"""
 
@@ -14,6 +54,10 @@ class SheetPreview(BaseModel):
     is_known: bool = Field(..., description="是否在已知行业映射表里（10 个 sheet）")
     sector_code: str | None = Field(default=None, description="对应的 sector_code")
     data_rows: int = Field(..., description="非空数据行数（行 10 起）")
+    column_mapping: SheetColumnMapping | None = Field(
+        default=None,
+        description="M5 列对齐结果；layout 标准或非已知 sheet 时为 None",
+    )
 
 
 class FilePreview(BaseModel):
@@ -21,6 +65,12 @@ class FilePreview(BaseModel):
 
     file_name: str
     sheets: list[SheetPreview]
+    needs_column_review: bool = Field(
+        default=False, description="是否存在任一 sheet 需要列对齐复核"
+    )
+    standard_fields: list[StandardFieldInfo] = Field(
+        default_factory=list, description="38 个标准字段清单（前端下拉用）"
+    )
 
 
 class ImportSheetSummary(BaseModel):
@@ -32,6 +82,10 @@ class ImportSheetSummary(BaseModel):
     rows_skipped: int = Field(default=0, description="跳过的空行 / 无效行")
     rows_pending: int = Field(default=0, description="发现冲突待复核的行数")
     issues: int = Field(default=0, description="data_quality_issue 新增数")
+    column_warnings: list[str] = Field(
+        default_factory=list,
+        description="M5 列对齐警告（自动对齐启用 / 低置信列被丢弃等），空表示快路径",
+    )
 
 
 class ImportResult(BaseModel):
@@ -48,6 +102,10 @@ class ImportResult(BaseModel):
     issues: int
     sheets: list[ImportSheetSummary]
     duration_ms: int
+    column_warnings: list[str] = Field(
+        default_factory=list,
+        description="全文件 M5 列对齐警告汇总（带 sheet 前缀），空表示全部走快路径",
+    )
 
 
 class ConflictRow(BaseModel):

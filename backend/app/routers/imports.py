@@ -1,12 +1,14 @@
 """导入相关路由。"""
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.agents.schema_mapper import SchemaMappingRejected
 from app.database import get_db
 from app.schemas import (
     ConflictListResponse,
@@ -56,13 +58,24 @@ def _validate_upload(file: UploadFile, file_bytes: bytes) -> None:
 )
 async def preview_import(
     file: UploadFile = File(..., description="要预览的 .xlsx 文件"),
+    use_llm_mapping: bool = Form(
+        default=False,
+        description="M5 列对齐是否用 LLM 后端（默认确定性，快且零成本）",
+    ),
 ) -> FilePreview:
-    """读取上传文件的 sheet 名称、行数、是否在已知映射表内。前端调用后用于让用户选 sheet。"""
+    """读取上传文件的 sheet 名称、行数、是否在已知映射表内，并给出 M5 列对齐建议。
+
+    前端用返回的 column_mapping 让用户在列布局变化时做对齐复核。
+    """
     file_bytes = await file.read()
     _validate_upload(file, file_bytes)
 
     try:
-        return preview_excel(file_bytes=file_bytes, file_name=file.filename or "upload.xlsx")
+        return preview_excel(
+            file_bytes=file_bytes,
+            file_name=file.filename or "upload.xlsx",
+            use_llm_mapping=use_llm_mapping,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.exception("预览失败")
         raise HTTPException(
@@ -85,11 +98,26 @@ async def create_import(
         default=None,
         description="只导入这些 sheet，逗号分隔。为空时导入全部已知 sheet。",
     ),
+    column_overrides: str | None = Form(
+        default=None,
+        description=(
+            "M5 列对齐复核结果，JSON 字符串：{sheet: {陌生列: 标准列}}。"
+            "给了就按它搬运，不再自动调 Schema-Mapping Agent。"
+        ),
+    ),
+    auto_map_columns: bool = Form(
+        default=True,
+        description="无 override 且表头非标准时，是否自动调 Schema-Mapping Agent",
+    ),
+    use_llm_mapping: bool = Form(
+        default=False, description="Schema-Mapping Agent 是否用 LLM 后端"
+    ),
     db: Session = Depends(get_db),
 ) -> ImportResult:
     """接收 Excel 文件，同步写入数据库并返回汇总结果。
 
     sheets 字段示例：`Power,Industry` 或 `Power, Industry`（空格无所谓）。
+    column_overrides 示例：`{"Power": {"F": "R", "G": "T"}}`。
     """
     file_bytes = await file.read()
     _validate_upload(file, file_bytes)
@@ -97,6 +125,23 @@ async def create_import(
     selected_sheets: list[str] | None = None
     if sheets:
         selected_sheets = [s.strip() for s in sheets.split(",") if s.strip()]
+
+    overrides: dict[str, dict[str, str]] | None = None
+    if column_overrides:
+        try:
+            parsed = json.loads(column_overrides)
+            if not isinstance(parsed, dict):
+                raise ValueError("column_overrides 必须是 JSON 对象")
+            overrides = {
+                str(sheet): {str(k): str(v) for k, v in mapping.items()}
+                for sheet, mapping in parsed.items()
+                if isinstance(mapping, dict)
+            }
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"column_overrides 解析失败：{exc!s}",
+            ) from exc
 
     try:
         result = import_excel(
@@ -106,7 +151,17 @@ async def create_import(
             imported_by=imported_by,
             note=note,
             selected_sheets=selected_sheets,
+            column_overrides=overrides,
+            auto_map_columns=auto_map_columns,
+            use_llm_mapping=use_llm_mapping,
         )
+    except SchemaMappingRejected as exc:
+        db.rollback()
+        logger.warning("导入被列对齐质量门槛拒绝：%s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except SQLAlchemyError as exc:
         db.rollback()
         logger.exception("导入失败 (DB 异常)")

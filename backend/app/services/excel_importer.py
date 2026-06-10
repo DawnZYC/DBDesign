@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.schemas import (
+    ColumnSuggestionOut,
     ConflictGroup,
     ConflictListResponse,
     ConflictResolution,
@@ -35,7 +36,9 @@ from app.schemas import (
     FilePreview,
     ImportResult,
     ImportSheetSummary,
+    SheetColumnMapping,
     SheetPreview,
+    StandardFieldInfo,
 )
 from app.services.value_cleaner import (
     clean_numeric,
@@ -101,12 +104,20 @@ def import_excel(
     imported_by: str | None = None,
     note: str | None = None,
     selected_sheets: list[str] | None = None,
+    column_overrides: dict[str, dict[str, str]] | None = None,
+    auto_map_columns: bool = True,
+    use_llm_mapping: bool = False,
 ) -> ImportResult:
     """执行一次 Excel 导入，返回汇总结果。
 
     Args:
         selected_sheets: 仅导入这些 sheet（按 sheet 名）。为 None 或空时导入全部已知 sheet。
             未识别的 sheet 名会被忽略并记入日志。
+        column_overrides: {sheet_name: {陌生列 -> 标准列}}，由前端列对齐复核确认后回传，
+            优先级最高。给了就直接按它搬运，不再调 Schema-Mapping Agent。
+        auto_map_columns: 没有 override 且表头与标准模板不一致时，是否自动调用
+            Schema-Mapping Agent（M5）对齐列布局。默认开。
+        use_llm_mapping: Schema-Mapping Agent 是否用 LLM 后端（否则用确定性兜底）。
     """
 
     started = time.perf_counter()
@@ -133,6 +144,7 @@ def import_excel(
     total_skipped = 0
     total_pending = 0
     total_issues = 0
+    all_column_warnings: list[str] = []
 
     for sheet_name in workbook.sheetnames:
         if sheet_name not in SHEET_TO_SECTOR_CODE:
@@ -143,7 +155,26 @@ def import_excel(
             continue
 
         worksheet = workbook[sheet_name]
-        summary = _import_sheet(db, batch=batch, worksheet=worksheet, sheet_name=sheet_name)
+
+        # ---- M5: 决定本 sheet 是否需要列搬运（前置层） ----
+        column_remap, column_warnings = _resolve_column_remap(
+            db,
+            worksheet=worksheet,
+            sheet_name=sheet_name,
+            column_overrides=column_overrides,
+            auto_map=auto_map_columns,
+            use_llm=use_llm_mapping,
+        )
+
+        summary = _import_sheet(
+            db,
+            batch=batch,
+            worksheet=worksheet,
+            sheet_name=sheet_name,
+            column_remap=column_remap,
+        )
+        summary.column_warnings = column_warnings
+        all_column_warnings.extend(f"[{sheet_name}] {w}" for w in column_warnings)
         sheet_summaries.append(summary)
         total_imported += summary.rows_imported
         total_skipped += summary.rows_skipped
@@ -163,18 +194,89 @@ def import_excel(
         issues=total_issues,
         sheets=sheet_summaries,
         duration_ms=duration_ms,
+        column_warnings=all_column_warnings,
     )
 
 
 # -----------------------------------------------------------------------------
 # 单 sheet 导入
 # -----------------------------------------------------------------------------
+def _resolve_column_remap(
+    db: Session,
+    *,
+    worksheet: Worksheet,
+    sheet_name: str,
+    column_overrides: dict[str, dict[str, str]] | None,
+    auto_map: bool,
+    use_llm: bool,
+) -> tuple[dict[str, str] | None, list[str]]:
+    """M5 前置层：返回 (本 sheet 的「陌生列 -> 标准列」搬运表或 None, 列级警告列表)。
+
+    优先级：
+      1. column_overrides[sheet] —— 前端列对齐复核确认过的，直接用（不走质量门槛）。
+      2. 表头与标准模板一致（headers_match_canonical）—— 返回 None，走原硬编码快路径。
+      3. 否则调用 Schema-Mapping Agent：高置信自动应用，低置信写 data_quality_issue
+         并产出警告；核心列缺失 / 覆盖率过低 → 抛 SchemaMappingRejected 拒绝导入。
+    """
+    # 延迟 import，避免 importer 在没装 LLM 依赖的环境里 import 失败
+    from app.agents import schema_mapper as sm
+
+    if column_overrides and sheet_name in column_overrides:
+        remap = {k: v for k, v in column_overrides[sheet_name].items() if v}
+        logger.info("sheet %s 使用前端确认的列映射 %d 列", sheet_name, len(remap))
+        return remap or None, []
+
+    blobs = sm.extract_header_blobs(worksheet)
+    if sm.headers_match_canonical(blobs):
+        return None, []  # 快路径：标准模板，不调 Agent
+
+    if not auto_map:
+        logger.warning("sheet %s 表头非标准布局，但 auto_map 关闭，按原列位导入", sheet_name)
+        return None, [
+            "表头与标准模板不一致，且 auto_map_columns 已关闭，按原列位导入（可能错位）"
+        ]
+
+    mapping = sm.map_columns(blobs, use_llm=use_llm)
+    remap, needs_review = sm.build_remap(mapping)
+    logger.info(
+        "sheet %s Schema-Mapping：自动对齐 %d 列，低置信待复核 %d 列",
+        sheet_name, len(remap), len(needs_review),
+    )
+    # 质量门槛：核心列缺失 / 覆盖率过低 → 拒绝静默导入（SchemaMappingRejected）
+    sm.validate_remap(remap, needs_review, sheet_name=sheet_name)
+
+    # 低置信列写 data_quality_issue（raw_row_id 可空，列级问题不绑定具体行），
+    # 同时产出警告让 ImportResult 直接可见——不走 preview 的调用方也能感知。
+    warnings: list[str] = [
+        f"已自动对齐 {len(remap)} 列（表头与标准模板不一致，启用了 Schema-Mapping）"
+    ]
+    for s in needs_review:
+        msg = (
+            f"列 {s.excel_column}（'{s.excel_header}'）疑似匹配字段 "
+            f"'{s.target_field}'，置信度 {s.confidence}，本次未导入该列，建议人工确认"
+        )
+        warnings.append(msg)
+        db.add(
+            models.DataQualityIssue(
+                raw_row_id=None,
+                source_sheet_name=sheet_name,
+                excel_row_number=None,
+                excel_column=s.excel_column,
+                issue_type="schema_mapping_unconfident",
+                original_value=s.excel_header[:500] if s.excel_header else None,
+                issue_message=msg,
+            )
+        )
+    return remap or None, warnings
+
+
 def _import_sheet(
     db: Session,
     *,
     batch: models.ImportBatch,
     worksheet: Worksheet,
     sheet_name: str,
+    column_remap: dict[str, str] | None = None,
 ) -> ImportSheetSummary:
     """处理一个 sheet 的所有数据行。
 
@@ -199,6 +301,11 @@ def _import_sheet(
     for excel_row_number in range(DATA_START_ROW, last_row + 1):
         cells = _read_row_as_dict(worksheet=worksheet, row_number=excel_row_number)
 
+        # ---- M5: 列搬运（前置层）。把陌生列位的值搬到标准列位，
+        #      之后所有硬编码逻辑（继承 / sector 冲突 / 各 _insert_*）原样跑。
+        if column_remap:
+            cells = _apply_column_remap(cells, column_remap)
+
         # 全空行直接跳过
         if all(is_placeholder(v) for v in cells.values()):
             rows_skipped += 1
@@ -221,9 +328,16 @@ def _import_sheet(
                 if not is_placeholder(cells.get(column))
             }
 
-        # 1) 写 raw_excel_row（保留行内真实出现的内容，不写继承值）
+        # 1) 写 raw_excel_row（保留行内真实出现的【原始】内容，不搬运、不写继承值；
+        #    图表反查源单元格要看用户文件里的真实列/行，故这里存原始 cells）
         raw_cells_payload = _read_row_as_dict(
             worksheet=worksheet, row_number=excel_row_number
+        )
+        # 用于 sector 冲突判断的「行内显式 A 列」：搬运后 A 列才是标准 sector 列
+        explicit_cells = (
+            _apply_column_remap(raw_cells_payload, column_remap)
+            if column_remap
+            else raw_cells_payload
         )
         raw_row = models.RawExcelRow(
             import_batch_id=batch.import_batch_id,
@@ -238,7 +352,7 @@ def _import_sheet(
 
         # 2) 检查 sector 冲突：只看行内显式写的 A 列（不算继承值），
         #    避免续行连带被误判
-        explicit_a_value = raw_cells_payload.get("A")
+        explicit_a_value = explicit_cells.get("A")
         a_sector_code = resolve_sector_from_text(explicit_a_value)
         if (
             a_sector_code is not None
@@ -830,6 +944,16 @@ def _read_row_as_dict(*, worksheet: Worksheet, row_number: int) -> dict[str, Any
     return cells
 
 
+def _apply_column_remap(
+    cells: dict[str, Any], remap: dict[str, str]
+) -> dict[str, Any]:
+    """把一行 cells 从陌生列位搬到标准列位（M5）。
+
+    未在 remap 里的列被丢弃（视为未匹配，下游硬编码读到 None）。
+    """
+    return {std_col: cells.get(src_col) for src_col, std_col in remap.items()}
+
+
 def _jsonify(value: Any) -> Any:
     """把 cell 值转成可 JSON 序列化的形式（处理 datetime 等）。"""
     if value is None:
@@ -991,27 +1115,110 @@ def _resolve_single_conflict(
     raw_row.normalized_status = STATUS_NORMALIZED
 
 
-def preview_excel(*, file_bytes: bytes, file_name: str) -> FilePreview:
-    """只解析 sheet 列表 + 行数，不写库。供前端「选 sheet 再导入」使用。"""
+def preview_excel(
+    *, file_bytes: bytes, file_name: str, use_llm_mapping: bool = False
+) -> FilePreview:
+    """解析 sheet 列表 + 行数 + M5 列对齐建议，不写库。供前端「选 sheet / 列对齐」使用。
+
+    use_llm_mapping: 列对齐是否用 LLM 后端（默认确定性，预览快且零成本）。
+    """
     workbook = load_workbook(
         filename=BytesIO(file_bytes), data_only=True, read_only=True
     )
     previews: list[SheetPreview] = []
+    needs_review = False
     try:
         for sheet_name in workbook.sheetnames:
             worksheet = workbook[sheet_name]
             data_rows = _count_non_empty_data_rows(worksheet)
+            is_known = sheet_name in SHEET_TO_SECTOR_CODE
+            column_mapping = (
+                _build_sheet_column_mapping(
+                    worksheet, sheet_name=sheet_name, use_llm=use_llm_mapping
+                )
+                if is_known
+                else None
+            )
+            if column_mapping is not None and column_mapping.review_count > 0:
+                needs_review = True
             previews.append(
                 SheetPreview(
                     sheet_name=sheet_name,
-                    is_known=sheet_name in SHEET_TO_SECTOR_CODE,
+                    is_known=is_known,
                     sector_code=SHEET_TO_SECTOR_CODE.get(sheet_name),
                     data_rows=data_rows,
+                    column_mapping=column_mapping,
                 )
             )
     finally:
         workbook.close()
-    return FilePreview(file_name=file_name, sheets=previews)
+    return FilePreview(
+        file_name=file_name,
+        sheets=previews,
+        needs_column_review=needs_review,
+        standard_fields=_standard_field_infos(),
+    )
+
+
+def _standard_field_infos() -> list[StandardFieldInfo]:
+    from app.agents import schema_mapper as sm
+
+    return [
+        StandardFieldInfo(
+            field=spec.field,
+            column=spec.column,
+            label=spec.label,
+            description=spec.description,
+        )
+        for spec in sm.STANDARD_FIELDS
+    ]
+
+
+def _build_sheet_column_mapping(
+    worksheet: Worksheet, *, sheet_name: str, use_llm: bool
+) -> SheetColumnMapping | None:
+    """对一个已知 sheet 计算 M5 列对齐建议（预览用，不写库）。"""
+    from app.agents import schema_mapper as sm
+
+    blobs = sm.extract_header_blobs(worksheet)
+    if not blobs:
+        return None
+    if sm.headers_match_canonical(blobs):
+        return SheetColumnMapping(
+            sheet_name=sheet_name, layout_is_standard=True,
+            suggestions=[], auto_count=0, review_count=0, unmatched_count=0,
+        )
+
+    mapping = sm.map_columns(blobs, use_llm=use_llm)
+    suggestions: list[ColumnSuggestionOut] = []
+    auto = review = unmatched = 0
+    for s in mapping.suggestions:
+        spec = sm.FIELD_BY_NAME.get(s.target_field) if s.target_field else None
+        if s.target_field and s.confidence >= sm.AUTO_APPLY_THRESHOLD:
+            status_ = "auto"
+            auto += 1
+        elif s.target_field and s.confidence >= sm.REVIEW_THRESHOLD:
+            status_ = "review"
+            review += 1
+        else:
+            status_ = "unmatched"
+            unmatched += 1
+        suggestions.append(
+            ColumnSuggestionOut(
+                excel_column=s.excel_column,
+                excel_header=s.excel_header,
+                target_field=s.target_field if status_ != "unmatched" else None,
+                target_column=spec.column if (spec and status_ != "unmatched") else None,
+                confidence=round(s.confidence, 3),
+                status=status_,
+                reasoning=s.reasoning,
+            )
+        )
+    return SheetColumnMapping(
+        sheet_name=sheet_name, layout_is_standard=False,
+        suggestions=suggestions, auto_count=auto,
+        review_count=review, unmatched_count=unmatched,
+    )
 
 
 # -----------------------------------------------------------------------------

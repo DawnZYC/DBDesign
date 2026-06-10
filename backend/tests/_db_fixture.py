@@ -30,6 +30,9 @@ def setup_test_db() -> None:
     Table("import_batch", md,
         Column("import_batch_id", Integer, primary_key=True, autoincrement=True),
         Column("file_name", Text, nullable=False),
+        Column("file_hash", Text),
+        Column("imported_by", Text),
+        Column("imported_at", Text),
         Column("note", Text),
     )
     Table("raw_excel_row", md,

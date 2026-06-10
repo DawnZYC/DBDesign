@@ -45,7 +45,12 @@ export async function previewExcel(file: File): Promise<FilePreview> {
  */
 export async function uploadExcel(
   file: File,
-  options?: { importedBy?: string; note?: string; sheets?: string[] },
+  options?: {
+    importedBy?: string;
+    note?: string;
+    sheets?: string[];
+    columnOverrides?: import('./types').ColumnOverrides;
+  },
 ): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('file', file);
@@ -53,6 +58,10 @@ export async function uploadExcel(
   if (options?.note) formData.append('note', options.note);
   if (options?.sheets && options.sheets.length > 0) {
     formData.append('sheets', options.sheets.join(','));
+  }
+  // M5: 列对齐复核确认后的「陌生列 -> 标准列」映射
+  if (options?.columnOverrides && Object.keys(options.columnOverrides).length > 0) {
+    formData.append('column_overrides', JSON.stringify(options.columnOverrides));
   }
 
   const response = await fetch(`${API_BASE}/imports`, {

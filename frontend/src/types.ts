@@ -2,17 +2,52 @@
  * 与后端 schemas.py 保持一致的类型定义。
  */
 
+// ---- M5: Schema-Mapping 列对齐 ----
+export type ColumnMappingStatus = 'auto' | 'review' | 'unmatched';
+
+export interface ColumnSuggestion {
+  excel_column: string;
+  excel_header: string;
+  target_field: string | null;
+  target_column: string | null;
+  confidence: number;
+  status: ColumnMappingStatus;
+  reasoning: string;
+}
+
+export interface SheetColumnMapping {
+  sheet_name: string;
+  layout_is_standard: boolean;
+  suggestions: ColumnSuggestion[];
+  auto_count: number;
+  review_count: number;
+  unmatched_count: number;
+}
+
+export interface StandardFieldInfo {
+  field: string;
+  column: string;
+  label: string;
+  description: string;
+}
+
 export interface SheetPreview {
   sheet_name: string;
   is_known: boolean;
   sector_code: string | null;
   data_rows: number;
+  column_mapping: SheetColumnMapping | null;
 }
 
 export interface FilePreview {
   file_name: string;
   sheets: SheetPreview[];
+  needs_column_review: boolean;
+  standard_fields: StandardFieldInfo[];
 }
+
+/** 列对齐复核结果：{sheet: {陌生列: 标准列}}，回传给导入接口的 column_overrides。 */
+export type ColumnOverrides = Record<string, Record<string, string>>;
 
 export interface ImportSheetSummary {
   sheet_name: string;
@@ -21,6 +56,8 @@ export interface ImportSheetSummary {
   rows_skipped: number;
   rows_pending: number;
   issues: number;
+  /** M5 列对齐警告（自动对齐启用 / 低置信列被丢弃等），空数组表示快路径 */
+  column_warnings: string[];
 }
 
 export interface ImportResult {
@@ -33,6 +70,8 @@ export interface ImportResult {
   issues: number;
   sheets: ImportSheetSummary[];
   duration_ms: number;
+  /** 全文件 M5 列对齐警告汇总（带 sheet 前缀） */
+  column_warnings: string[];
 }
 
 export interface ConflictRow {

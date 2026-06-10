@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { ColumnMappingReview } from './ColumnMappingReview';
 import { ConflictReviewModal } from './ConflictReviewModal';
 import { FileUpload } from './FileUpload';
 import { ImportResultPanel } from './ImportResultPanel';
 import { SheetPicker } from './SheetPicker';
 import { previewExcel, uploadExcel } from '../api';
 import type {
+  ColumnOverrides,
   ConflictResolveResponse,
   FilePreview,
   ImportResult,
@@ -24,6 +26,7 @@ export function ImportView() {
   const [note, setNote] = useState('');
   const [reviewing, setReviewing] = useState(false);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+  const [columnOverrides, setColumnOverrides] = useState<ColumnOverrides>({});
 
   const handleFile = async (file: File) => {
     setStage({ kind: 'previewing', fileName: file.name });
@@ -59,10 +62,16 @@ export function ImportView() {
       sheetCount: stage.selected.size,
     });
     try {
+      // 只回传被选中 sheet 的列覆盖
+      const overrides: ColumnOverrides = {};
+      for (const name of stage.selected) {
+        if (columnOverrides[name]) overrides[name] = columnOverrides[name];
+      }
       const result = await uploadExcel(stage.file, {
         importedBy: importedBy.trim() || undefined,
         note: note.trim() || undefined,
         sheets: Array.from(stage.selected),
+        columnOverrides: overrides,
       });
       setStage({ kind: 'success', result });
     } catch (err) {
@@ -77,6 +86,7 @@ export function ImportView() {
   const handleReset = () => {
     setStage({ kind: 'idle' });
     setReviewMessage(null);
+    setColumnOverrides({});
   };
 
   const handleReviewResolved = (response: ConflictResolveResponse) => {
@@ -154,6 +164,24 @@ export function ImportView() {
             selected={stage.selected}
             onChange={handleSelectionChange}
           />
+          {(() => {
+            const needReview = stage.preview.sheets
+              .filter(
+                (s) =>
+                  stage.selected.has(s.sheet_name) &&
+                  s.column_mapping &&
+                  !s.column_mapping.layout_is_standard,
+              )
+              .map((s) => s.column_mapping!)
+              .filter(Boolean);
+            return needReview.length > 0 ? (
+              <ColumnMappingReview
+                mappings={needReview}
+                standardFields={stage.preview.standard_fields}
+                onChange={setColumnOverrides}
+              />
+            ) : null;
+          })()}
           <div className="action-row">
             <button type="button" className="btn-secondary" onClick={handleReset}>
               重新选择文件
