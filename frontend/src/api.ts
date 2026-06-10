@@ -311,7 +311,7 @@ export function streamChat(
         const dataLines: string[] = [];
         for (const line of block.split(LINE_DELIM)) {
           if (!line) continue;
-          if (line.startsWith(':')) continue;             // SSE 注释行，忽略
+          if (line.startsWith(':')) continue; // SSE 注释行，忽略
           if (line.startsWith('event:')) {
             eventType = line.slice(6).trimStart().trim();
           } else if (line.startsWith('data:')) {
@@ -344,10 +344,7 @@ export function streamChat(
           callbacks.onToken?.(data.delta as string);
           break;
         case 'tool_call':
-          callbacks.onToolCall?.(
-            data.tool as string,
-            (data.args as Record<string, unknown>) ?? {},
-          );
+          callbacks.onToolCall?.(data.tool as string, (data.args as Record<string, unknown>) ?? {});
           break;
         case 'tool_result':
           callbacks.onToolResult?.(data);

@@ -1,9 +1,5 @@
 import { useEffect, useState } from 'react';
-import type {
-  ColumnOverrides,
-  SheetColumnMapping,
-  StandardFieldInfo,
-} from '../types';
+import type { ColumnOverrides, SheetColumnMapping, StandardFieldInfo } from '../types';
 
 /**
  * M5 列对齐复核（导入前）。
@@ -35,8 +31,7 @@ export function ColumnMappingReview({
       for (const s of m.suggestions) {
         const key = `${m.sheet_name}::${s.excel_column}`;
         // auto / review 预填建议的标准列；unmatched 默认不导入
-        init[key] =
-          s.status !== 'unmatched' && s.target_column ? s.target_column : NONE;
+        init[key] = s.status !== 'unmatched' && s.target_column ? s.target_column : NONE;
       }
     }
     return init;
@@ -86,9 +81,7 @@ export function ColumnMappingReview({
               <span className="cmr-badge cmr-review">{m.review_count} 待确认</span>
             )}
             {m.unmatched_count > 0 && (
-              <span className="cmr-badge cmr-unmatched">
-                {m.unmatched_count} 未匹配
-              </span>
+              <span className="cmr-badge cmr-unmatched">{m.unmatched_count} 未匹配</span>
             )}
           </div>
 
@@ -114,9 +107,7 @@ export function ColumnMappingReview({
                     <td>
                       <select
                         value={selected}
-                        onChange={(e) =>
-                          setChoice((prev) => ({ ...prev, [key]: e.target.value }))
-                        }
+                        onChange={(e) => setChoice((prev) => ({ ...prev, [key]: e.target.value }))}
                       >
                         <option value={NONE}>— 不导入此列 —</option>
                         {standardFields.map((f) => (

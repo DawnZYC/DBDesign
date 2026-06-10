@@ -78,21 +78,15 @@ export function MessageBubble({ message, onPointClick }: Props) {
         {/* 4. Markdown 正文（流式） */}
         {message.content && (
           <div className={`markdown-text ${isStreaming ? 'streaming-cursor' : ''}`}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content}
-            </ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
         )}
 
         {/* 5. ECharts 图表气泡 */}
-        {message.chartSpec && (
-          <ChartBubble spec={message.chartSpec} onPointClick={onPointClick} />
-        )}
+        {message.chartSpec && <ChartBubble spec={message.chartSpec} onPointClick={onPointClick} />}
 
         {/* 6. 错误提示 */}
-        {message.errorMessage && (
-          <div className="bubble-error">⚠ {message.errorMessage}</div>
-        )}
+        {message.errorMessage && <div className="bubble-error">⚠ {message.errorMessage}</div>}
       </div>
     </div>
   );

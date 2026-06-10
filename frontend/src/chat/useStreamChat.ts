@@ -109,9 +109,7 @@ export function useStreamChat(): UseStreamChatReturn {
       },
 
       onPlan: (steps) => {
-        setMessages((prev) =>
-          updateById(prev, assistantId, (m) => ({ ...m, plan: steps })),
-        );
+        setMessages((prev) => updateById(prev, assistantId, (m) => ({ ...m, plan: steps })));
       },
 
       onToken: (delta) => {
@@ -150,9 +148,7 @@ export function useStreamChat(): UseStreamChatReturn {
       },
 
       onChart: (spec) => {
-        setMessages((prev) =>
-          updateById(prev, assistantId, (m) => ({ ...m, chartSpec: spec })),
-        );
+        setMessages((prev) => updateById(prev, assistantId, (m) => ({ ...m, chartSpec: spec })));
       },
 
       onError: (message) => {

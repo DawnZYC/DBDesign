@@ -108,10 +108,7 @@ export function ChatPage() {
 
       {/* 源单元格反查浮层 */}
       {cellTraceId !== null && (
-        <CellTraceModal
-          rawRowId={cellTraceId}
-          onClose={() => setCellTraceId(null)}
-        />
+        <CellTraceModal rawRowId={cellTraceId} onClose={() => setCellTraceId(null)} />
       )}
     </div>
   );

@@ -269,10 +269,7 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
           {/* M5: column-alignment review for sheets whose layout differs from the template. */}
           <ColumnMappingReview
             mappings={stage.preview.sheets
-              .filter(
-                (s) =>
-                  s.is_known && s.column_mapping && !s.column_mapping.layout_is_standard,
-              )
+              .filter((s) => s.is_known && s.column_mapping && !s.column_mapping.layout_is_standard)
               .map((s) => s.column_mapping!)}
             standardFields={stage.preview.standard_fields ?? []}
             onChange={setColumnOverrides}

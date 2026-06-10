@@ -35,8 +35,7 @@ export function CellTraceModal({ rawRowId, onClose }: Props) {
         if (!cancelled) setState({ status: 'ok', data });
       })
       .catch((err: Error) => {
-        if (!cancelled)
-          setState({ status: 'error', message: err.message });
+        if (!cancelled) setState({ status: 'error', message: err.message });
       });
 
     return () => {
@@ -67,16 +66,9 @@ export function CellTraceModal({ rawRowId, onClose }: Props) {
             <h2 className="modal-title" style={{ margin: 0, fontSize: 17 }}>
               源单元格追溯
             </h2>
-            <p className="modal-subtitle">
-              raw_row_id = {rawRowId}
-            </p>
+            <p className="modal-subtitle">raw_row_id = {rawRowId}</p>
           </div>
-          <button
-            type="button"
-            className="modal-close"
-            onClick={onClose}
-            aria-label="关闭"
-          >
+          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">
             ×
           </button>
         </div>
