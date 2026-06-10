@@ -6,6 +6,7 @@
   - 数据点 < 3 → 拒绝
   - 输出最近 N 年（horizon），每年一个 (year, value) 对，并附 R²
 """
+
 from __future__ import annotations
 
 from typing import Literal

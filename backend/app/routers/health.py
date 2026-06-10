@@ -1,4 +1,5 @@
 """健康检查（含数据库 + LLM 抽象层）。"""
+
 from __future__ import annotations
 
 import logging

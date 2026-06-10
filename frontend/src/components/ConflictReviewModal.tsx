@@ -25,7 +25,7 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
     listConflicts()
       .then((res) => {
         setGroups(res.groups);
-        // 默认选 TRUST_SHEET（保持当前默认行为，最保险）
+        // Default to TRUST_SHEET to preserve the current behavior.
         const initial: DecisionMap = {};
         for (const g of res.groups) {
           initial[g.group_id] = 'TRUST_SHEET';
@@ -75,33 +75,40 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <header className="modal-header">
           <div>
-            <h2>冲突复核</h2>
+            <h2>Conflict review</h2>
             <p className="modal-subtitle">
-              系统在 sheet 名与 A 列内容冲突的行上暂停了导入。请逐组决定使用哪边。
+              These rows have a sheet name that disagrees with column A. Choose the value to trust
+              for each group.
             </p>
           </div>
-          <button
-            type="button"
-            className="modal-close"
-            onClick={onClose}
-            aria-label="关闭"
-          >
-            ✕
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6 6l12 12" />
+              <path d="M18 6L6 18" />
+            </svg>
           </button>
         </header>
 
         <div className="modal-body">
-          {loading && <div className="modal-empty">加载中…</div>}
+          {loading && <div className="modal-empty">Loading conflicts</div>}
 
           {!loading && error && (
             <div className="modal-error">
-              <strong>加载失败：</strong>
+              <strong>Failed to load:</strong>
               <pre>{error}</pre>
             </div>
           )}
 
           {!loading && !error && groups && groups.length === 0 && (
-            <div className="modal-empty">当前没有待复核的冲突 ✓</div>
+            <div className="modal-empty">No conflicts pending review.</div>
           )}
 
           {!loading && groups && groups.length > 0 && (
@@ -112,90 +119,88 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
                   <li key={group.group_id} className="conflict-card">
                     <div className="conflict-header">
                       <strong>{group.sheet_name}</strong>
-                      <span className="conflict-rows">{group.rows.length} 行</span>
+                      <span className="conflict-rows">{group.rows.length} rows</span>
                     </div>
 
                     <div className="conflict-versus">
                       <div className="versus-side">
-                        <span className="versus-label">Sheet 名</span>
+                        <span className="versus-label">Sheet</span>
                         <span className="versus-value">{group.sheet_name}</span>
-                        <span className="versus-arrow">→</span>
-                        <span className="versus-sector">
-                          {group.sheet_sector_code ?? '—'}
+                        <span className="versus-arrow" aria-hidden="true">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M5 12h14" />
+                            <path d="M13 6l6 6-6 6" />
+                          </svg>
                         </span>
+                        <span className="versus-sector">{group.sheet_sector_code ?? '—'}</span>
                       </div>
                       <div className="versus-side">
-                        <span className="versus-label">A 列</span>
-                        <span className="versus-value">
-                          {group.a_column_value ?? '—'}
+                        <span className="versus-label">Column A</span>
+                        <span className="versus-value">{group.a_column_value ?? '—'}</span>
+                        <span className="versus-arrow" aria-hidden="true">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M5 12h14" />
+                            <path d="M13 6l6 6-6 6" />
+                          </svg>
                         </span>
-                        <span className="versus-arrow">→</span>
                         <span className="versus-sector">
-                          {group.a_column_sector_code ?? '无法解析'}
+                          {group.a_column_sector_code ?? 'Unresolved'}
                         </span>
                       </div>
                     </div>
 
                     <div className="conflict-rows-list">
-                      影响行号：
+                      Affected rows:&nbsp;
                       {group.rows
                         .slice(0, 12)
                         .map((r) => `R${r.excel_row_number}`)
                         .join(', ')}
-                      {group.rows.length > 12 && ` … 等 ${group.rows.length} 行`}
+                      {group.rows.length > 12 && ` and ${group.rows.length - 12} more`}
                     </div>
 
                     <div className="decision-row">
-                      <label
-                        className={`decision ${
-                          current === 'TRUST_SHEET' ? 'active' : ''
-                        }`}
-                      >
+                      <label className={`decision ${current === 'TRUST_SHEET' ? 'active' : ''}`}>
                         <input
                           type="radio"
                           name={group.group_id}
                           checked={current === 'TRUST_SHEET'}
-                          onChange={() =>
-                            handleDecisionChange(group.group_id, 'TRUST_SHEET')
-                          }
+                          onChange={() => handleDecisionChange(group.group_id, 'TRUST_SHEET')}
                           disabled={!group.sheet_sector_code}
                         />
-                        <span>
-                          信 sheet（{group.sheet_sector_code ?? '—'}）
-                        </span>
+                        <span>Trust sheet ({group.sheet_sector_code ?? '—'})</span>
                       </label>
-                      <label
-                        className={`decision ${
-                          current === 'TRUST_A' ? 'active' : ''
-                        }`}
-                      >
+                      <label className={`decision ${current === 'TRUST_A' ? 'active' : ''}`}>
                         <input
                           type="radio"
                           name={group.group_id}
                           checked={current === 'TRUST_A'}
-                          onChange={() =>
-                            handleDecisionChange(group.group_id, 'TRUST_A')
-                          }
+                          onChange={() => handleDecisionChange(group.group_id, 'TRUST_A')}
                           disabled={!group.a_column_sector_code}
                         />
-                        <span>
-                          信 A 列（{group.a_column_sector_code ?? '不可用'}）
-                        </span>
+                        <span>Trust column A ({group.a_column_sector_code ?? 'unavailable'})</span>
                       </label>
-                      <label
-                        className={`decision ${
-                          current === 'SKIP' ? 'active skip' : ''
-                        }`}
-                      >
+                      <label className={`decision ${current === 'SKIP' ? 'active skip' : ''}`}>
                         <input
                           type="radio"
                           name={group.group_id}
                           checked={current === 'SKIP'}
-                          onChange={() =>
-                            handleDecisionChange(group.group_id, 'SKIP')
-                          }
+                          onChange={() => handleDecisionChange(group.group_id, 'SKIP')}
                         />
-                        <span>跳过（不导入）</span>
+                        <span>Skip (do not import)</span>
                       </label>
                     </div>
                   </li>
@@ -207,30 +212,19 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
 
         <footer className="modal-footer">
           <span className="modal-meta">
-            共 {groups?.length ?? 0} 组 · {totalRows} 行待处理
+            {groups?.length ?? 0} groups &middot; {totalRows} rows pending
           </span>
           <div className="modal-actions">
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={onClose}
-              disabled={submitting}
-            >
-              稍后再说
+            <button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>
+              Later
             </button>
             <button
               type="button"
               className="btn-primary"
               onClick={handleSubmit}
-              disabled={
-                submitting ||
-                loading ||
-                !groups ||
-                groups.length === 0 ||
-                error !== null
-              }
+              disabled={submitting || loading || !groups || groups.length === 0 || error !== null}
             >
-              {submitting ? '提交中…' : `应用决定（${totalRows} 行）`}
+              {submitting ? 'Applying' : `Apply decisions (${totalRows} rows)`}
             </button>
           </div>
         </footer>

@@ -36,14 +36,15 @@ export interface SheetPreview {
   is_known: boolean;
   sector_code: string | null;
   data_rows: number;
-  column_mapping: SheetColumnMapping | null;
+  /** M5 列对齐结果；标准布局 / 未知 sheet / 旧后端为 null 或缺省 */
+  column_mapping?: SheetColumnMapping | null;
 }
 
 export interface FilePreview {
   file_name: string;
   sheets: SheetPreview[];
-  needs_column_review: boolean;
-  standard_fields: StandardFieldInfo[];
+  needs_column_review?: boolean;
+  standard_fields?: StandardFieldInfo[];
 }
 
 /** 列对齐复核结果：{sheet: {陌生列: 标准列}}，回传给导入接口的 column_overrides。 */
@@ -57,7 +58,7 @@ export interface ImportSheetSummary {
   rows_pending: number;
   issues: number;
   /** M5 列对齐警告（自动对齐启用 / 低置信列被丢弃等），空数组表示快路径 */
-  column_warnings: string[];
+  column_warnings?: string[];
 }
 
 export interface ImportResult {
@@ -71,7 +72,7 @@ export interface ImportResult {
   sheets: ImportSheetSummary[];
   duration_ms: number;
   /** 全文件 M5 列对齐警告汇总（带 sheet 前缀） */
-  column_warnings: string[];
+  column_warnings?: string[];
 }
 
 export interface ConflictRow {
@@ -263,4 +264,23 @@ export interface RawRowDetail {
     imported_at: string;
     note: string | null;
   };
+}
+// ---- Convert (VT -> EcoTEA, from main) ----
+export interface ConvertModelInfo {
+  key: string;
+  label: string;
+  sector: string;
+  description: string | null;
+}
+
+export interface ConvertResult {
+  download_token: string;
+  download_name: string;
+  row_count: number;
+  sheet_name: string;
+  model_key: string;
+  source_file_name: string;
+  template_file_name: string;
+  bytes: number;
+  created_at: string; // ISO datetime
 }

@@ -15,6 +15,7 @@
   * SQL 结果可能有几百行，全部传给 LLM 会超 context window
   * 只取前 MAX_ROWS_FOR_LLM 行 + 统计摘要，避免超额消耗 token
 """
+
 from __future__ import annotations
 
 import json
@@ -28,7 +29,7 @@ from app.llm.provider import get_chat_model
 
 logger = logging.getLogger(__name__)
 
-MAX_ROWS_FOR_LLM = 30   # 最多把这么多行发给 LLM，其余用统计摘要替代
+MAX_ROWS_FOR_LLM = 30  # 最多把这么多行发给 LLM，其余用统计摘要替代
 
 # -----------------------------------------------------------------------------
 # Prompt

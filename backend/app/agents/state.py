@@ -6,6 +6,7 @@
   * 其余字段用最后写入值（LangGraph 默认 last-write-wins）
   * 所有可选字段默认 None，节点负责填写并向后传
 """
+
 from __future__ import annotations
 
 from typing import Annotated, Any
@@ -36,16 +37,16 @@ class AgentState(TypedDict):
     plan: list[str]
 
     # SQL Agent 产物
-    sql_params: dict[str, Any] | None      # app.tools.sql_runner.QueryParams.model_dump()
+    sql_params: dict[str, Any] | None  # app.tools.sql_runner.QueryParams.model_dump()
 
     # run_sql 工具产物
-    sql_result: dict[str, Any] | None      # QueryResult.model_dump()
+    sql_result: dict[str, Any] | None  # QueryResult.model_dump()
 
     # Interpreter 产物
     interpretation: str | None
 
     # Visualizer 产物
-    chart_spec: dict[str, Any] | None      # EChartsSpec.model_dump()
+    chart_spec: dict[str, Any] | None  # EChartsSpec.model_dump()
 
     # 流控
     retry_count: int

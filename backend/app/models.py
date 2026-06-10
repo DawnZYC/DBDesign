@@ -1,7 +1,8 @@
-"""SQLAlchemy ORM 模型 — 与 sql/001_init_schema.sql 一一对应。"""
+"""SQLAlchemy ORM models aligned with sql/001_init_schema.sql."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -33,13 +34,13 @@ class ImportBatch(Base):
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         nullable=False,
     )
     imported_by: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
 
-    raw_rows: Mapped[list["RawExcelRow"]] = relationship(
+    raw_rows: Mapped[list[RawExcelRow]] = relationship(
         back_populates="batch", cascade="all, delete-orphan"
     )
 
@@ -77,7 +78,7 @@ class Sector(Base):
 
 
 # =============================================================================
-# 4. (REMOVED) data_source — 已合并进 traceability_record
+# 4. (REMOVED) data_source, merged into traceability_record
 # =============================================================================
 
 
@@ -93,7 +94,7 @@ class Geography(Base):
 
 
 # =============================================================================
-# 11. commodity（含 VEDA Commodities 字段）
+# 11. commodity, including VEDA Commodities fields
 # =============================================================================
 class Commodity(Base):
     __tablename__ = "commodity"
@@ -102,11 +103,11 @@ class Commodity(Base):
     commodity_code: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     commodity_set: Mapped[str | None] = mapped_column(Text)  # NRG / ENV
     commodity_description: Mapped[str | None] = mapped_column(Text)
-    unit: Mapped[str | None] = mapped_column(Text)            # PJ, kt
-    lim_type: Mapped[str | None] = mapped_column(Text)        # FX
-    cts_lvl: Mapped[str | None] = mapped_column(Text)         # DAYNITE
+    unit: Mapped[str | None] = mapped_column(Text)  # PJ, kt
+    lim_type: Mapped[str | None] = mapped_column(Text)  # FX
+    cts_lvl: Mapped[str | None] = mapped_column(Text)  # DAYNITE
     peak_ts: Mapped[str | None] = mapped_column(Text)
-    ctype: Mapped[str | None] = mapped_column(Text)           # ELC
+    ctype: Mapped[str | None] = mapped_column(Text)  # ELC
 
 
 # =============================================================================

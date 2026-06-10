@@ -1,4 +1,5 @@
 """① lookup_terminology 单测（依赖 DB；RAG 部分用 monkeypatch 替身避免下载模型）。"""
+
 from __future__ import annotations
 
 import os
@@ -19,18 +20,23 @@ from app.tools import terminology as term_mod  # noqa: E402
 def _stub_rag_search(query: str, k: int = 5):
     """RAG 替身：根据 query 返回固定的"语义命中"。"""
     from app.rag.search import SearchHit
+
     if "天然气" in query or "natural gas" in query.lower():
-        return [SearchHit(
-            text="商品代码: PWRNGA | 描述: Power Natural Gas",
-            score=0.85,
-            metadata={"source": "commodity", "code": "PWRNGA"},
-        )]
+        return [
+            SearchHit(
+                text="商品代码: PWRNGA | 描述: Power Natural Gas",
+                score=0.85,
+                metadata={"source": "commodity", "code": "PWRNGA"},
+            )
+        ]
     if "carbon" in query.lower() or "co2" in query.lower():
-        return [SearchHit(
-            text="商品代码: PWRCO2 | 描述: Power CO2",
-            score=0.78,
-            metadata={"source": "commodity", "code": "PWRCO2"},
-        )]
+        return [
+            SearchHit(
+                text="商品代码: PWRCO2 | 描述: Power CO2",
+                score=0.78,
+                metadata={"source": "commodity", "code": "PWRCO2"},
+            )
+        ]
     return []
 
 

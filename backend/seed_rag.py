@@ -9,6 +9,7 @@
   python seed_rag.py --skip-md           # 只灌 PG 字典
   python seed_rag.py --md-file other.md  # 用别的 markdown 替代
 """
+
 from __future__ import annotations
 
 import argparse
@@ -30,12 +31,15 @@ from app.rag.ingest import ingest_dictionary, ingest_markdown
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed RAG knowledge base")
-    parser.add_argument("--reset", action="store_true",
-                        help="先清空 collection 再灌（切 embedding provider 时用）")
-    parser.add_argument("--skip-md", action="store_true",
-                        help="跳过 markdown 灌入")
-    parser.add_argument("--md-file", default="domain_knowledge.md",
-                        help="markdown 文件路径（默认 domain_knowledge.md）")
+    parser.add_argument(
+        "--reset", action="store_true", help="先清空 collection 再灌（切 embedding provider 时用）"
+    )
+    parser.add_argument("--skip-md", action="store_true", help="跳过 markdown 灌入")
+    parser.add_argument(
+        "--md-file",
+        default="domain_knowledge.md",
+        help="markdown 文件路径（默认 domain_knowledge.md）",
+    )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 

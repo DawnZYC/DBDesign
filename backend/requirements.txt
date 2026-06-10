@@ -27,16 +27,20 @@ openai>=1.58.1,<2               # langchain-openai 0.2.x 使用 openai 1.x；避
 tiktoken==0.8.0                 # token 计数 / 费用估算
 
 # --- RAG / 向量库 (M1) ---
+# NOTE: local-embedding deps (sentence-transformers -> torch, ~2 GB) live in
+# requirements-ml.txt. Install them only where local HuggingFace embeddings
+# are actually used:  pip install -r requirements-ml.txt
+# Without them the app still boots; the embedding registry imports lazily.
 numpy==1.26.4
 chromadb==0.5.23                # 向量库（PersistentClient 模式）
 langchain-chroma==0.1.4         # Chroma 与 LangChain Embeddings 的桥接
-langchain-huggingface==0.1.2    # 本地 sentence-transformers 包装（默认 embedding）
-sentence-transformers==3.3.1    # 实际 embedding 算子
-transformers==4.46.3
-huggingface-hub==0.36.2
 langchain-community==0.3.14     # DashScope (Qwen) 等国产 embedding
 
 # --- Agent 编排 / SSE (M3) ---
 langgraph==0.2.62               # LangGraph 状态图编排（节点 / 条件边 / checkpoint）
 sse-starlette==2.1.3            # FastAPI SSE 响应（StreamingResponse 替代）
 tenacity==9.0.0                 # Agent 节点失败重试（指数退避）
+
+# --- Convert (VT -> EcoTEA, from main) ---
+pandas>=2.1
+xlrd>=2.0

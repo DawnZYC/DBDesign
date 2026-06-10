@@ -9,6 +9,7 @@
 M3 的入口走 PEP 562 惰性加载：只有真正访问 build_graph/AgentState 时才 import
 langgraph 相关模块。`from app.agents import schema_mapper` 不会触发这些重依赖。
 """
+
 from __future__ import annotations
 
 from typing import Any

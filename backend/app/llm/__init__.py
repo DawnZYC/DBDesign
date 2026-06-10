@@ -10,6 +10,7 @@
     from app.llm import get_chat_model
     llm = get_chat_model()
 """
+
 from app.llm.provider import (
     PROVIDER_REGISTRY,
     ProviderConfig,

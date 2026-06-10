@@ -1,4 +1,5 @@
 """④ lookup_emission_factor 单测（依赖测试 DB）。"""
+
 from __future__ import annotations
 
 import os
@@ -18,9 +19,13 @@ from app.tools.emission import lookup_emission_factor  # noqa: E402
 
 
 def _call(code: str, year: int, geo: str = "SG") -> dict:
-    return lookup_emission_factor.invoke({
-        "technology_code": code, "year": year, "geography_code": geo,
-    })
+    return lookup_emission_factor.invoke(
+        {
+            "technology_code": code,
+            "year": year,
+            "geography_code": geo,
+        }
+    )
 
 
 def test_exact_year_hit():

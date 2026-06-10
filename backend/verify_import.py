@@ -1,15 +1,15 @@
 """
-端到端逻辑验证脚本（无需 PostgreSQL）。
+End-to-end logic verification script without PostgreSQL.
 
-用一个 MockSession 替代真实 SQLAlchemy Session，捕获所有 db.add()/db.flush()/db.execute()
-调用，统计各表会被插入多少条、内容是否合理。
+Uses MockSession instead of a real SQLAlchemy Session, captures all db.add() /
+db.flush() / db.execute() calls, and reports insert counts and sample content.
 
-用途：
-  - 验证 import_excel() 在你修改逻辑后还能正确处理全部 38 列
-  - 验证清洗规则（占位符 / #VALUE! / 混合文本 / 多商品）
-  - 检查 sheet 名 vs A 列冲突时 sector 是否正确
+Purpose:
+  - Verify import_excel() still handles all 38 columns after logic changes.
+  - Verify cleaning rules for placeholders / #VALUE! / mixed text / multi-commodity rows.
+  - Check sector behavior when sheet name conflicts with column A.
 
-运行：
+Run:
   cd backend && python3 verify_import.py [/path/to/EcoTEA Endo WP1.xlsx]
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ from itertools import count
 from pathlib import Path
 from typing import Any
 
-# 让 app 包可被 import
+# Make the app package importable.
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app import models  # noqa: E402
@@ -33,22 +33,22 @@ _id_seq = count(1)
 
 
 class MockResult:
-    """模拟 db.execute(...) 的返回，目前只用于 ON CONFLICT INSERT。"""
+    """Mock return value for db.execute(...), currently only used for ON CONFLICT INSERT."""
 
     def fetchall(self):
         return []
 
 
 class MockSession:
-    """够用的 SQLAlchemy Session 替身。"""
+    """Minimal SQLAlchemy Session substitute."""
 
     def __init__(self) -> None:
         self.inserts: dict[str, list[Any]] = defaultdict(list)
         self._lookup: dict[tuple[str, tuple], Any] = {}
 
-    # ---- ORM 风格 ----
+    # ---- ORM style ----
     def add(self, obj: Any) -> None:
-        # 给 PK 字段填一个递增 id（如果未被设置）
+        # Fill a primary key field with an incrementing ID if it is unset.
         for pk_field in (
             "import_batch_id",
             "raw_row_id",
@@ -70,7 +70,7 @@ class MockSession:
 
         self.inserts[type(obj).__tablename__].append(obj)
 
-        # 加进查找缓存（给 db.scalar(select(...)) 用）
+        # Add to lookup cache for db.scalar(select(...)).
         for keys in (
             ("sector_code",),
             ("geography_code",),
@@ -95,10 +95,10 @@ class MockSession:
     def close(self) -> None:
         pass
 
-    # ---- 查询 ----
+    # ---- Queries ----
     def scalar(self, stmt: Any) -> Any:
-        """模拟简单的 SELECT ... WHERE x = ? AND y = ?。"""
-        # 解析 stmt：拿到 froms 和 where 子句
+        """Mock a simple SELECT ... WHERE x = ? AND y = ?."""
+        # Parse stmt to obtain froms and where clauses.
         try:
             froms = stmt.get_final_froms()
             table_name = froms[0].name
@@ -106,7 +106,7 @@ class MockSession:
         except Exception:
             return None
 
-        # 查 lookup 缓存
+        # Check lookup cache.
         for keys in (
             ("sector_code",),
             ("geography_code",),
@@ -125,7 +125,7 @@ class MockSession:
         return MockResult()
 
     def scalars(self, stmt: Any) -> list[Any]:
-        """模拟 db.scalars(...).all()。"""
+        """Mock db.scalars(...).all()."""
         try:
             froms = stmt.get_final_froms()
             table_name = froms[0].name
@@ -139,11 +139,11 @@ class MockSession:
         return result
 
     def get(self, model_cls: Any, pk: Any) -> Any:
-        """模拟 db.get(Model, pk)。"""
+        """Mock db.get(Model, pk)."""
         table = getattr(model_cls, "__tablename__", None)
         if table is None:
             return None
-        # 在 inserts[table] 列表里按各种 pk 字段名查找
+        # Look up objects in inserts[table] by known primary key field names.
         for obj in self.inserts.get(table, []):
             for pk_field in (
                 "import_batch_id",
@@ -166,7 +166,7 @@ class MockSession:
 
     @staticmethod
     def _extract_where_kvs(stmt: Any) -> dict[str, Any]:
-        """从 select().where() 的 stmt 里抽出 {column_name: value}。"""
+        """Extract {column_name: value} from a select().where() statement."""
         kvs: dict[str, Any] = {}
         try:
             whereclause = stmt.whereclause
@@ -187,7 +187,7 @@ class MockSession:
 
 
 def _seed_sectors(session: MockSession) -> None:
-    """模拟 schema.sql 里预置的 sector 行。"""
+    """Mock the sector rows seeded by schema.sql."""
     seeds = [
         ("POWER", "Power"),
         ("INDUSTRY", "Industry"),
@@ -208,23 +208,23 @@ def _seed_sectors(session: MockSession) -> None:
 
 
 # -----------------------------------------------------------------------------
-# 主流程
+# Main flow
 # -----------------------------------------------------------------------------
 def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
     if not xlsx_path.exists():
-        sys.exit(f"找不到 Excel 文件：{xlsx_path}")
+        sys.exit(f"Excel file not found: {xlsx_path}")
 
     session = MockSession()
     _seed_sectors(session)
 
     file_bytes = xlsx_path.read_bytes()
-    print(f"\n>>> 开始模拟导入：{xlsx_path.name}（{len(file_bytes):,} bytes）\n")
+    print(f"\n>>> Starting simulated import: {xlsx_path.name} ({len(file_bytes):,} bytes)\n")
 
-    # 顺便测试 preview 接口
+    # Also test the preview interface.
     preview = excel_importer.preview_excel(
         file_bytes=file_bytes, file_name=xlsx_path.name
     )
-    print("== 预览（preview_excel）==")
+    print("== Preview (preview_excel) ==")
     print(f"  {'sheet':<12} {'known':>6} {'sector':>10} {'data_rows':>10}")
     for s in preview.sheets:
         print(
@@ -242,17 +242,17 @@ def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
         selected_sheets=selected_sheets,
     )
 
-    # ---- 整体摘要 ----
-    print(f"== 总览 ==")
-    print(f"  批次 id        : {result.import_batch_id}")
-    print(f"  导入行数        : {result.rows_imported}")
-    print(f"  跳过行数        : {result.rows_skipped}")
+    # ---- Overall summary ----
+    print("== Overview ==")
+    print(f"  batch id        : {result.import_batch_id}")
+    print(f"  imported rows   : {result.rows_imported}")
+    print(f"  skipped rows    : {result.rows_skipped}")
     print(f"  data_quality_issue : {result.issues}")
-    print(f"  耗时           : {result.duration_ms} ms")
+    print(f"  duration        : {result.duration_ms} ms")
     print()
 
-    # ---- 各 sheet 摘要 ----
-    print(f"== 各 sheet 摘要 ==")
+    # ---- Per-sheet summary ----
+    print("== Per-sheet Summary ==")
     print(
         f"  {'sheet':<12} {'rows_total':>10} {'imported':>10} {'skipped':>9} {'issues':>8}"
     )
@@ -263,8 +263,8 @@ def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
         )
     print()
 
-    # ---- 各表插入数 ----
-    print(f"== 各表插入条数 ==")
+    # ---- Insert counts by table ----
+    print("== Insert Counts by Table ==")
     table_order = [
         "import_batch",
         "raw_excel_row",
@@ -287,12 +287,12 @@ def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
         print(f"  {marker} {tbl:<40} {cnt:>6}")
     print()
 
-    # ---- 抽样：多商品行 ----
+    # ---- Sample: multi-commodity rows ----
     multi_commodity_groups = defaultdict(list)
     for tyc in session.inserts.get("technology_year_commodity", []):
         multi_commodity_groups[tyc.technology_year_id].append(tyc)
     multi = {k: v for k, v in multi_commodity_groups.items() if len(v) > 1}
-    print(f"== 多商品组合行（应该有 PWRBMS+PWACOA 这类）：{len(multi)} 组 ==")
+    print(f"== Multi-commodity rows, such as PWRBMS+PWACOA: {len(multi)} groups ==")
     commodity_by_id = {c.commodity_id: c for c in session.inserts.get("commodity", [])}
     for ty_id, items in list(multi.items())[:5]:
         codes = [
@@ -305,17 +305,17 @@ def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
         print(f"  technology_year_id={ty_id}: codes={codes} shares={shares}")
     print()
 
-    # ---- 抽样：data_quality_issue ----
+    # ---- Sample: data_quality_issue ----
     issues_by_type = Counter(
         it.issue_type for it in session.inserts.get("data_quality_issue", [])
     )
-    print(f"== data_quality_issue 类型分布 ==")
+    print("== data_quality_issue Type Distribution ==")
     for issue_type, cnt in issues_by_type.most_common():
         print(f"  {issue_type:<20} {cnt:>4}")
     print()
 
-    # 列出前几条以便核对
-    print(f"== data_quality_issue 抽样（前 5 条）==")
+    # Print the first few rows for checking.
+    print("== data_quality_issue Sample (first 5 rows) ==")
     for it in session.inserts.get("data_quality_issue", [])[:5]:
         print(
             f"  sheet={it.source_sheet_name} row={it.excel_row_number} "
@@ -324,8 +324,8 @@ def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
         )
     print()
 
-    # ---- 抽样：sector 解决（特别检查 Agri 的 wp_title_raw='Building' 异常）----
-    print(f"== Agri sheet 第 10 行（A 列 vs sheet 名冲突）==")
+    # ---- Sample: sector resolution, especially Agri row 10 with wp_title_raw='Building'. ----
+    print("== Agri sheet row 10 (column A vs sheet name conflict) ==")
     for trace in session.inserts.get("traceability_record", []):
         if trace.source_sheet_name == "Agri" and trace.source_excel_row == 10:
             sector_obj = next(
@@ -336,23 +336,23 @@ def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
                 ),
                 None,
             )
-            print(f"  wp_title_raw (A 列) = {trace.wp_title_raw!r}")
+            print(f"  wp_title_raw (column A) = {trace.wp_title_raw!r}")
             print(f"  source_sheet_name   = {trace.source_sheet_name!r}")
             print(
                 f"  sector_id           = {trace.sector_id} "
                 f"({sector_obj.sector_code if sector_obj else '?'})"
             )
             print(
-                "  → 期望 sector_code = AGRI（以 sheet 名为权威，wp_title_raw 仅审计）"
+                "  -> expected sector_code = AGRI; sheet name is authoritative and wp_title_raw is audit-only"
             )
             break
 
-    # ---- 抽样：sector 冲突待复核 ----
+    # ---- Sample: sector conflicts pending review ----
     pending_rows = [
         r for r in session.inserts.get("raw_excel_row", [])
         if r.normalized_status == "pending_sector_review"
     ]
-    print(f"\n== sector 冲突待复核（pending_sector_review）：{len(pending_rows)} 行 ==")
+    print(f"\n== Sector Conflicts Pending Review (pending_sector_review): {len(pending_rows)} rows ==")
     for r in pending_rows[:3]:
         a_val = r.raw_cells.get("A") if r.raw_cells else None
         print(
@@ -360,7 +360,7 @@ def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
             f"row={r.excel_row_number} A={a_val!r}"
         )
 
-    # ---- 测试 list_pending_conflicts ----
+    # ---- Test list_pending_conflicts ----
     print(f"\n== list_pending_conflicts() ==")
     conflict_response = excel_importer.list_pending_conflicts(session)
     print(f"  total_pending = {conflict_response.total_pending}")
@@ -368,10 +368,10 @@ def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
     for g in conflict_response.groups[:3]:
         print(
             f"  - sheet={g.sheet_name} ({g.sheet_sector_code}) "
-            f"vs A='{g.a_column_value}' ({g.a_column_sector_code}) — {len(g.rows)} 行"
+            f"vs A='{g.a_column_value}' ({g.a_column_sector_code}) - {len(g.rows)} rows"
         )
 
-    # ---- 测试 resolve_pending_conflicts: TRUST_SHEET ----
+    # ---- Test resolve_pending_conflicts: TRUST_SHEET ----
     if pending_rows:
         from app.schemas import ConflictResolution
         resolutions = [
@@ -381,14 +381,14 @@ def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
         resolve_resp = excel_importer.resolve_pending_conflicts(
             session, resolutions=resolutions
         )
-        print(f"\n== 提交 TRUST_SHEET 决定后 ==")
+        print("\n== After Submitting TRUST_SHEET Decisions ==")
         print(f"  resolved={resolve_resp.resolved} failed={resolve_resp.failed}")
 
-        # 再查一次 pending — 应该归零
+        # Query pending rows again; this should be zero.
         after = excel_importer.list_pending_conflicts(session)
-        print(f"  剩余 pending = {after.total_pending}")
+        print(f"  remaining pending = {after.total_pending}")
 
-    print("\n>>> 完成。")
+    print("\n>>> Done.")
 
 
 if __name__ == "__main__":
@@ -397,9 +397,9 @@ if __name__ == "__main__":
         if len(sys.argv) > 1
         else "/sessions/relaxed-beautiful-hamilton/mnt/uploads/EcoTEA Endo WP1.xlsx"
     )
-    # 第二个参数：可选的 sheet 白名单（逗号分隔），用于验证「按 sheet 选择导入」
+    # Second argument: optional comma-separated sheet allowlist for testing selected-sheet imports.
     selected: list[str] | None = None
     if len(sys.argv) > 2:
         selected = [s.strip() for s in sys.argv[2].split(",") if s.strip()]
-        print(f"\n>>> 仅导入这些 sheet：{selected}\n")
+        print(f"\n>>> Importing only these sheets: {selected}\n")
     main(xlsx, selected_sheets=selected)

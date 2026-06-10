@@ -44,7 +44,7 @@ export function SheetPicker({
         <div>
           <strong>{fileName}</strong>
           <span className="sheet-picker-meta">
-            {knownSheets.length} 个可识别 sheet · 共 {sheets.length} 个
+            {knownSheets.length} recognized of {sheets.length} sheets
           </span>
         </div>
         <label className="select-all">
@@ -54,7 +54,7 @@ export function SheetPicker({
             onChange={toggleAll}
             disabled={disabled || knownSheets.length === 0}
           />
-          全选
+          Select all recognized
         </label>
       </header>
 
@@ -76,14 +76,21 @@ export function SheetPicker({
                   disabled={disabled || !sheet.is_known}
                 />
                 <span className="sheet-name">{sheet.sheet_name}</span>
-                {sheet.sector_code && (
+                {sheet.sector_code ? (
                   <span className="sheet-sector">{sheet.sector_code}</span>
+                ) : (
+                  <span />
                 )}
-                <span className="sheet-rows">{sheet.data_rows} 行数据</span>
-                {!sheet.is_known && (
-                  <span className="sheet-warn" title="未在已知映射表中，将被跳过">
-                    未识别
+                <span className="sheet-rows">{sheet.data_rows} data rows</span>
+                {!sheet.is_known ? (
+                  <span
+                    className="sheet-warn"
+                    title="This sheet is not in the recognized mapping and will be skipped."
+                  >
+                    Unrecognized
                   </span>
+                ) : (
+                  <span />
                 )}
               </label>
             </li>

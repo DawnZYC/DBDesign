@@ -1,10 +1,12 @@
 """工具基础设施：日志 hook、错误信封、便捷的 @tool 包装。"""
+
 from __future__ import annotations
 
 import functools
 import logging
 import time
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,7 @@ def with_observability(name: str) -> Callable[[Callable[..., T]], Callable[..., 
     Agent 系统接入 LangSmith 之后，每次工具调用都会自动转 trace span。
     在没有 LangSmith 的本地开发环境，至少也能看到 stdout 日志。
     """
+
     def decorator(fn: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> T:

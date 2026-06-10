@@ -15,6 +15,7 @@
   - capacity（来自 technology_year_constraint）
   - commodity_demand_value（来自 technology_year_commodity）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -126,14 +127,10 @@ class QueryResult(BaseModel):
     rows: list[dict[str, Any]]
     metric: MetricName
     aggregation: Aggregation
-    metric_unit: str | None = Field(
-        default=None, description="结果中最常见的单位（多种时取众数）"
-    )
+    metric_unit: str | None = Field(default=None, description="结果中最常见的单位（多种时取众数）")
     row_count: int
     truncated: bool = Field(default=False, description="是否触达 limit 被截断")
-    sql_summary: str = Field(
-        default="", description="人类可读的查询摘要（debug / trace 用）"
-    )
+    sql_summary: str = Field(default="", description="人类可读的查询摘要（debug / trace 用）")
 
 
 # -----------------------------------------------------------------------------
@@ -157,25 +154,37 @@ def _build_query(params: QueryParams) -> tuple[Select, list[str]]:
 
     if params.aggregation == "raw":
         # 原始行：必带 raw_row_id 用于反查
-        select_cols.extend([
-            ty.data_year.label("data_year"),
-            tp.technology_code.label("technology_code"),
-            sector.sector_code.label("sector_code"),
-            sector.sector_name.label("sector_name"),
-            geo.geography_code.label("geography_code"),
-            ty.raw_row_id.label("raw_row_id"),
-            value_col.label("value"),
-        ])
-        col_names = ["data_year", "technology_code", "sector_code",
-                     "sector_name", "geography_code", "raw_row_id", "value"]
+        select_cols.extend(
+            [
+                ty.data_year.label("data_year"),
+                tp.technology_code.label("technology_code"),
+                sector.sector_code.label("sector_code"),
+                sector.sector_name.label("sector_name"),
+                geo.geography_code.label("geography_code"),
+                ty.raw_row_id.label("raw_row_id"),
+                value_col.label("value"),
+            ]
+        )
+        col_names = [
+            "data_year",
+            "technology_code",
+            "sector_code",
+            "sector_name",
+            "geography_code",
+            "raw_row_id",
+            "value",
+        ]
         if info.unit_col is not None:
             select_cols.append(info.unit_col.label("unit"))
             col_names.append("unit")
     else:
         # 聚合
         agg_func = {
-            "sum": func.sum, "avg": func.avg, "min": func.min,
-            "max": func.max, "count": func.count,
+            "sum": func.sum,
+            "avg": func.avg,
+            "min": func.min,
+            "max": func.max,
+            "count": func.count,
         }[params.aggregation]
         select_cols.append(agg_func(value_col).label("value"))
         col_names.append("value")
@@ -198,9 +207,7 @@ def _build_query(params: QueryParams) -> tuple[Select, list[str]]:
 
     # 如果 metric 是 commodity_demand_value，还要 join commodity 表（可选，用于过滤）
     if params.metric == "commodity_demand_value" and params.commodity_codes:
-        stmt = stmt.join(
-            models.Commodity, models.Commodity.commodity_id == _CM.commodity_id
-        )
+        stmt = stmt.join(models.Commodity, models.Commodity.commodity_id == _CM.commodity_id)
 
     # ---- WHERE ----
     where: list[Any] = [value_col.is_not(None)]  # 永远过滤掉 NULL 指标
@@ -234,9 +241,7 @@ def _build_query(params: QueryParams) -> tuple[Select, list[str]]:
     return stmt, col_names
 
 
-def _resolve_group_by(
-    gb: list[GroupBy], sector, geo, tp, ty
-) -> list[tuple[str, Any]]:
+def _resolve_group_by(gb: list[GroupBy], sector, geo, tp, ty) -> list[tuple[str, Any]]:
     mapping = {
         "sector": ("sector_code", sector.sector_code),
         "geography": ("geography_code", geo.geography_code),
@@ -260,7 +265,7 @@ def _execute(db: Session, params: QueryParams) -> QueryResult:
 
     truncated = len(rows_list) > effective_limit
     if truncated:
-        rows_list = rows_list[:effective_limit]   # 去掉多取的那 1 行
+        rows_list = rows_list[:effective_limit]  # 去掉多取的那 1 行
 
     # 单位推断（取众数）
     unit: str | None = None
@@ -271,13 +276,18 @@ def _execute(db: Session, params: QueryParams) -> QueryResult:
 
     # SQL 摘要（人类可读）
     summary_parts = [f"metric={params.metric}", f"agg={params.aggregation}"]
-    if params.sector_codes: summary_parts.append(f"sectors={params.sector_codes}")
-    if params.geography_codes: summary_parts.append(f"geo={params.geography_codes}")
-    if params.technology_codes: summary_parts.append(f"techs={params.technology_codes}")
-    if params.technology_code_like: summary_parts.append(f"tech~{params.technology_code_like}")
+    if params.sector_codes:
+        summary_parts.append(f"sectors={params.sector_codes}")
+    if params.geography_codes:
+        summary_parts.append(f"geo={params.geography_codes}")
+    if params.technology_codes:
+        summary_parts.append(f"techs={params.technology_codes}")
+    if params.technology_code_like:
+        summary_parts.append(f"tech~{params.technology_code_like}")
     if params.year_min or params.year_max:
         summary_parts.append(f"years={params.year_min or '*'}..{params.year_max or '*'}")
-    if params.group_by: summary_parts.append(f"group_by={params.group_by}")
+    if params.group_by:
+        summary_parts.append(f"group_by={params.group_by}")
 
     return QueryResult(
         rows=rows_list,

@@ -1,4 +1,5 @@
 """RAG 检索接口。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,7 +13,7 @@ class SearchHit:
     """单条检索命中结果。"""
 
     text: str
-    score: float          # 相似度（已转为「越大越相关」）
+    score: float  # 相似度（已转为「越大越相关」）
     metadata: dict[str, Any]
 
 
@@ -30,9 +31,11 @@ def search(query: str, k: int = 5) -> list[SearchHit]:
         # Chroma 默认走 cosine distance（0 = 完全相同，2 = 完全相反）
         # 这里转成 score = 1 - distance / 2 让前端更直观
         score = max(0.0, min(1.0, 1.0 - float(distance) / 2.0))
-        hits.append(SearchHit(
-            text=doc.page_content,
-            score=score,
-            metadata=dict(doc.metadata or {}),
-        ))
+        hits.append(
+            SearchHit(
+                text=doc.page_content,
+                score=score,
+                metadata=dict(doc.metadata or {}),
+            )
+        )
     return hits

@@ -5,6 +5,7 @@
   - 单例 vectorstore，按当前 embedding provider 自动注入
   - 切换 embedding provider 时，旧 collection 维度会不匹配 — 提供 reset_collection() 一键清空
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,11 +58,13 @@ def reset_collection() -> None:
         # 通过 chromadb 客户端 API 删 collection 更安全
         try:
             import chromadb
+
             client = chromadb.PersistentClient(path=str(persist_dir))
             try:
                 client.delete_collection(name=settings.chroma_collection_name)
-                logger.info("Deleted existing Chroma collection: %s",
-                            settings.chroma_collection_name)
+                logger.info(
+                    "Deleted existing Chroma collection: %s", settings.chroma_collection_name
+                )
             except Exception:  # noqa: BLE001
                 logger.info("No existing collection to delete (ok)")
         except Exception as exc:  # noqa: BLE001

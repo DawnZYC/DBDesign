@@ -1,75 +1,129 @@
 import { useEffect, useState } from 'react';
 import { BrowseView } from './components/BrowseView';
+import { ConvertView } from './components/ConvertView';
 import { ImportView } from './components/ImportView';
 import { ChatPage } from './pages/ChatPage';
 import { checkHealth } from './api';
+import type { ConvertResult } from './types';
 
-type HealthState =
-  | { status: 'checking' }
-  | { status: 'ok'; database: string }
-  | { status: 'error'; message: string };
+type HealthState = { status: 'checking' } | { status: 'ok' } | { status: 'error' };
 
-type Tab = 'chat' | 'import' | 'browse';
+type Tab = 'chat' | 'convert' | 'import' | 'browse';
+
+const HEALTH_LABEL: Record<HealthState['status'], string> = {
+  checking: 'Connecting',
+  ok: 'Online',
+  error: 'Service unavailable',
+};
+
+const STEPS: Array<{ id: Tab; index: string; title: string; description: string }> = [
+  {
+    id: 'chat',
+    index: '01',
+    title: 'AI Assistant',
+    description: 'Ask in natural language; agents query, interpret, and chart.',
+  },
+  {
+    id: 'convert',
+    index: '02',
+    title: 'Convert',
+    description: 'Map VT model files to the unified EcoTEA workbook.',
+  },
+  {
+    id: 'import',
+    index: '03',
+    title: 'Import',
+    description: 'Load EcoTEA workbooks into the database.',
+  },
+  {
+    id: 'browse',
+    index: '04',
+    title: 'Browse',
+    description: 'Search and inspect technology records.',
+  },
+];
 
 function App() {
   const [health, setHealth] = useState<HealthState>({ status: 'checking' });
-  // M4: 默认进入 AI 助手（原来是 'import'）
   const [activeTab, setActiveTab] = useState<Tab>('chat');
+  const [pendingConversion, setPendingConversion] = useState<ConvertResult | null>(null);
 
   useEffect(() => {
     checkHealth()
-      .then((res) => setHealth({ status: 'ok', database: res.database }))
-      .catch((err) => setHealth({ status: 'error', message: (err as Error).message }));
+      .then(() => setHealth({ status: 'ok' }))
+      .catch(() => setHealth({ status: 'error' }));
   }, []);
 
+  const handleHandoffToImport = (result: ConvertResult) => {
+    setPendingConversion(result);
+    setActiveTab('import');
+  };
+
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>SG-TIMES</h1>
-        <nav className="tab-nav">
-          <button
-            type="button"
-            className={`tab ${activeTab === 'chat' ? 'active' : ''}`}
-            onClick={() => setActiveTab('chat')}
-          >
-            AI 助手
-          </button>
-          <button
-            type="button"
-            className={`tab ${activeTab === 'browse' ? 'active' : ''}`}
-            onClick={() => setActiveTab('browse')}
-          >
-            数据浏览
-          </button>
-          <button
-            type="button"
-            className={`tab ${activeTab === 'import' ? 'active' : ''}`}
-            onClick={() => setActiveTab('import')}
-          >
-            数据接入
-          </button>
+    <div className="app-shell">
+      <aside className="sidebar" aria-label="Workflow steps">
+        <div className="sidebar-brand">
+          <div className="brand-mark" aria-hidden="true">
+            EW
+          </div>
+          <div className="brand-text">
+            <div className="brand-title">SG-TIMES</div>
+            <div className="brand-subtitle">Technology &amp; Cost Database</div>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav" aria-label="Primary">
+          {STEPS.map((step) => {
+            const isActive = activeTab === step.id;
+            return (
+              <button
+                key={step.id}
+                type="button"
+                className={`sidebar-step ${isActive ? 'active' : ''}`}
+                onClick={() => setActiveTab(step.id)}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <span className="step-index">{step.index}</span>
+                <span className="step-content">
+                  <span className="step-title">{step.title}</span>
+                  <span className="step-description">{step.description}</span>
+                </span>
+              </button>
+            );
+          })}
         </nav>
-        <span className={`health-pill health-${health.status}`}>
-          {health.status === 'checking' && '后端检测中…'}
-          {health.status === 'ok' && `后端正常 · DB ${health.database}`}
-          {health.status === 'error' && `后端异常：${health.message}`}
-        </span>
-      </header>
+
+        <div className="sidebar-footer">
+          <span
+            className={`health-indicator health-${health.status}`}
+            role="status"
+            aria-live="polite"
+          >
+            <span className="health-dot" aria-hidden="true" />
+            {HEALTH_LABEL[health.status]}
+          </span>
+        </div>
+      </aside>
 
       <main className="app-main">
-        {activeTab === 'chat' && <ChatPage />}
-        {activeTab === 'browse' && <BrowseView />}
-        {activeTab === 'import' && <ImportView />}
-      </main>
+        <header className="page-header">
+          <div>
+            <div className="page-eyebrow">{STEPS.find((s) => s.id === activeTab)?.index}</div>
+            <h1 className="page-title">{STEPS.find((s) => s.id === activeTab)?.title}</h1>
+            <p className="page-description">{STEPS.find((s) => s.id === activeTab)?.description}</p>
+          </div>
+        </header>
 
-      <footer className="app-footer">
-        <a href="/api/health" target="_blank" rel="noreferrer">
-          /api/health
-        </a>
-        <a href="http://localhost:8000/docs" target="_blank" rel="noreferrer">
-          API 文档
-        </a>
-      </footer>
+        {activeTab === 'chat' && <ChatPage />}
+        {activeTab === 'convert' && <ConvertView onHandoffToImport={handleHandoffToImport} />}
+        {activeTab === 'import' && (
+          <ImportView
+            handoff={pendingConversion}
+            onHandoffConsumed={() => setPendingConversion(null)}
+          />
+        )}
+        {activeTab === 'browse' && <BrowseView />}
+      </main>
     </div>
   );
 }

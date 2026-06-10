@@ -25,12 +25,14 @@
   * LLM 后端：llm.with_structured_output(ColumnMapping)，强类型、防幻觉字段。
   * 确定性后端：纯 token/别名匹配，**无需 API key**，供 CI / 离线 / LLM 失败兜底。
 """
+
 from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field as dc_field
-from typing import Iterable
+from collections.abc import Iterable
+from dataclasses import dataclass
+from dataclasses import field as dc_field
 
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
@@ -51,106 +53,242 @@ PRIMARY_HEADER_ROW = 2
 # -----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class FieldSpec:
-    field: str          # 标准字段名（业务语义）
-    column: str         # 标准列位（Excel 列字母，importer 硬编码的那个）
-    label: str          # 模板主表头（row 2）
-    description: str     # 给 LLM 的字段说明
+    field: str  # 标准字段名（业务语义）
+    column: str  # 标准列位（Excel 列字母，importer 硬编码的那个）
+    label: str  # 模板主表头（row 2）
+    description: str  # 给 LLM 的字段说明
     aliases: tuple[str, ...] = dc_field(default_factory=tuple)
 
 
 STANDARD_FIELDS: tuple[FieldSpec, ...] = (
-    FieldSpec("wp_title", "A", "WP6 Title", "工作包标题 / 所属部门标签（也是 sector 文本来源）",
-              ("wp title", "wp6 title", "sector", "work package", "title")),
-    FieldSpec("data_owner", "B", "data owner", "数据所有者",
-              ("owner", "owner of data", "data owner")),
-    FieldSpec("data_provider", "C", "data provider", "数据提供方",
-              ("provider", "data provider", "source provider")),
-    FieldSpec("data_source", "D", "data source", "数据来源 / 模型运行名",
-              ("source", "data source", "model run name", "dataset")),
-    FieldSpec("data_source_description", "E", "data source description", "数据来源描述",
-              ("source description", "data source desc", "source desc")),
-    FieldSpec("data_user", "F", "data user", "数据使用方",
-              ("user", "data user")),
-    FieldSpec("usage_purpose", "G", "usage purpose", "使用目的",
-              ("purpose", "usage", "usage purpose")),
-    FieldSpec("technology_code", "H", "technology/process", "技术 / 工艺代码（anchor 主键）",
-              ("technology", "process", "tech", "asset name", "technology/process",
-               "tech code", "technology code")),
-    FieldSpec("technology_description", "I", "technology/process description",
-              "技术 / 工艺描述",
-              ("technology description", "process description", "asset description",
-               "tech desc")),
-    FieldSpec("geography", "J", "Geography", "地理 / 国家 / 区域",
-              ("geography", "country", "region", "geo")),
-    FieldSpec("data_year", "K", "year of data", "数据年份（anchor 的时间维）",
-              ("year", "year of data", "data year")),
-    FieldSpec("technology_start_year", "L", "Technology Start Year",
-              "技术最早建设 / 起始年",
-              ("start year", "technology start year", "earliest build year",
-               "ncap_start")),
-    FieldSpec("technology_lifetime_years", "M", "technology lifetime (years)",
-              "技术寿命（年）",
-              ("lifetime", "technology lifetime", "tlife", "ncap_tlife")),
-    FieldSpec("grade", "N", "Grade", "等级 / 分级",
-              ("grade",)),
-    FieldSpec("emission_factor", "O", "ef", "排放因子",
-              ("ef", "emission factor", "emissions factor", "vda_emcb", "emcb")),
-    FieldSpec("emission_factor_unit", "P", "ef ref unit", "排放因子参考单位",
-              ("ef unit", "ef ref unit", "emission factor unit")),
-    FieldSpec("base_currency", "Q", "base currency", "基准货币（分子）",
-              ("currency", "base currency", "numerator currency")),
-    FieldSpec("capex", "R", "capex", "资本支出",
-              ("capex", "build cost", "investment", "capital cost", "ncap_cost",
-               "capital expenditure")),
-    FieldSpec("capex_unit", "S", "capex ref unit", "capex 参考单位（分母）",
-              ("capex unit", "capex ref unit", "capacity unit")),
-    FieldSpec("fixed_opex", "T", "fixed opex", "固定运维成本",
-              ("fixed opex", "fom", "fo&m", "fixed o&m", "ncap_fom",
-               "fixed operating cost")),
-    FieldSpec("fixed_opex_unit", "U", "fixed opex ref unit", "固定运维参考单位",
-              ("fixed opex unit", "fom unit", "fixed opex ref unit")),
-    FieldSpec("variable_opex", "V", "variable opex", "可变运维成本",
-              ("variable opex", "vom", "vo&m", "act_cost", "variable operating cost")),
-    FieldSpec("variable_opex_unit", "W", "variable opex ref unit", "可变运维参考单位",
-              ("variable opex unit", "vom unit", "variable opex ref unit",
-               "activity unit")),
-    FieldSpec("tax_cost", "X", "Tax cost", "税成本",
-              ("tax", "tax cost")),
-    FieldSpec("subsidy_cost", "Y", "Sub cost", "补贴成本",
-              ("subsidy", "sub cost", "subsidy cost")),
-    FieldSpec("efficiency", "Z", "efficiency", "效率（WP 特定技术描述）",
-              ("efficiency", "act_eff", "eff")),
-    FieldSpec("technology_efficiency", "AA", "technology efficiency", "技术效率",
-              ("technology efficiency", "tech efficiency")),
-    FieldSpec("commodity_share", "AB", "commodity share", "商品份额",
-              ("commodity share", "flo_share", "share", "by energy use")),
-    FieldSpec("commodity_code", "AC", "commodity", "商品代码",
-              ("commodity", "commodity code", "fuel")),
-    FieldSpec("commodity_demand", "AD", "Commodity Demand", "商品需求量",
-              ("commodity demand", "demand")),
-    FieldSpec("interpolation_rule", "AE", "Interpolation rule", "插值规则",
-              ("interpolation rule", "interpolation", "interp rule")),
-    FieldSpec("capacity_to_activity_factor", "AF", "capacity to activity factor",
-              "容量到活动转换系数",
-              ("capacity to activity factor", "afa", "c2a")),
-    FieldSpec("heat_rate", "AG", "heat rate", "热耗率",
-              ("heat rate", "heatrate")),
-    FieldSpec("capacity", "AH", "capacity", "容量约束值",
-              ("capacity", "wp1 constraints", "capacity constraint")),
-    FieldSpec("bound_type", "AI", "capacity type", "容量约束类型（fixed/up/lo）",
-              ("capacity type", "bound type", "capacity constraint type")),
-    FieldSpec("max_import_possible", "AJ", "max import possible", "最大可进口量",
-              ("max import possible", "act_bnd", "max import")),
-    FieldSpec("max_solar_output_allowed", "AK", "max solar output allowed",
-              "最大允许太阳能出力",
-              ("max solar output allowed", "uc_rhsrt", "max solar output")),
+    FieldSpec(
+        "wp_title",
+        "A",
+        "WP6 Title",
+        "工作包标题 / 所属部门标签（也是 sector 文本来源）",
+        ("wp title", "wp6 title", "sector", "work package", "title"),
+    ),
+    FieldSpec(
+        "data_owner", "B", "data owner", "数据所有者", ("owner", "owner of data", "data owner")
+    ),
+    FieldSpec(
+        "data_provider",
+        "C",
+        "data provider",
+        "数据提供方",
+        ("provider", "data provider", "source provider"),
+    ),
+    FieldSpec(
+        "data_source",
+        "D",
+        "data source",
+        "数据来源 / 模型运行名",
+        ("source", "data source", "model run name", "dataset"),
+    ),
+    FieldSpec(
+        "data_source_description",
+        "E",
+        "data source description",
+        "数据来源描述",
+        ("source description", "data source desc", "source desc"),
+    ),
+    FieldSpec("data_user", "F", "data user", "数据使用方", ("user", "data user")),
+    FieldSpec(
+        "usage_purpose", "G", "usage purpose", "使用目的", ("purpose", "usage", "usage purpose")
+    ),
+    FieldSpec(
+        "technology_code",
+        "H",
+        "technology/process",
+        "技术 / 工艺代码（anchor 主键）",
+        (
+            "technology",
+            "process",
+            "tech",
+            "asset name",
+            "technology/process",
+            "tech code",
+            "technology code",
+        ),
+    ),
+    FieldSpec(
+        "technology_description",
+        "I",
+        "technology/process description",
+        "技术 / 工艺描述",
+        ("technology description", "process description", "asset description", "tech desc"),
+    ),
+    FieldSpec(
+        "geography",
+        "J",
+        "Geography",
+        "地理 / 国家 / 区域",
+        ("geography", "country", "region", "geo"),
+    ),
+    FieldSpec(
+        "data_year",
+        "K",
+        "year of data",
+        "数据年份（anchor 的时间维）",
+        ("year", "year of data", "data year"),
+    ),
+    FieldSpec(
+        "technology_start_year",
+        "L",
+        "Technology Start Year",
+        "技术最早建设 / 起始年",
+        ("start year", "technology start year", "earliest build year", "ncap_start"),
+    ),
+    FieldSpec(
+        "technology_lifetime_years",
+        "M",
+        "technology lifetime (years)",
+        "技术寿命（年）",
+        ("lifetime", "technology lifetime", "tlife", "ncap_tlife"),
+    ),
+    FieldSpec("grade", "N", "Grade", "等级 / 分级", ("grade",)),
+    FieldSpec(
+        "emission_factor",
+        "O",
+        "ef",
+        "排放因子",
+        ("ef", "emission factor", "emissions factor", "vda_emcb", "emcb"),
+    ),
+    FieldSpec(
+        "emission_factor_unit",
+        "P",
+        "ef ref unit",
+        "排放因子参考单位",
+        ("ef unit", "ef ref unit", "emission factor unit"),
+    ),
+    FieldSpec(
+        "base_currency",
+        "Q",
+        "base currency",
+        "基准货币（分子）",
+        ("currency", "base currency", "numerator currency"),
+    ),
+    FieldSpec(
+        "capex",
+        "R",
+        "capex",
+        "资本支出",
+        ("capex", "build cost", "investment", "capital cost", "ncap_cost", "capital expenditure"),
+    ),
+    FieldSpec(
+        "capex_unit",
+        "S",
+        "capex ref unit",
+        "capex 参考单位（分母）",
+        ("capex unit", "capex ref unit", "capacity unit"),
+    ),
+    FieldSpec(
+        "fixed_opex",
+        "T",
+        "fixed opex",
+        "固定运维成本",
+        ("fixed opex", "fom", "fo&m", "fixed o&m", "ncap_fom", "fixed operating cost"),
+    ),
+    FieldSpec(
+        "fixed_opex_unit",
+        "U",
+        "fixed opex ref unit",
+        "固定运维参考单位",
+        ("fixed opex unit", "fom unit", "fixed opex ref unit"),
+    ),
+    FieldSpec(
+        "variable_opex",
+        "V",
+        "variable opex",
+        "可变运维成本",
+        ("variable opex", "vom", "vo&m", "act_cost", "variable operating cost"),
+    ),
+    FieldSpec(
+        "variable_opex_unit",
+        "W",
+        "variable opex ref unit",
+        "可变运维参考单位",
+        ("variable opex unit", "vom unit", "variable opex ref unit", "activity unit"),
+    ),
+    FieldSpec("tax_cost", "X", "Tax cost", "税成本", ("tax", "tax cost")),
+    FieldSpec("subsidy_cost", "Y", "Sub cost", "补贴成本", ("subsidy", "sub cost", "subsidy cost")),
+    FieldSpec(
+        "efficiency", "Z", "efficiency", "效率（WP 特定技术描述）", ("efficiency", "act_eff", "eff")
+    ),
+    FieldSpec(
+        "technology_efficiency",
+        "AA",
+        "technology efficiency",
+        "技术效率",
+        ("technology efficiency", "tech efficiency"),
+    ),
+    FieldSpec(
+        "commodity_share",
+        "AB",
+        "commodity share",
+        "商品份额",
+        ("commodity share", "flo_share", "share", "by energy use"),
+    ),
+    FieldSpec(
+        "commodity_code", "AC", "commodity", "商品代码", ("commodity", "commodity code", "fuel")
+    ),
+    FieldSpec(
+        "commodity_demand", "AD", "Commodity Demand", "商品需求量", ("commodity demand", "demand")
+    ),
+    FieldSpec(
+        "interpolation_rule",
+        "AE",
+        "Interpolation rule",
+        "插值规则",
+        ("interpolation rule", "interpolation", "interp rule"),
+    ),
+    FieldSpec(
+        "capacity_to_activity_factor",
+        "AF",
+        "capacity to activity factor",
+        "容量到活动转换系数",
+        ("capacity to activity factor", "afa", "c2a"),
+    ),
+    FieldSpec("heat_rate", "AG", "heat rate", "热耗率", ("heat rate", "heatrate")),
+    FieldSpec(
+        "capacity",
+        "AH",
+        "capacity",
+        "容量约束值",
+        ("capacity", "wp1 constraints", "capacity constraint"),
+    ),
+    FieldSpec(
+        "bound_type",
+        "AI",
+        "capacity type",
+        "容量约束类型（fixed/up/lo）",
+        ("capacity type", "bound type", "capacity constraint type"),
+    ),
+    FieldSpec(
+        "max_import_possible",
+        "AJ",
+        "max import possible",
+        "最大可进口量",
+        ("max import possible", "act_bnd", "max import"),
+    ),
+    FieldSpec(
+        "max_solar_output_allowed",
+        "AK",
+        "max solar output allowed",
+        "最大允许太阳能出力",
+        ("max solar output allowed", "uc_rhsrt", "max solar output"),
+    ),
     # 注意：label 必须与模板 row 2 原文一致（headers_match_canonical 依赖它），
     # 模板里 AH / AL 的 row 2 都是 "capacity"，靠 aliases / description 区分语义。
     # "uc_rhsrt" 别名只留给 AK（其 blob 还有 "max solar output allowed" 强信号），
     # 避免 AK / AL 两列在确定性匹配里抢同一个别名。
-    FieldSpec("capacity_special", "AL", "capacity",
-              "特殊容量约束（UC 约束右端项 UC_RHSRT，区别于 AH 的常规容量约束）",
-              ("capacity special", "special capacity", "uc capacity")),
+    FieldSpec(
+        "capacity_special",
+        "AL",
+        "capacity",
+        "特殊容量约束（UC 约束右端项 UC_RHSRT，区别于 AH 的常规容量约束）",
+        ("capacity special", "special capacity", "uc capacity"),
+    ),
 )
 
 # 索引
@@ -192,7 +330,7 @@ CORE_FIELDS: tuple[str, ...] = ("technology_code", "data_year")
 MIN_AUTO_MAPPED_RATIO = 0.5
 
 
-class SchemaMappingRejected(ValueError):
+class SchemaMappingRejected(ValueError):  # noqa: N818 - public API name kept stable
     """自动列对齐质量不达标，拒绝静默导入。
 
     由导入流程捕获并转成 4xx，提示用户走 preview 的列对齐复核（人工 override）。
@@ -232,10 +370,7 @@ def extract_header_blobs(
         for c_idx, val in enumerate(row, start=1):
             if val is not None and str(val).strip():
                 per_col.setdefault(c_idx, []).append(str(val).strip())
-    return {
-        get_column_letter(c): " | ".join(parts)
-        for c, parts in sorted(per_col.items())
-    }
+    return {get_column_letter(c): " | ".join(parts) for c, parts in sorted(per_col.items())}
 
 
 def extract_primary_headers(
@@ -337,8 +472,11 @@ def map_columns_deterministic(blobs: dict[str, str]) -> ColumnMapping:
         else:
             suggestions.append(
                 ColumnSuggestion(
-                    excel_column=col, excel_header=blob, target_field=None,
-                    confidence=0.0, reasoning="无相似标准字段",
+                    excel_column=col,
+                    excel_header=blob,
+                    target_field=None,
+                    confidence=0.0,
+                    reasoning="无相似标准字段",
                 )
             )
     suggestions.sort(key=lambda s: _col_sort_key(s.excel_column))
@@ -354,8 +492,7 @@ def _col_sort_key(letter: str) -> tuple[int, str]:
 # -----------------------------------------------------------------------------
 def _build_llm_prompt(blobs: dict[str, str]) -> tuple[str, str]:
     field_lines = "\n".join(
-        f"  - {spec.field}（标准列 {spec.column}）：{spec.description}"
-        for spec in STANDARD_FIELDS
+        f"  - {spec.field}（标准列 {spec.column}）：{spec.description}" for spec in STANDARD_FIELDS
     )
     system = (
         "你是 SG-TIMES 数据接入的 Schema-Mapping Agent。\n"
@@ -375,7 +512,10 @@ def _build_llm_prompt(blobs: dict[str, str]) -> tuple[str, str]:
         '  - "FO&M" → fixed_opex（confidence≈0.9，Fixed O&M 缩写）\n'
         '  - "Remarks for internal use" → null（confidence=0，备注列与任何标准字段无关）'
     )
-    col_lines = "\n".join(f"  列 {col}：{blob}" for col, blob in sorted(blobs.items(), key=lambda x: _col_sort_key(x[0])))
+    col_lines = "\n".join(
+        f"  列 {col}：{blob}"
+        for col, blob in sorted(blobs.items(), key=lambda x: _col_sort_key(x[0]))
+    )
     user = f"新版 Excel 的列表头如下：\n{col_lines}\n\n请输出 ColumnMapping。"
     return system, user
 
@@ -458,9 +598,7 @@ def validate_remap(
     只用于 Agent 自动路径；用户在 preview 里人工确认的 override 不走此门槛。
     """
     mapped_cols = set(remap.values())
-    missing_core = [
-        f for f in CORE_FIELDS if FIELD_BY_NAME[f].column not in mapped_cols
-    ]
+    missing_core = [f for f in CORE_FIELDS if FIELD_BY_NAME[f].column not in mapped_cols]
     ratio = len(remap) / len(STANDARD_FIELDS)
 
     problems: list[str] = []
@@ -475,9 +613,7 @@ def validate_remap(
             f" = {ratio:.0%}（门槛 {MIN_AUTO_MAPPED_RATIO:.0%}），列布局变化太大"
         )
     if problems:
-        review_hint = (
-            f"；另有 {len(needs_review)} 列置信度在复核区间" if needs_review else ""
-        )
+        review_hint = f"；另有 {len(needs_review)} 列置信度在复核区间" if needs_review else ""
         raise SchemaMappingRejected(
             f"sheet '{sheet_name}' 列布局自动对齐被拒绝：{'；'.join(problems)}"
             f"{review_hint}。请先调用 POST /api/imports/preview 查看列对齐建议，"

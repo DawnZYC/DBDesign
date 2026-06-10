@@ -13,13 +13,13 @@
   * 所有过滤值走 SQLAlchemy bindparam，无字符串拼接
   * 结果行数硬上限 10000
 """
+
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.state import AgentState
 from app.llm.provider import get_chat_model
@@ -90,6 +90,7 @@ def sql_agent_node(state: AgentState) -> dict:
 
     # 取原始用户问题（用于构造提示）
     from langchain_core.messages import HumanMessage as HMsg
+
     user_msgs = [m for m in state["messages"] if isinstance(m, HMsg)]
     question = str(user_msgs[-1].content) if user_msgs else "(unknown)"
 
@@ -106,7 +107,8 @@ def sql_agent_node(state: AgentState) -> dict:
         params: QueryParams = structured_llm.invoke(messages)
         logger.info(
             "sql_agent_node: structured output ok metric=%s agg=%s",
-            params.metric, params.aggregation,
+            params.metric,
+            params.aggregation,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("sql_agent_node: structured output failed")
@@ -121,7 +123,8 @@ def sql_agent_node(state: AgentState) -> dict:
         result_dict: dict[str, Any] = run_sql.invoke(params.model_dump())
         logger.info(
             "sql_agent_node: run_sql ok row_count=%s truncated=%s",
-            result_dict.get("row_count"), result_dict.get("truncated"),
+            result_dict.get("row_count"),
+            result_dict.get("truncated"),
         )
         return {
             "sql_params": params.model_dump(),

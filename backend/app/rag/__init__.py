@@ -6,6 +6,7 @@
   - search(query, k): 简单语义检索接口
   - ingest_dictionary(db) / ingest_markdown(path): 灌库
 """
+
 from app.rag.chroma_client import get_vectorstore, reset_collection
 from app.rag.embeddings import (
     EMBEDDING_REGISTRY,

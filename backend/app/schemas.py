@@ -1,4 +1,5 @@
-"""Pydantic schemas — API 请求/响应模型。"""
+"""Pydantic schemas for API request and response models."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -7,39 +8,38 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# =============================================================================
-# Schema-Mapping (M5) — 列对齐
-# =============================================================================
 class ColumnSuggestionOut(BaseModel):
-    """单列的匹配建议（前端列对齐复核用）。"""
+    """Single-column mapping suggestion for the M5 column-alignment review UI."""
 
-    excel_column: str = Field(..., description="陌生 Excel 的列字母")
-    excel_header: str = Field(default="", description="该列表头原文")
-    target_field: str | None = Field(default=None, description="匹配到的标准字段名")
-    target_column: str | None = Field(default=None, description="该标准字段的标准列位")
-    confidence: float = Field(default=0.0, description="0-1 置信度")
+    excel_column: str = Field(..., description="Column letter in the uploaded Excel.")
+    excel_header: str = Field(default="", description="Raw header text of the column.")
+    target_field: str | None = Field(default=None, description="Matched standard field name.")
+    target_column: str | None = Field(
+        default=None, description="Canonical column letter of the matched field."
+    )
+    confidence: float = Field(default=0.0, description="Match confidence in [0, 1].")
     status: str = Field(
         ...,
-        description="auto（≥0.9 自动应用）/ review（0.6-0.9 待人工）/ unmatched（<0.6）",
+        description="auto (>=0.9, applied) / review (0.6-0.9, needs human) / unmatched (<0.6).",
     )
     reasoning: str = Field(default="")
 
 
 class SheetColumnMapping(BaseModel):
-    """单个 sheet 的列对齐结果。"""
+    """M5 column-alignment result for one sheet."""
 
     sheet_name: str
     layout_is_standard: bool = Field(
-        ..., description="表头是否与标准模板一致（True 则无需对齐，走快路径）"
+        ..., description="True when headers match the canonical template (fast path)."
     )
     suggestions: list[ColumnSuggestionOut] = Field(default_factory=list)
     auto_count: int = 0
-    review_count: int = Field(default=0, description="低置信待人工复核的列数")
+    review_count: int = Field(default=0, description="Low-confidence columns needing review.")
     unmatched_count: int = 0
 
 
 class StandardFieldInfo(BaseModel):
-    """标准字段元信息（前端下拉选项用）。"""
+    """Standard field metadata for the frontend column-mapping dropdown."""
 
     field: str
     column: str
@@ -48,48 +48,50 @@ class StandardFieldInfo(BaseModel):
 
 
 class SheetPreview(BaseModel):
-    """文件预览中的单个 sheet 信息。"""
+    """Single sheet entry in a file preview."""
 
     sheet_name: str
-    is_known: bool = Field(..., description="是否在已知行业映射表里（10 个 sheet）")
-    sector_code: str | None = Field(default=None, description="对应的 sector_code")
-    data_rows: int = Field(..., description="非空数据行数（行 10 起）")
+    is_known: bool = Field(
+        ..., description="Whether the sheet is in the known sector mapping table."
+    )
+    sector_code: str | None = Field(default=None, description="Mapped sector_code.")
+    data_rows: int = Field(..., description="Non-empty data rows from row 10 onward.")
     column_mapping: SheetColumnMapping | None = Field(
         default=None,
-        description="M5 列对齐结果；layout 标准或非已知 sheet 时为 None",
+        description="M5 column alignment; None for unknown sheets or standard layout.",
     )
 
 
 class FilePreview(BaseModel):
-    """POST /api/imports/preview 的响应。"""
+    """Response for POST /api/imports/preview."""
 
     file_name: str
     sheets: list[SheetPreview]
     needs_column_review: bool = Field(
-        default=False, description="是否存在任一 sheet 需要列对齐复核"
+        default=False, description="True when any sheet needs column-alignment review."
     )
     standard_fields: list[StandardFieldInfo] = Field(
-        default_factory=list, description="38 个标准字段清单（前端下拉用）"
+        default_factory=list, description="All 38 standard fields for the dropdown."
     )
 
 
 class ImportSheetSummary(BaseModel):
-    """单个 sheet 的导入摘要。"""
+    """Import summary for a single sheet."""
 
     sheet_name: str
-    rows_total: int = Field(..., description="该 sheet 数据行总数（不含表头）")
-    rows_imported: int = Field(..., description="成功导入的行数")
-    rows_skipped: int = Field(default=0, description="跳过的空行 / 无效行")
-    rows_pending: int = Field(default=0, description="发现冲突待复核的行数")
-    issues: int = Field(default=0, description="data_quality_issue 新增数")
+    rows_total: int = Field(..., description="Total data rows in the sheet, excluding headers.")
+    rows_imported: int = Field(..., description="Rows imported successfully.")
+    rows_skipped: int = Field(default=0, description="Empty or invalid rows skipped.")
+    rows_pending: int = Field(default=0, description="Rows pending conflict review.")
+    issues: int = Field(default=0, description="New data_quality_issue rows.")
     column_warnings: list[str] = Field(
         default_factory=list,
-        description="M5 列对齐警告（自动对齐启用 / 低置信列被丢弃等），空表示快路径",
+        description="M5 column-alignment warnings; empty means the fast path was used.",
     )
 
 
 class ImportResult(BaseModel):
-    """整个导入操作的结果摘要。"""
+    """Summary for the full import operation."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -98,83 +100,87 @@ class ImportResult(BaseModel):
     imported_at: datetime
     rows_imported: int
     rows_skipped: int
-    rows_pending: int = Field(default=0, description="待复核行数（有 sector 冲突等）")
+    rows_pending: int = Field(
+        default=0, description="Rows pending review, such as sector conflicts."
+    )
     issues: int
     sheets: list[ImportSheetSummary]
     duration_ms: int
     column_warnings: list[str] = Field(
         default_factory=list,
-        description="全文件 M5 列对齐警告汇总（带 sheet 前缀），空表示全部走快路径",
+        description="Aggregated M5 column-alignment warnings, prefixed with the sheet name.",
     )
 
 
 class ConflictRow(BaseModel):
-    """一条待复核的行（按 sheet + A 列值分组前的原始记录）。"""
+    """Single row pending review before grouping by sheet and column A value."""
 
     raw_row_id: int
     excel_row_number: int
 
 
 class ConflictGroup(BaseModel):
-    """同 sheet、同 A 列值的若干行打包成一组，让用户一次决定。"""
+    """Rows with the same sheet and column A value, grouped for one decision."""
 
-    group_id: str = Field(..., description="组 ID，由 sheet+a_value 派生，用于客户端引用")
+    group_id: str = Field(
+        ..., description="Group ID derived from sheet+a_value for client references."
+    )
     sheet_name: str
     sheet_sector_code: str | None
-    a_column_value: str | None = Field(..., description="A 列原始值")
+    a_column_value: str | None = Field(..., description="Raw value from column A.")
     a_column_sector_code: str | None = Field(
-        ..., description="A 列文本解析出的 sector_code（无法解析则为 None）"
+        ..., description="sector_code parsed from column A text, or None when unresolved."
     )
     rows: list[ConflictRow]
     message: str
 
 
 class ConflictListResponse(BaseModel):
-    """GET /api/imports/conflicts 响应。"""
+    """Response for GET /api/imports/conflicts."""
 
     total_pending: int
     groups: list[ConflictGroup]
 
 
 class ConflictResolution(BaseModel):
-    """客户端提交的单条决定。"""
+    """Single decision submitted by the client."""
 
     raw_row_id: int
     decision: str = Field(
         ...,
-        description="TRUST_SHEET（用 sheet 推出的 sector）/ TRUST_A（用 A 列推出的 sector）/ SKIP（不导入）",
+        description="TRUST_SHEET uses the sheet-derived sector; TRUST_A uses the column A-derived sector; SKIP does not import the row.",
     )
 
 
 class ConflictResolveResponse(BaseModel):
-    """POST /api/imports/conflicts/resolve 响应。"""
+    """Response for POST /api/imports/conflicts/resolve."""
 
-    resolved: int = Field(..., description="处理成功的行数")
-    failed: int = Field(default=0, description="处理失败的行数")
+    resolved: int = Field(..., description="Rows processed successfully.")
+    failed: int = Field(default=0, description="Rows that failed to process.")
     failure_reasons: list[str] = Field(default_factory=list)
 
 
 class LLMHealth(BaseModel):
-    """LLM 子系统的健康检查信息。"""
+    """Health info for the LLM subsystem (M0)."""
 
     provider: str
     model: str | None = None
-    configured: bool = Field(..., description="当前 provider 是否已配置 API key")
-    ok: bool = Field(default=False, description="最近一次连通性测试是否成功")
+    configured: bool = Field(..., description="Whether the active provider has an API key.")
+    ok: bool = Field(default=False, description="Whether the last connectivity test succeeded.")
     latency_ms: int | None = None
     error: str | None = None
 
 
 class HealthResponse(BaseModel):
-    """健康检查响应。"""
+    """Health check response."""
 
     status: str = "ok"
-    database: str = Field(..., description="数据库连接状态")
-    llm: LLMHealth | None = Field(default=None, description="LLM 抽象层状态")
+    database: str = Field(..., description="Database connection status.")
+    llm: LLMHealth | None = Field(default=None, description="LLM abstraction layer status.")
 
 
 class ProviderInfo(BaseModel):
-    """单个 provider 的元信息（用于 GET /api/llm/providers）。"""
+    """Metadata for one LLM provider (GET /api/llm/providers)."""
 
     name: str
     display_name: str
@@ -192,7 +198,33 @@ class ProvidersResponse(BaseModel):
 
 
 # =============================================================================
-# 浏览相关
+# Convert (VT -> EcoTEA)
+# =============================================================================
+class ConvertModelInfo(BaseModel):
+    """Public metadata for a registered VT-to-EcoTEA converter."""
+
+    key: str = Field(..., description="Stable identifier passed back to /api/convert.")
+    label: str
+    sector: str
+    description: str | None = None
+
+
+class ConvertResult(BaseModel):
+    """Successful conversion response."""
+
+    download_token: str = Field(..., description="Opaque token used to fetch the converted file.")
+    download_name: str
+    row_count: int
+    sheet_name: str
+    model_key: str
+    source_file_name: str
+    template_file_name: str
+    bytes: int = Field(..., description="Size of the produced workbook in bytes.")
+    created_at: datetime
+
+
+# =============================================================================
+# Browse
 # =============================================================================
 class SectorOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -211,7 +243,7 @@ class GeographyOut(BaseModel):
 
 
 class TechnologyListItem(BaseModel):
-    """技术列表的一行（用于 /api/technologies）。"""
+    """Single technology list row for /api/technologies."""
 
     technology_id: int
     technology_code: str
@@ -222,14 +254,14 @@ class TechnologyListItem(BaseModel):
     technology_start_year: int | None
     technology_lifetime_years: int | None
     grade: str | None
-    year_count: int = Field(..., description="该技术下 technology_year 的数量")
+    year_count: int = Field(..., description="Number of technology_year rows for this technology.")
     year_min: int | None
     year_max: int | None
 
 
 class TechnologyListResponse(BaseModel):
     items: list[TechnologyListItem]
-    total: int = Field(..., description="符合过滤条件的总数（分页用）")
+    total: int = Field(..., description="Total rows matching the filters, for pagination.")
     page: int
     page_size: int
 
@@ -241,7 +273,7 @@ class CommodityRowOut(BaseModel):
     share_text: str | None
     demand_value: Decimal | None
     demand_text: str | None
-    # 来自 commodity 字典表（VEDA Commodities sheet）
+    # From the commodity dictionary table (VEDA Commodities sheet).
     commodity_set: str | None = None
     commodity_description: str | None = None
     unit: str | None = None
@@ -254,7 +286,7 @@ class ConstraintDetailOut(BaseModel):
 
 
 class TechnologyYearOut(BaseModel):
-    """单个技术年份的全部参数（master + 5 satellites）。"""
+    """All parameters for one technology year, including master and satellite data."""
 
     technology_year_id: int
     data_year: int
@@ -293,7 +325,7 @@ class TechnologyYearOut(BaseModel):
 
 
 class TechnologyDetail(BaseModel):
-    """技术详情：master + 所有年份。"""
+    """Technology detail: master row plus all years."""
 
     technology_id: int
     technology_code: str

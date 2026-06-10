@@ -2,6 +2,7 @@
 
 精确年份没有时回退到最近一年（带 emission_factor 的）。
 """
+
 from __future__ import annotations
 
 from langchain_core.tools import tool
@@ -37,9 +38,7 @@ class EmissionFactorResponse(BaseModel):
 
 @tool("lookup_emission_factor", args_schema=EmissionFactorInput)
 @with_observability("lookup_emission_factor")
-def lookup_emission_factor(
-    technology_code: str, year: int, geography_code: str = "SG"
-) -> dict:
+def lookup_emission_factor(technology_code: str, year: int, geography_code: str = "SG") -> dict:
     """Look up the emission factor for a given technology code and year.
 
     Returns the exact year if available; otherwise falls back to the
@@ -50,8 +49,10 @@ def lookup_emission_factor(
         # 拿到 technology_id
         tech = db.scalar(
             select(models.TechnologyProcess)
-            .join(models.Geography,
-                  models.Geography.geography_id == models.TechnologyProcess.geography_id)
+            .join(
+                models.Geography,
+                models.Geography.geography_id == models.TechnologyProcess.geography_id,
+            )
             .where(
                 models.TechnologyProcess.technology_code == technology_code,
                 models.Geography.geography_code == geography_code,
@@ -81,9 +82,7 @@ def lookup_emission_factor(
             .order_by(models.TechnologyYear.data_year)
         ).all()
 
-        candidates = [
-            r for r in rows if r.emission_factor is not None
-        ]
+        candidates = [r for r in rows if r.emission_factor is not None]
         if not candidates:
             return EmissionFactorResponse(
                 found=False,

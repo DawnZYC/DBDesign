@@ -16,7 +16,7 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
       if (!file) return;
       const lower = file.name.toLowerCase();
       if (!lower.endsWith('.xlsx') && !lower.endsWith('.xlsm')) {
-        alert('仅支持 .xlsx / .xlsm 文件');
+        alert('Only .xlsx / .xlsm files are supported');
         return;
       }
       onFileSelected(file);
@@ -26,7 +26,7 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     handleSelect(event.target.files?.[0]);
-    event.target.value = ''; // 允许同名文件再次触发
+    event.target.value = ''; // Allow selecting the same file again.
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
@@ -48,7 +48,7 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
       onClick={() => !disabled && inputRef.current?.click()}
       role="button"
       tabIndex={0}
-      aria-label="选择或拖拽 Excel 文件"
+      aria-label="Select or drop an Excel file"
     >
       <input
         ref={inputRef}
@@ -58,11 +58,23 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
         disabled={disabled}
         hidden
       />
-      <div className="drop-icon" aria-hidden="true">📂</div>
-      <div className="drop-text">
-        <strong>点击选择</strong> 或将 .xlsx 文件 <strong>拖拽到此处</strong>
+      <div className="drop-icon" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 16V4" />
+          <path d="M7 9l5-5 5 5" />
+          <path d="M5 20h14" />
+        </svg>
       </div>
-      <div className="drop-hint">仅支持 .xlsx / .xlsm，单文件 ≤ 50 MB</div>
+      <div className="drop-text">
+        <strong>Click to choose a file</strong> or drag it here
+      </div>
+      <div className="drop-hint">Excel workbook (.xlsx or .xlsm), up to 50&nbsp;MB</div>
     </div>
   );
 }

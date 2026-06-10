@@ -1,4 +1,5 @@
 """③ run_sql 单测（依赖测试 DB）。"""
+
 from __future__ import annotations
 
 import os
@@ -14,6 +15,7 @@ from tests._db_fixture import setup_test_db  # noqa: E402
 setup_test_db()
 
 import pytest  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
 
 from app.tools.sql_runner import (  # noqa: E402
     METRICS,
@@ -32,11 +34,18 @@ def _call(**kwargs) -> dict:
 def test_metric_registry_complete():
     """注册表应覆盖所有重要指标。"""
     expected = {
-        "capex", "fixed_opex", "variable_opex", "emission_factor",
-        "tax_cost", "subsidy_cost",
-        "efficiency_value", "technology_efficiency",
-        "heat_rate", "capacity_to_activity_factor",
-        "capacity", "commodity_demand_value",
+        "capex",
+        "fixed_opex",
+        "variable_opex",
+        "emission_factor",
+        "tax_cost",
+        "subsidy_cost",
+        "efficiency_value",
+        "technology_efficiency",
+        "heat_rate",
+        "capacity_to_activity_factor",
+        "capacity",
+        "commodity_demand_value",
     }
     assert expected.issubset(set(METRICS.keys()))
 
@@ -85,7 +94,8 @@ def test_unit_field_returned_for_capex():
 # -----------------------------------------------------------------------------
 def test_aggregation_sum_by_sector():
     out = _call(
-        metric="capex", aggregation="sum",
+        metric="capex",
+        aggregation="sum",
         group_by=["sector"],
     )
     assert out["aggregation"] == "sum"
@@ -100,7 +110,8 @@ def test_aggregation_sum_by_sector():
 
 def test_aggregation_avg_by_year():
     out = _call(
-        metric="capex", aggregation="avg",
+        metric="capex",
+        aggregation="avg",
         group_by=["year"],
     )
     for row in out["rows"]:
@@ -119,7 +130,7 @@ def test_count_aggregation():
 # -----------------------------------------------------------------------------
 def test_unknown_metric_rejected():
     """metric 不在白名单 → Pydantic 验证拒绝。"""
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         _call(metric="DROP TABLE users; --")
 
 
@@ -130,7 +141,7 @@ def test_limit_enforced():
 
 def test_limit_max_clamp():
     """超过 MAX_LIMIT 不应 crash，会被 Pydantic 拒绝。"""
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         _call(metric="capex", limit=99999999)
 
 

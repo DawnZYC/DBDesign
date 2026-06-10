@@ -8,6 +8,7 @@
   - raw_row_id / source_sheet_name / excel_row_number / raw_cells (JSONB)
   - import_batch.file_name / imported_at / note（情景标签）
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,8 +18,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.database import get_db
 from app import models
+from app.database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["raw-rows"])
@@ -29,6 +30,7 @@ router = APIRouter(prefix="/api", tags=["raw-rows"])
 # -----------------------------------------------------------------------------
 class ImportBatchBrief(BaseModel):
     """import_batch 的简要信息（避免把整张 batch 表都透传）。"""
+
     import_batch_id: int
     file_name: str
     imported_at: datetime
@@ -37,10 +39,11 @@ class ImportBatchBrief(BaseModel):
 
 class RawRowDetail(BaseModel):
     """单条原始 Excel 行的完整信息。"""
+
     raw_row_id: int
     source_sheet_name: str
     excel_row_number: int
-    raw_cells: dict           # JSONB 原文，保持 dict 格式
+    raw_cells: dict  # JSONB 原文，保持 dict 格式
     import_batch: ImportBatchBrief
 
 
@@ -63,11 +66,7 @@ def get_raw_row(
       - raw_cells JSONB（原始单元格内容，key=列字母，value=原始值）
       - 所属 import_batch（文件名 + 导入时间 + 情景注记）
     """
-    row = (
-        db.query(models.RawExcelRow)
-        .filter(models.RawExcelRow.raw_row_id == raw_row_id)
-        .first()
-    )
+    row = db.query(models.RawExcelRow).filter(models.RawExcelRow.raw_row_id == raw_row_id).first()
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -84,7 +83,10 @@ def get_raw_row(
 
     logger.info(
         "raw_row fetch: id=%d sheet=%s row=%d batch_id=%d",
-        raw_row_id, row.source_sheet_name, row.excel_row_number, batch.import_batch_id,
+        raw_row_id,
+        row.source_sheet_name,
+        row.excel_row_number,
+        batch.import_batch_id,
     )
 
     return RawRowDetail(

@@ -21,6 +21,7 @@ ECharts spec 完整格式（前端直接 setOption）：
   * ECharts dataset 只传前 MAX_CHART_ROWS 行（避免前端渲染卡顿）
   * 超出时在 _meta.truncated 标记，让前端提示用户
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,7 +34,7 @@ from app.tools.chart import DataShape, RecommendChartInput, recommend_chart
 
 logger = logging.getLogger(__name__)
 
-MAX_CHART_ROWS = 500   # 前端 ECharts dataset 最大行数
+MAX_CHART_ROWS = 500  # 前端 ECharts dataset 最大行数
 
 
 # -----------------------------------------------------------------------------
@@ -103,9 +104,7 @@ def _build_echarts_spec(
     x_col = next((c for c in x_candidates if c in all_keys), None)
 
     # 分类列（用于 legend/series 分组）
-    category_keys_priority = [
-        "sector_code", "technology_code", "geography_code", "commodity_code"
-    ]
+    category_keys_priority = ["sector_code", "technology_code", "geography_code", "commodity_code"]
     cat_col = next((c for c in category_keys_priority if c in all_keys), None)
 
     # 数值列
@@ -139,27 +138,29 @@ def _build_echarts_spec(
     # 多 series 时，每个 category 需要自己的 filter dataset，否则 ECharts 会
     # 用同一份数据画 N 条相同的线 —— 用 dataset.transform=filter 在客户端切片。
     datasets: list[dict[str, Any]] = [
-        {"dimensions": dimensions, "source": source}   # index=0：原始全量数据
+        {"dimensions": dimensions, "source": source}  # index=0：原始全量数据
     ]
     series: list[dict[str, Any]] = []
 
     if cat_col and cat_col in dimensions:
         # 多 series：每个分类值生成一个 filter dataset + 一条 series 引用它
-        categories = list(dict.fromkeys(
-            r.get(cat_col) for r in sample_rows if r.get(cat_col) is not None
-        ))
+        categories = list(
+            dict.fromkeys(r.get(cat_col) for r in sample_rows if r.get(cat_col) is not None)
+        )
         for cat in categories:
             # 追加一个 transform dataset：从原始 dataset(0) 过滤出该 category 的行
-            datasets.append({
-                "transform": {
-                    "type": "filter",
-                    "config": {"dimension": cat_col, "value": cat},
-                },
-            })
+            datasets.append(
+                {
+                    "transform": {
+                        "type": "filter",
+                        "config": {"dimension": cat_col, "value": cat},
+                    },
+                }
+            )
             serie: dict[str, Any] = {
                 "type": chart_type if chart_type in ("line", "bar") else "line",
                 "name": str(cat),
-                "datasetIndex": len(datasets) - 1,   # 指向刚追加的 filter dataset
+                "datasetIndex": len(datasets) - 1,  # 指向刚追加的 filter dataset
                 "encode": {"x": x_col or dimensions[0], "y": value_col},
             }
             if skeleton.get("_stack_hint"):
@@ -167,15 +168,17 @@ def _build_echarts_spec(
             series.append(serie)
     else:
         # 单 series
-        series.append({
-            "type": chart_type if chart_type in ("line", "bar", "pie") else "line",
-            "name": sql_result.get("metric", "value"),
-            "datasetIndex": 0,
-            "encode": {
-                "x": x_col or (dimensions[0] if dimensions else "x"),
-                "y": value_col,
-            },
-        })
+        series.append(
+            {
+                "type": chart_type if chart_type in ("line", "bar", "pie") else "line",
+                "name": sql_result.get("metric", "value"),
+                "datasetIndex": 0,
+                "encode": {
+                    "x": x_col or (dimensions[0] if dimensions else "x"),
+                    "y": value_col,
+                },
+            }
+        )
 
     # 移除骨架中的 _stack_hint（前端不需要）
     spec = {k: v for k, v in skeleton.items() if k != "_stack_hint"}
@@ -186,7 +189,7 @@ def _build_echarts_spec(
         "chart_type": chart_type,
         "metric": sql_result.get("metric"),
         "unit": sql_result.get("metric_unit"),
-        "row_count": len(rows),           # SQL 总行数（含被截断部分）
+        "row_count": len(rows),  # SQL 总行数（含被截断部分）
         "chart_row_count": len(sample_rows),  # 图表实际渲染行数
         "truncated": truncated,
     }

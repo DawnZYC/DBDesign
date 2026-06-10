@@ -20,20 +20,21 @@ SSE 事件协议（前端 M4 按此解析）：
   * 用事件 name / metadata.langgraph_node 过滤出感兴趣的事件类型
   * sse_starlette.sse.EventSourceResponse 包装异步生成器推给客户端
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import uuid
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import APIRouter
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from app.agents.graph import get_graph
-from app.agents.graph import NODE_INTERPRETER, NODE_PLANNER, NODE_SQL, NODE_VISUALIZER
+from app.agents.graph import NODE_INTERPRETER, NODE_PLANNER, NODE_SQL, NODE_VISUALIZER, get_graph
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -113,8 +114,7 @@ async def _stream_graph_events(
             metadata: dict = event.get("metadata", {})
             node: str = metadata.get("langgraph_node", "")
 
-            logger.debug("LG event: type=%s node=%s name=%s",
-                         ev_type, node, event.get("name", ""))
+            logger.debug("LG event: type=%s node=%s name=%s", ev_type, node, event.get("name", ""))
 
             # ---- 节点开始 ----
             if ev_type == "on_chain_start" and node and node != current_node:
@@ -123,7 +123,7 @@ async def _stream_graph_events(
                         yield _sse_event("agent_end", {"node": current_node})
                     current_node = node
                     if node == NODE_INTERPRETER:
-                        tokens_sent = False   # 进入新 interpreter 节点时重置
+                        tokens_sent = False  # 进入新 interpreter 节点时重置
                     yield _sse_event("agent_start", {"node": node})
                     logger.debug("SSE agent_start: node=%s", node)
 
@@ -148,13 +148,16 @@ async def _stream_graph_events(
             elif ev_type == "on_tool_end" and node == NODE_SQL:
                 tool_output = event.get("data", {}).get("output", {})
                 if isinstance(tool_output, dict):
-                    yield _sse_event("tool_result", {
-                        "tool": "run_sql",
-                        "row_count": tool_output.get("row_count", 0),
-                        "truncated": tool_output.get("truncated", False),
-                        "metric": tool_output.get("metric"),
-                        "sql_summary": tool_output.get("sql_summary", ""),
-                    })
+                    yield _sse_event(
+                        "tool_result",
+                        {
+                            "tool": "run_sql",
+                            "row_count": tool_output.get("row_count", 0),
+                            "truncated": tool_output.get("truncated", False),
+                            "metric": tool_output.get("metric"),
+                            "sql_summary": tool_output.get("sql_summary", ""),
+                        },
+                    )
                     logger.debug("SSE tool_result: row_count=%s", tool_output.get("row_count"))
 
             # ---- Interpreter：流式 token（打字机效果） ----

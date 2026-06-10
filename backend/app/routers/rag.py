@@ -1,4 +1,5 @@
 """RAG 检索路由（M1）。"""
+
 from __future__ import annotations
 
 import logging
@@ -43,10 +44,7 @@ def rag_search(req: SearchRequest) -> SearchResponse:
     return SearchResponse(
         query=req.query,
         k=req.k,
-        hits=[
-            SearchResultItem(text=h.text, score=h.score, metadata=h.metadata)
-            for h in hits
-        ],
+        hits=[SearchResultItem(text=h.text, score=h.score, metadata=h.metadata) for h in hits],
     )
 
 

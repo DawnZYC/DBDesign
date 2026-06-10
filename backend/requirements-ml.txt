@@ -1,0 +1,18 @@
+# Local-embedding (HuggingFace) dependencies, split from requirements.txt
+# because sentence-transformers pulls in torch (~2 GB).
+#
+# Install only where local embeddings are needed (default EMBEDDING_PROVIDER
+# is huggingface). For a much smaller install, grab the CPU-only torch wheel
+# first:
+#
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements-ml.txt
+#
+# CI does NOT install this file: tests use fakes / registry-only checks and
+# never download models. Cloud embedding providers (OpenAI / DashScope) work
+# without it.
+
+langchain-huggingface==0.1.2    # LangChain wrapper for sentence-transformers (default embedding)
+sentence-transformers==3.3.1    # actual embedding operator (all-MiniLM-L6-v2)
+transformers==4.46.3
+huggingface-hub==0.36.2

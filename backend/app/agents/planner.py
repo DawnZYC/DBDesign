@@ -10,6 +10,7 @@
   * 输出 Markdown bullet list，后续节点解析为 plan: list[str]
   * 调用方（graph.py）负责把步骤作为 SSE agent_start 事件推给前端
 """
+
 from __future__ import annotations
 
 import logging
@@ -58,7 +59,7 @@ def _parse_plan(raw: str) -> list[str]:
             continue
         if step:
             steps.append(step)
-    return steps or [raw.strip()]   # 如果解析失败，把全文当一步兜底
+    return steps or [raw.strip()]  # 如果解析失败，把全文当一步兜底
 
 
 # -----------------------------------------------------------------------------

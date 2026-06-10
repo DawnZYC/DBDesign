@@ -7,6 +7,7 @@
 
 跨族（譬如 PJ → kt-CO2）不允许，需用排放因子，请改用 lookup_emission_factor。
 """
+
 from __future__ import annotations
 
 import re
@@ -23,20 +24,20 @@ from app.tools._base import with_observability
 # 能源单位 → PJ
 ENERGY_TO_PJ: dict[str, float] = {
     "PJ": 1.0,
-    "ktoe": 1.0 / 23.885,        # 1 ktoe ≈ 0.041868 PJ
-    "GWh": 0.0036,                # 1 GWh = 3.6 TJ = 0.0036 PJ
-    "MWh": 3.6e-6,                # 1 MWh = 3.6 GJ = 3.6e-6 PJ
-    "kWh": 3.6e-9,                # 1 kWh = 3.6 MJ = 3.6e-9 PJ
-    "GJ":  1e-6,                  # 1 GJ  = 1e-6 PJ
-    "TJ":  1e-3,                  # 1 TJ  = 1e-3 PJ
-    "MJ":  1e-9,                  # 1 MJ  = 1e-9 PJ
+    "ktoe": 1.0 / 23.885,  # 1 ktoe ≈ 0.041868 PJ
+    "GWh": 0.0036,  # 1 GWh = 3.6 TJ = 0.0036 PJ
+    "MWh": 3.6e-6,  # 1 MWh = 3.6 GJ = 3.6e-6 PJ
+    "kWh": 3.6e-9,  # 1 kWh = 3.6 MJ = 3.6e-9 PJ
+    "GJ": 1e-6,  # 1 GJ  = 1e-6 PJ
+    "TJ": 1e-3,  # 1 TJ  = 1e-3 PJ
+    "MJ": 1e-9,  # 1 MJ  = 1e-9 PJ
 }
 
 # CO₂ 排放单位 → kt-CO2
 CO2_TO_KT: dict[str, float] = {
     "kt-CO2": 1.0,
     "Mt-CO2": 1000.0,
-    "t-CO2":  0.001,
+    "t-CO2": 0.001,
     "Gt-CO2": 1_000_000.0,
     "kg-CO2": 1e-6,
 }

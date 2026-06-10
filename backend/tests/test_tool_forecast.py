@@ -1,4 +1,5 @@
 """⑤ forecast_trend 单测（纯计算，无 DB）。"""
+
 from __future__ import annotations
 
 import sys
@@ -12,9 +13,7 @@ from app.tools.forecast import forecast_trend  # noqa: E402
 
 
 def _call(series, horizon=10, method="linear"):
-    return forecast_trend.invoke(
-        {"series": series, "horizon": horizon, "method": method}
-    )
+    return forecast_trend.invoke({"series": series, "horizon": horizon, "method": method})
 
 
 def test_linear_perfect_fit():

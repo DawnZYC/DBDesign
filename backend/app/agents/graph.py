@@ -22,17 +22,22 @@
   async for event in graph.astream_events(initial_state, version="v2"):
       ...
 """
+
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from langgraph.graph import END, START, StateGraph
 
+if TYPE_CHECKING:
+    from langgraph.graph.graph import CompiledGraph
+
+from app.agents.interpreter import interpreter_node
 from app.agents.planner import planner_node
 from app.agents.sql_agent import sql_agent_node
-from app.agents.interpreter import interpreter_node
-from app.agents.visualizer import visualizer_node
 from app.agents.state import AgentState
+from app.agents.visualizer import visualizer_node
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -96,7 +101,7 @@ def _sql_gen_with_retry_increment(state: AgentState) -> dict:
 # -----------------------------------------------------------------------------
 # 图构造
 # -----------------------------------------------------------------------------
-def build_graph() -> "CompiledGraph":  # type: ignore[name-defined]
+def build_graph() -> CompiledGraph:
     """构造并编译 LangGraph 状态图。
 
     每次调用都新建（不缓存），调用方负责复用已编译的图。

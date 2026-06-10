@@ -6,21 +6,22 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // SSE 端点：必须禁用缓冲，否则事件会等到流结束才一次性到达浏览器
+      // SSE endpoint: buffering must be disabled, otherwise events only reach
+      // the browser in one batch when the stream ends.
       '/api/chat/stream': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-        // 让 http-proxy 把每一块数据立即转发，不等响应结束
+        // Forward each chunk immediately instead of waiting for the response to end.
         selfHandleResponse: false,
         configure: (proxy) => {
           proxy.on('proxyRes', (proxyRes) => {
-            // 告知 CDN / 中间代理不要缓冲
+            // Tell CDNs / intermediate proxies not to buffer.
             proxyRes.headers['x-accel-buffering'] = 'no';
             proxyRes.headers['cache-control'] = 'no-cache';
           });
         },
       },
-      // 其他 /api/* 走普通代理
+      // Proxy other /api/* to the backend to avoid CORS issues.
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,

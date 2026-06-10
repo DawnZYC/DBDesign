@@ -7,6 +7,7 @@
 
 如要做 live 集成测试（真打 API），加 marker：@pytest.mark.live
 """
+
 from __future__ import annotations
 
 import os
@@ -28,7 +29,6 @@ from app.llm import (  # noqa: E402
     get_chat_model,
     list_available_providers,
 )
-
 
 # -----------------------------------------------------------------------------
 # Registry 完整性

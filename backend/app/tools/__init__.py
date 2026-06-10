@@ -5,6 +5,7 @@
 
 ALL_TOOLS 是给 Agent 注册用的列表，后续 LangGraph 直接引用。
 """
+
 from app.tools.chart import recommend_chart
 from app.tools.emission import lookup_emission_factor
 from app.tools.forecast import forecast_trend

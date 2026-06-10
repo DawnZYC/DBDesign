@@ -7,6 +7,7 @@
 每个 Document 的 metadata 里都带 source 字段（'commodity' / 'sector' / ...），
 方便检索时过滤和回查。
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,7 +34,9 @@ def _commodity_to_doc(c: models.Commodity) -> Document:
     if c.commodity_description:
         parts.append(f"描述: {c.commodity_description}")
     if c.commodity_set:
-        parts.append(f"集合(Csets): {c.commodity_set} ({'能源' if c.commodity_set == 'NRG' else '排放' if c.commodity_set == 'ENV' else '其他'})")
+        parts.append(
+            f"集合(Csets): {c.commodity_set} ({'能源' if c.commodity_set == 'NRG' else '排放' if c.commodity_set == 'ENV' else '其他'})"
+        )
     if c.unit:
         parts.append(f"单位: {c.unit}")
     if c.lim_type:
@@ -175,5 +178,6 @@ def _make_doc_id(doc: Document) -> str:
         return f"manual::{md.get('file', '')}::{md.get('title', '')}"
     # 兜底：用内容的 hash
     import hashlib
-    h = hashlib.sha1(doc.page_content.encode("utf-8")).hexdigest()[:12]
+
+    h = hashlib.sha1(doc.page_content.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
     return f"{source}::{h}"

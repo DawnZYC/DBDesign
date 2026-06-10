@@ -2,9 +2,9 @@
 
 只测注册表 + 路由结构 + markdown 切段，不真打 embedding（避免下载模型）。
 """
+
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -17,7 +17,6 @@ from app.rag.embeddings import (
     list_embedding_providers,
 )
 from app.rag.ingest import _split_markdown_by_h2  # type: ignore[attr-defined]
-
 
 # -----------------------------------------------------------------------------
 # Embedding 注册表

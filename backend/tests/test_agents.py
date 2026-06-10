@@ -8,15 +8,13 @@
   - 测 visualizer_node：无数据 / 有数据两条路径
   - 测 graph 编译：确认 graph 可正常 build_graph()（不调 LLM）
 """
+
 from __future__ import annotations
 
 import os
 import sys
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 # 让 app 包可 import
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -29,9 +27,11 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 # Helpers
 # =============================================================================
 
+
 def _make_state(**overrides) -> dict:
     """构造最小合法的 AgentState dict（用于单元测试）。"""
     from langchain_core.messages import HumanMessage
+
     base = {
         "messages": [HumanMessage(content="Power 部门 2030 年 capex")],
         "plan": [],
@@ -48,13 +48,15 @@ def _make_state(**overrides) -> dict:
 
 def _fake_llm(responses: list[str]):
     """返回一个能 invoke() 的假 LLM（FakeListChatModel）。"""
-    from langchain_core.language_models.fake import FakeListChatModel
+    from langchain_core.language_models.fake_chat_models import FakeListChatModel
+
     return FakeListChatModel(responses=responses)
 
 
 # =============================================================================
 # planner_node
 # =============================================================================
+
 
 class TestPlannerNode:
     """测 planner_node 的入参 / 输出结构 / 重试提示注入。"""
@@ -64,6 +66,7 @@ class TestPlannerNode:
         fake_response = "- 查询 Power 部门 capex\n- 按年份聚合\n- 生成折线图"
         with patch("app.agents.planner.get_chat_model", return_value=_fake_llm([fake_response])):
             from app.agents.planner import planner_node
+
             result = planner_node(_make_state())
 
         assert isinstance(result, dict)
@@ -75,9 +78,11 @@ class TestPlannerNode:
     def test_no_user_message_returns_error(self):
         """没有 HumanMessage 时应返回 error 字段。"""
         from langchain_core.messages import AIMessage
+
         state = _make_state(messages=[AIMessage(content="hello")])
         with patch("app.agents.planner.get_chat_model"):
             from app.agents.planner import planner_node
+
             result = planner_node(state)
 
         assert result["error"] is not None
@@ -89,17 +94,21 @@ class TestPlannerNode:
 
         def fake_factory():
             llm = MagicMock()
+
             def fake_invoke(msgs):
                 captured_messages.extend(msgs)
                 from langchain_core.messages import AIMessage
+
                 return AIMessage(content="- 重新查询")
+
             llm.invoke = fake_invoke
             return llm
 
         state = _make_state(retry_count=1, error="SQL 执行失败: column not found")
         with patch("app.agents.planner.get_chat_model", side_effect=fake_factory):
             from app.agents.planner import planner_node
-            result = planner_node(state)
+
+            planner_node(state)
 
         # 验证有某条 message 包含重试提示
         all_content = " ".join(str(m.content) for m in captured_messages)
@@ -110,6 +119,7 @@ class TestPlannerNode:
         fake_response = "1. 查询数据\n2. 聚合汇总\n3. 生成图表"
         with patch("app.agents.planner.get_chat_model", return_value=_fake_llm([fake_response])):
             from app.agents.planner import planner_node
+
             result = planner_node(_make_state())
 
         assert len(result["plan"]) == 3
@@ -117,6 +127,7 @@ class TestPlannerNode:
 
     def test_llm_failure_returns_error(self):
         """LLM 调用抛异常时，应捕获并返回 error 字段，不向上传播。"""
+
         def exploding_factory():
             llm = MagicMock()
             llm.invoke.side_effect = RuntimeError("LLM timeout")
@@ -124,6 +135,7 @@ class TestPlannerNode:
 
         with patch("app.agents.planner.get_chat_model", side_effect=exploding_factory):
             from app.agents.planner import planner_node
+
             result = planner_node(_make_state())
 
         assert result["error"] is not None
@@ -135,26 +147,31 @@ class TestPlannerNode:
 # _parse_plan（内部函数）
 # =============================================================================
 
+
 class TestParsePlan:
     """独立测 _parse_plan 解析逻辑。"""
 
     def test_bullet_dash(self):
         from app.agents.planner import _parse_plan
+
         raw = "- step one\n- step two\n- step three"
         assert _parse_plan(raw) == ["step one", "step two", "step three"]
 
     def test_bullet_asterisk(self):
         from app.agents.planner import _parse_plan
+
         raw = "* step one\n* step two"
         assert _parse_plan(raw) == ["step one", "step two"]
 
     def test_numbered_list(self):
         from app.agents.planner import _parse_plan
+
         raw = "1. first\n2. second\n3. third"
         assert _parse_plan(raw) == ["first", "second", "third"]
 
     def test_empty_string_fallback(self):
         from app.agents.planner import _parse_plan
+
         raw = "无法解析的内容"
         result = _parse_plan(raw)
         # 兜底：把整段当一步
@@ -163,6 +180,7 @@ class TestParsePlan:
 
     def test_ignores_blank_lines(self):
         from app.agents.planner import _parse_plan
+
         raw = "- step1\n\n- step2\n  \n- step3"
         assert _parse_plan(raw) == ["step1", "step2", "step3"]
 
@@ -170,6 +188,7 @@ class TestParsePlan:
 # =============================================================================
 # route_after_sql（条件边）
 # =============================================================================
+
 
 class TestRouteAfterSql:
     """测条件边路由函数的三条分支。"""
@@ -180,19 +199,23 @@ class TestRouteAfterSql:
 
     def test_success_routes_to_interpreter(self):
         from app.agents.graph import NODE_INTERPRETER, route_after_sql
+
         state = _make_state(sql_result={"rows": [], "row_count": 0}, error=None)
         assert route_after_sql(state) == NODE_INTERPRETER
 
     def test_error_within_retry_routes_to_planner(self):
         from app.agents.graph import NODE_PLANNER, route_after_sql
+
         state = _make_state(error="SQL failed", retry_count=0)
         result = route_after_sql(state)
         assert result == NODE_PLANNER
 
     def test_error_at_max_retry_routes_to_interpreter(self):
         from app.config import get_settings
+
         get_settings.cache_clear()
         from app.agents.graph import NODE_INTERPRETER, route_after_sql
+
         # retry_count 等于 max_retries（默认 2），不再重试
         state = _make_state(error="SQL failed", retry_count=2)
         assert route_after_sql(state) == NODE_INTERPRETER
@@ -200,6 +223,7 @@ class TestRouteAfterSql:
     def test_no_error_ignores_retry_count(self):
         """即使 retry_count > 0，只要没 error 就应走 interpreter。"""
         from app.agents.graph import NODE_INTERPRETER, route_after_sql
+
         state = _make_state(sql_result={"rows": []}, error=None, retry_count=1)
         assert route_after_sql(state) == NODE_INTERPRETER
 
@@ -208,11 +232,13 @@ class TestRouteAfterSql:
 # visualizer_node
 # =============================================================================
 
+
 class TestVisualizerNode:
     """测 visualizer_node 的有数据 / 无数据路径。"""
 
     def test_no_sql_result_returns_none_spec(self):
         from app.agents.visualizer import visualizer_node
+
         state = _make_state(sql_result=None)
         result = visualizer_node(state)
         assert result["chart_spec"] is None
@@ -220,6 +246,7 @@ class TestVisualizerNode:
 
     def test_empty_rows_returns_none_spec(self):
         from app.agents.visualizer import visualizer_node
+
         sql_result = {
             "rows": [],
             "row_count": 0,
@@ -235,6 +262,7 @@ class TestVisualizerNode:
     def test_with_rows_produces_chart_spec(self):
         """有数据行时，应生成含 dataset / series / _meta 的 spec。"""
         from app.agents.visualizer import visualizer_node
+
         sql_result = {
             "rows": [
                 {"data_year": 2025, "sector_code": "POWER", "value": 100.0, "raw_row_id": 1},
@@ -262,6 +290,7 @@ class TestVisualizerNode:
     def test_dataset_includes_raw_row_id(self):
         """ECharts dataset 的 dimensions 必须包含 raw_row_id（反查用）。"""
         from app.agents.visualizer import visualizer_node
+
         sql_result = {
             "rows": [
                 {"data_year": 2025, "value": 100.0, "raw_row_id": 42},
@@ -284,19 +313,25 @@ class TestVisualizerNode:
 # graph.build_graph（编译正确性）
 # =============================================================================
 
+
 class TestBuildGraph:
     """仅测图可以成功编译，不执行任何 LLM 调用。"""
 
     def test_graph_compiles_without_error(self):
         from app.agents.graph import build_graph
+
         g = build_graph()
         assert g is not None
 
     def test_graph_has_expected_nodes(self):
         from app.agents.graph import (
-            NODE_INTERPRETER, NODE_PLANNER, NODE_SQL, NODE_VISUALIZER,
+            NODE_INTERPRETER,
+            NODE_PLANNER,
+            NODE_SQL,
+            NODE_VISUALIZER,
             build_graph,
         )
+
         g = build_graph()
         node_names = set(g.nodes)
         assert NODE_PLANNER in node_names
@@ -306,6 +341,7 @@ class TestBuildGraph:
 
     def test_get_graph_returns_singleton(self):
         from app.agents.graph import get_graph
+
         g1 = get_graph()
         g2 = get_graph()
         assert g1 is g2

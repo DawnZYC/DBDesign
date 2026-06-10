@@ -8,10 +8,12 @@
   - openai           : OpenAI text-embedding-3-small / -large
   - qwen             : 通义千问 DashScope text-embedding-v3
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Literal
+from collections.abc import Callable
+from typing import Any, Literal
 
 from langchain_core.embeddings import Embeddings
 from pydantic import BaseModel, ConfigDict
@@ -75,18 +77,21 @@ def _register_builder(adapter: str):
     def decorator(fn):
         _BUILDERS[adapter] = fn
         return fn
+
     return decorator
 
 
 @_register_builder("huggingface")
 def _build_hf(cfg: EmbeddingProviderConfig, settings: Settings, model: str) -> Embeddings:
     from langchain_huggingface import HuggingFaceEmbeddings
+
     return HuggingFaceEmbeddings(model_name=model)
 
 
 @_register_builder("openai")
 def _build_openai(cfg: EmbeddingProviderConfig, settings: Settings, model: str) -> Embeddings:
     from langchain_openai import OpenAIEmbeddings
+
     return OpenAIEmbeddings(model=model, api_key=settings.openai_api_key)
 
 
@@ -94,6 +99,7 @@ def _build_openai(cfg: EmbeddingProviderConfig, settings: Settings, model: str) 
 def _build_dashscope(cfg: EmbeddingProviderConfig, settings: Settings, model: str) -> Embeddings:
     # 注意：langchain-community 的 DashScopeEmbeddings 走的是 DashScope 原生协议
     from langchain_community.embeddings import DashScopeEmbeddings
+
     return DashScopeEmbeddings(model=model, dashscope_api_key=settings.dashscope_api_key)
 
 
@@ -127,7 +133,9 @@ def get_embedder(*, provider: str | None = None, model: str | None = None) -> Em
 
     logger.info(
         "Init embedding provider=%s model=%s dim=%s",
-        cfg.name, final_model, cfg.dimensions,
+        cfg.name,
+        final_model,
+        cfg.dimensions,
     )
     return builder(cfg, settings, final_model)
 
@@ -142,13 +150,15 @@ def list_embedding_providers() -> list[dict[str, Any]]:
             configured = True  # 本地 provider 无需 key
         else:
             configured = bool(getattr(settings, cfg.api_key_field, None))
-        out.append({
-            "name": cfg.name,
-            "display_name": cfg.display_name,
-            "adapter": cfg.adapter,
-            "default_model": cfg.default_model,
-            "dimensions": cfg.dimensions,
-            "configured": configured,
-            "is_active": cfg.name == active,
-        })
+        out.append(
+            {
+                "name": cfg.name,
+                "display_name": cfg.display_name,
+                "adapter": cfg.adapter,
+                "default_model": cfg.default_model,
+                "dimensions": cfg.dimensions,
+                "configured": configured,
+                "is_active": cfg.name == active,
+            }
+        )
     return out

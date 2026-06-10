@@ -12,6 +12,7 @@
   1. 在 PROVIDER_REGISTRY 增加一项
   2. 在 app/config.py 增加对应的 *_API_KEY 字段
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,7 +37,7 @@ class ProviderConfig(BaseModel):
     name: str
     display_name: str
     adapter: Literal["openai_compat", "anthropic"]
-    api_key_field: str           # Settings 上对应的字段名
+    api_key_field: str  # Settings 上对应的字段名
     base_url: str | None = None  # OpenAI-compatible 时填，None 用默认（即官方 OpenAI）
     default_model: str
     docs_url: str | None = None
@@ -121,8 +122,7 @@ def get_chat_model(
 
     if provider_name not in PROVIDER_REGISTRY:
         raise ValueError(
-            f"未知 provider '{provider_name}'。"
-            f"可选: {', '.join(PROVIDER_REGISTRY.keys())}"
+            f"未知 provider '{provider_name}'。可选: {', '.join(PROVIDER_REGISTRY.keys())}"
         )
     cfg = PROVIDER_REGISTRY[provider_name]
 
@@ -140,7 +140,10 @@ def get_chat_model(
 
     logger.info(
         "Init LLM provider=%s adapter=%s model=%s base_url=%s",
-        cfg.name, cfg.adapter, final_model, cfg.base_url or "(default)",
+        cfg.name,
+        cfg.adapter,
+        final_model,
+        cfg.base_url or "(default)",
     )
 
     if cfg.adapter == "openai_compat":

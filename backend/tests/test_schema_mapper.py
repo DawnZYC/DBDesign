@@ -12,6 +12,7 @@
 
 无需 API key（LLM 路径用替身）。
 """
+
 from __future__ import annotations
 
 import io
@@ -24,7 +25,9 @@ from sqlalchemy import text
 from app.agents import schema_mapper as sm
 from tests._db_fixture import setup_test_db
 
-TEMPLATE = Path(__file__).resolve().parent.parent.parent / "uploads" / "template" / "EcoTEA Endo WP1.xlsx"
+TEMPLATE = (
+    Path(__file__).resolve().parent.parent.parent / "uploads" / "template" / "EcoTEA Endo WP1.xlsx"
+)
 HAS_TEMPLATE = TEMPLATE.exists()
 
 
@@ -40,11 +43,11 @@ def test_standard_field_count():
 
 def test_deterministic_recovers_renamed_headers():
     blobs = {
-        "B": "owner of data",      # data_owner
-        "R": "build cost",          # capex
-        "T": "FO&M charge",         # fixed_opex
-        "O": "emissions factor",    # emission_factor
-        "H": "asset name",          # technology_code
+        "B": "owner of data",  # data_owner
+        "R": "build cost",  # capex
+        "T": "FO&M charge",  # fixed_opex
+        "O": "emissions factor",  # emission_factor
+        "H": "asset name",  # technology_code
     }
     mapping = sm.map_columns(blobs, use_llm=False)
     got = {s.excel_column: s.target_field for s in mapping.suggestions}
@@ -64,13 +67,15 @@ def test_one_field_one_column():
 
 
 def test_build_remap_thresholds():
-    mapping = sm.ColumnMapping(suggestions=[
-        sm.ColumnSuggestion(excel_column="F", target_field="capex", confidence=0.95),
-        sm.ColumnSuggestion(excel_column="G", target_field="fixed_opex", confidence=0.75),
-        sm.ColumnSuggestion(excel_column="X", target_field="heat_rate", confidence=0.3),
-    ])
+    mapping = sm.ColumnMapping(
+        suggestions=[
+            sm.ColumnSuggestion(excel_column="F", target_field="capex", confidence=0.95),
+            sm.ColumnSuggestion(excel_column="G", target_field="fixed_opex", confidence=0.75),
+            sm.ColumnSuggestion(excel_column="X", target_field="heat_rate", confidence=0.3),
+        ]
+    )
     remap, review = sm.build_remap(mapping)
-    assert remap == {"F": "R"}            # 高置信 → 搬到标准列 R
+    assert remap == {"F": "R"}  # 高置信 → 搬到标准列 R
     assert [s.excel_column for s in review] == ["G"]  # 中置信 → 复核
     # 低置信 X 被丢弃
 
@@ -84,10 +89,12 @@ def test_remap_cells_moves_values():
 
 def test_build_remap_prefers_higher_confidence_on_duplicate_target():
     """LLM 后端可能返回两列指向同一标准字段——高分列必须赢，与列表顺序无关。"""
-    mapping = sm.ColumnMapping(suggestions=[
-        sm.ColumnSuggestion(excel_column="C", target_field="capex", confidence=0.91),
-        sm.ColumnSuggestion(excel_column="F", target_field="capex", confidence=0.98),
-    ])
+    mapping = sm.ColumnMapping(
+        suggestions=[
+            sm.ColumnSuggestion(excel_column="C", target_field="capex", confidence=0.91),
+            sm.ColumnSuggestion(excel_column="F", target_field="capex", confidence=0.98),
+        ]
+    )
     remap, _ = sm.build_remap(mapping)
     assert remap == {"F": "R"}, "置信度 0.98 的 F 列应胜出，而非列表里先出现的 C 列"
 
@@ -141,12 +148,18 @@ class _FakeStructuredLLM:
 
 def test_llm_backend_cleans_invalid_target_field(monkeypatch):
     """LLM 幻觉出不存在的字段名 → 置空并归零置信度。"""
-    fake = _FakeStructuredLLM(sm.ColumnMapping(suggestions=[
-        sm.ColumnSuggestion(excel_column="A", target_field="hallucinated_field",
-                            confidence=0.99),
-        sm.ColumnSuggestion(excel_column="B", target_field="capex", confidence=0.95),
-    ]))
+    fake = _FakeStructuredLLM(
+        sm.ColumnMapping(
+            suggestions=[
+                sm.ColumnSuggestion(
+                    excel_column="A", target_field="hallucinated_field", confidence=0.99
+                ),
+                sm.ColumnSuggestion(excel_column="B", target_field="capex", confidence=0.95),
+            ]
+        )
+    )
     import app.llm.provider as provider
+
     monkeypatch.setattr(provider, "get_chat_model", lambda **kw: fake)
 
     mapping = sm.map_columns_llm({"A": "mystery", "B": "build cost"})
@@ -222,7 +235,7 @@ def test_end_to_end_shifted_import_aligns_columns():
             file_name="shifted.xlsx",
             note="m5-shift-test",
             auto_map_columns=True,
-            use_llm_mapping=False,   # 确定性后端
+            use_llm_mapping=False,  # 确定性后端
         )
         assert result.rows_imported > 0, "右移文件经 M5 对齐后应能导入数据行"
 
@@ -231,8 +244,10 @@ def test_end_to_end_shifted_import_aligns_columns():
             text("SELECT COUNT(*) FROM technology_year_ecotea_parameter WHERE capex > 0")
         ).scalar()
         tech_codes = db.execute(
-            text("SELECT COUNT(*) FROM technology_process WHERE technology_code IS NOT NULL "
-                 "AND technology_code <> ''")
+            text(
+                "SELECT COUNT(*) FROM technology_process WHERE technology_code IS NOT NULL "
+                "AND technology_code <> ''"
+            )
         ).scalar()
     finally:
         db.close()
@@ -289,7 +304,7 @@ def test_end_to_end_renamed_and_shifted_import():
         assert result.rows_imported > 0
         # ImportResult 必须暴露列对齐警告（启用了自动对齐）
         assert result.column_warnings, "启用 Schema-Mapping 时应有列级警告"
-        assert any("自动对齐" in w for w in result.column_warnings)
+        assert any("Auto-aligned" in w for w in result.column_warnings)
 
         capex_rows = db.execute(
             text("SELECT COUNT(*) FROM technology_year_ecotea_parameter WHERE capex > 0")
@@ -392,8 +407,11 @@ def test_standard_template_still_imports_fast_path():
     db = SessionLocal()
     try:
         result = import_excel(
-            db, file_bytes=buf.getvalue(), file_name="std.xlsx",
-            auto_map_columns=True, use_llm_mapping=False,
+            db,
+            file_bytes=buf.getvalue(),
+            file_name="std.xlsx",
+            auto_map_columns=True,
+            use_llm_mapping=False,
         )
         assert result.rows_imported > 0
     finally:

@@ -3,6 +3,8 @@ import type {
   ConflictListResponse,
   ConflictResolution,
   ConflictResolveResponse,
+  ConvertModelInfo,
+  ConvertResult,
   FilePreview,
   Geography,
   ImportResult,
@@ -19,13 +21,13 @@ async function parseError(response: Response): Promise<string> {
     const body = (await response.json()) as ApiError;
     if (body.detail) message = body.detail;
   } catch {
-    // 后端返回非 JSON
+    // Backend returned non-JSON.
   }
   return message;
 }
 
 /**
- * 预览 Excel 的 sheet 列表（不入库）。
+ * Preview the Excel sheet list without writing to the database.
  */
 export async function previewExcel(file: File): Promise<FilePreview> {
   const formData = new FormData();
@@ -41,7 +43,7 @@ export async function previewExcel(file: File): Promise<FilePreview> {
 }
 
 /**
- * 上传 Excel 并触发导入。
+ * Upload Excel and start the import.
  */
 export async function uploadExcel(
   file: File,
@@ -59,7 +61,7 @@ export async function uploadExcel(
   if (options?.sheets && options.sheets.length > 0) {
     formData.append('sheets', options.sheets.join(','));
   }
-  // M5: 列对齐复核确认后的「陌生列 -> 标准列」映射
+  // M5: user-confirmed source-to-canonical column mapping from the review UI.
   if (options?.columnOverrides && Object.keys(options.columnOverrides).length > 0) {
     formData.append('column_overrides', JSON.stringify(options.columnOverrides));
   }
@@ -74,7 +76,7 @@ export async function uploadExcel(
 }
 
 /**
- * 列出所有待复核冲突（按 sheet + A 列值分组）。
+ * List conflicts pending review, grouped by sheet and column A value.
  */
 export async function listConflicts(): Promise<ConflictListResponse> {
   const response = await fetch(`${API_BASE}/imports/conflicts`);
@@ -83,7 +85,7 @@ export async function listConflicts(): Promise<ConflictListResponse> {
 }
 
 /**
- * 提交冲突复核结果。
+ * Submit conflict review results.
  */
 export async function resolveConflicts(
   resolutions: ConflictResolution[],
@@ -98,7 +100,7 @@ export async function resolveConflicts(
 }
 
 // ---------------------------------------------------------------------------
-// 浏览
+// Browse
 // ---------------------------------------------------------------------------
 export async function listSectors(): Promise<Sector[]> {
   const response = await fetch(`${API_BASE}/sectors`);
@@ -120,13 +122,10 @@ export interface TechFilters {
   page_size?: number;
 }
 
-export async function listTechnologies(
-  filters: TechFilters = {},
-): Promise<TechnologyListResponse> {
+export async function listTechnologies(filters: TechFilters = {}): Promise<TechnologyListResponse> {
   const params = new URLSearchParams();
   if (filters.sector_id != null) params.set('sector_id', String(filters.sector_id));
-  if (filters.geography_id != null)
-    params.set('geography_id', String(filters.geography_id));
+  if (filters.geography_id != null) params.set('geography_id', String(filters.geography_id));
   if (filters.q) params.set('q', filters.q);
   if (filters.page != null) params.set('page', String(filters.page));
   if (filters.page_size != null) params.set('page_size', String(filters.page_size));
@@ -147,7 +146,7 @@ export async function getTechnology(technologyId: number): Promise<TechnologyDet
 }
 
 /**
- * 健康检查。
+ * Health check.
  */
 export async function checkHealth(): Promise<{ status: string; database: string }> {
   const response = await fetch(`${API_BASE}/health`);
@@ -155,6 +154,67 @@ export async function checkHealth(): Promise<{ status: string; database: string 
   return (await response.json()) as { status: string; database: string };
 }
 
+// ---------------------------------------------------------------------------
+// Convert (VT -> EcoTEA)
+// ---------------------------------------------------------------------------
+export async function listConvertModels(): Promise<ConvertModelInfo[]> {
+  const response = await fetch(`${API_BASE}/convert/models`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as ConvertModelInfo[];
+}
+
+export async function convertVT(args: {
+  modelKey: string;
+  sourceFile: File;
+  templateFile?: File;
+}): Promise<ConvertResult> {
+  const formData = new FormData();
+  formData.append('model_key', args.modelKey);
+  formData.append('vt_file', args.sourceFile);
+  if (args.templateFile) {
+    formData.append('ecotea_template', args.templateFile);
+  }
+  const response = await fetch(`${API_BASE}/convert`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as ConvertResult;
+}
+
+/** Build the absolute URL for the converted file download endpoint. */
+export function conversionDownloadUrl(token: string): string {
+  return `${API_BASE}/convert/download/${encodeURIComponent(token)}`;
+}
+
+export async function previewFromConversion(token: string): Promise<FilePreview> {
+  const response = await fetch(
+    `${API_BASE}/imports/preview/from-conversion?token=${encodeURIComponent(token)}`,
+    { method: 'POST' },
+  );
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as FilePreview;
+}
+
+export async function importFromConversion(args: {
+  token: string;
+  importedBy?: string;
+  note?: string;
+  sheets?: string[];
+}): Promise<ImportResult> {
+  const formData = new FormData();
+  if (args.importedBy) formData.append('imported_by', args.importedBy);
+  if (args.note) formData.append('note', args.note);
+  if (args.sheets && args.sheets.length > 0) {
+    formData.append('sheets', args.sheets.join(','));
+  }
+  const response = await fetch(
+    `${API_BASE}/imports/from-conversion?token=${encodeURIComponent(args.token)}`,
+    { method: 'POST', body: formData },
+  );
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as ImportResult;
+}
 // ---------------------------------------------------------------------------
 // Chat / AI 助手（M4）
 // ---------------------------------------------------------------------------

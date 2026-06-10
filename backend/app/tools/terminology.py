@@ -5,6 +5,7 @@
   2. 否则走 RAG 语义检索，从领域知识库召回 top-k
   3. 返回结构化 metadata + 自然语言摘要，方便 Agent 后续步骤使用
 """
+
 from __future__ import annotations
 
 import re
@@ -69,10 +70,7 @@ def lookup_terminology(term: str, k: int = 5) -> dict:
     # 2) RAG 语义检索
     rag_hits = rag_search(term, k=k)
     if rag_hits:
-        hits = [
-            TerminologyHit(text=h.text, score=h.score, metadata=h.metadata)
-            for h in rag_hits
-        ]
+        hits = [TerminologyHit(text=h.text, score=h.score, metadata=h.metadata) for h in rag_hits]
         top = hits[0]
         return TerminologyResponse(
             matched_by="semantic_search",
@@ -92,9 +90,7 @@ def _exact_code_lookup(term: str) -> TerminologyHit | None:
     db = SessionLocal()
     try:
         # commodity
-        c = db.scalar(
-            select(models.Commodity).where(models.Commodity.commodity_code == term)
-        )
+        c = db.scalar(select(models.Commodity).where(models.Commodity.commodity_code == term))
         if c:
             text_parts = [f"商品 {c.commodity_code}"]
             if c.commodity_description:
@@ -115,9 +111,7 @@ def _exact_code_lookup(term: str) -> TerminologyHit | None:
                 },
             )
         # sector
-        s = db.scalar(
-            select(models.Sector).where(models.Sector.sector_code == term.upper())
-        )
+        s = db.scalar(select(models.Sector).where(models.Sector.sector_code == term.upper()))
         if s:
             return TerminologyHit(
                 text=f"行业 {s.sector_code}（{s.sector_name}）",

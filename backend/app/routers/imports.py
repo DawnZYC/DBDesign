@@ -1,15 +1,17 @@
-"""导入相关路由。"""
+"""Import routes."""
+
 from __future__ import annotations
 
 import json
 import logging
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.agents.schema_mapper import SchemaMappingRejected
 from app.database import get_db
+from app.routers.convert import get_artefact as get_conversion_artefact
 from app.schemas import (
     ConflictListResponse,
     ConflictResolution,
@@ -33,20 +35,18 @@ MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 def _validate_upload(file: UploadFile, file_bytes: bytes) -> None:
-    """通用文件校验：扩展名、是否为空、大小上限。"""
+    """Common upload validation for suffix, empty content, and size limit."""
     if not file.filename or not file.filename.lower().endswith(ALLOWED_SUFFIXES):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"仅支持 {ALLOWED_SUFFIXES} 类型的文件",
+            detail=f"Only {ALLOWED_SUFFIXES} files are supported",
         )
     if not file_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="文件为空"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File is empty")
     if len(file_bytes) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"文件超过 {MAX_FILE_SIZE_BYTES // 1024 // 1024} MB 上限",
+            detail=f"File exceeds the {MAX_FILE_SIZE_BYTES // 1024 // 1024} MB limit",
         )
 
 
@@ -54,19 +54,16 @@ def _validate_upload(file: UploadFile, file_bytes: bytes) -> None:
     "/preview",
     response_model=FilePreview,
     status_code=status.HTTP_200_OK,
-    summary="预览 Excel 的 sheet 列表（不入库）",
+    summary="Preview Excel sheet list without writing to the database",
 )
 async def preview_import(
-    file: UploadFile = File(..., description="要预览的 .xlsx 文件"),
+    file: UploadFile = File(..., description=".xlsx file to preview"),
     use_llm_mapping: bool = Form(
         default=False,
-        description="M5 列对齐是否用 LLM 后端（默认确定性，快且零成本）",
+        description="Whether M5 column alignment uses the LLM backend (deterministic by default).",
     ),
 ) -> FilePreview:
-    """读取上传文件的 sheet 名称、行数、是否在已知映射表内，并给出 M5 列对齐建议。
-
-    前端用返回的 column_mapping 让用户在列布局变化时做对齐复核。
-    """
+    """Read sheet names, row counts, known mapping status, and M5 column-alignment suggestions."""
     file_bytes = await file.read()
     _validate_upload(file, file_bytes)
 
@@ -77,10 +74,10 @@ async def preview_import(
             use_llm_mapping=use_llm_mapping,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.exception("预览失败")
+        logger.exception("Preview failed")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"读取 Excel 失败：{exc!s}",
+            detail=f"Failed to read Excel: {exc!s}",
         ) from exc
 
 
@@ -88,36 +85,40 @@ async def preview_import(
     "",
     response_model=ImportResult,
     status_code=status.HTTP_201_CREATED,
-    summary="上传并导入 EcoTEA Excel 文件（可选择 sheet 白名单）",
+    summary="Upload and import an EcoTEA Excel file with an optional sheet allowlist",
 )
 async def create_import(
-    file: UploadFile = File(..., description="要导入的 .xlsx 文件"),
-    imported_by: str | None = Form(default=None, description="导入操作人（可选）"),
-    note: str | None = Form(default=None, description="本次导入备注（可选）"),
+    file: UploadFile = File(..., description=".xlsx file to import"),
+    imported_by: str | None = Form(default=None, description="Importer name, optional"),
+    note: str | None = Form(default=None, description="Import note, optional"),
     sheets: str | None = Form(
         default=None,
-        description="只导入这些 sheet，逗号分隔。为空时导入全部已知 sheet。",
+        description="Comma-separated sheet names to import. Empty imports all known sheets.",
     ),
     column_overrides: str | None = Form(
         default=None,
         description=(
-            "M5 列对齐复核结果，JSON 字符串：{sheet: {陌生列: 标准列}}。"
-            "给了就按它搬运，不再自动调 Schema-Mapping Agent。"
+            "M5 column-alignment review result as a JSON string: "
+            "{sheet: {source column: canonical column}}. When given, it is applied as-is "
+            "and the Schema-Mapping Agent is not invoked."
         ),
     ),
     auto_map_columns: bool = Form(
         default=True,
-        description="无 override 且表头非标准时，是否自动调 Schema-Mapping Agent",
+        description=(
+            "Whether to run the Schema-Mapping Agent automatically when there is no "
+            "override and headers differ from the canonical template."
+        ),
     ),
     use_llm_mapping: bool = Form(
-        default=False, description="Schema-Mapping Agent 是否用 LLM 后端"
+        default=False, description="Whether the Schema-Mapping Agent uses the LLM backend."
     ),
     db: Session = Depends(get_db),
 ) -> ImportResult:
-    """接收 Excel 文件，同步写入数据库并返回汇总结果。
+    """Receive an Excel file, write it to the database synchronously, and return a summary.
 
-    sheets 字段示例：`Power,Industry` 或 `Power, Industry`（空格无所谓）。
-    column_overrides 示例：`{"Power": {"F": "R", "G": "T"}}`。
+    Example sheets value: `Power,Industry` or `Power, Industry`; spaces are ignored.
+    Example column_overrides value: `{"Power": {"F": "R", "G": "T"}}`.
     """
     file_bytes = await file.read()
     _validate_upload(file, file_bytes)
@@ -131,7 +132,7 @@ async def create_import(
         try:
             parsed = json.loads(column_overrides)
             if not isinstance(parsed, dict):
-                raise ValueError("column_overrides 必须是 JSON 对象")
+                raise ValueError("column_overrides must be a JSON object")
             overrides = {
                 str(sheet): {str(k): str(v) for k, v in mapping.items()}
                 for sheet, mapping in parsed.items()
@@ -140,7 +141,7 @@ async def create_import(
         except (json.JSONDecodeError, ValueError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"column_overrides 解析失败：{exc!s}",
+                detail=f"Failed to parse column_overrides: {exc!s}",
             ) from exc
 
     try:
@@ -157,33 +158,107 @@ async def create_import(
         )
     except SchemaMappingRejected as exc:
         db.rollback()
-        logger.warning("导入被列对齐质量门槛拒绝：%s", exc)
+        logger.warning("Import rejected by the column-alignment quality gate: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
     except SQLAlchemyError as exc:
         db.rollback()
-        logger.exception("导入失败 (DB 异常)")
+        logger.exception("Import failed (database error)")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"数据库写入失败：{exc!s}",
+            detail=f"Database write failed: {exc!s}",
         ) from exc
     except Exception as exc:  # noqa: BLE001
         db.rollback()
-        logger.exception("导入失败 (未知异常)")
+        logger.exception("Import failed (unknown error)")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导入失败：{exc!s}",
+            detail=f"Import failed: {exc!s}",
         ) from exc
 
     return result
 
 
+@router.post(
+    "/preview/from-conversion",
+    response_model=FilePreview,
+    summary="Preview a previously converted EcoTEA workbook by token (no re-upload).",
+)
+def preview_from_conversion(
+    token: str = Query(..., description="Token returned by POST /api/convert."),
+) -> FilePreview:
+    artefact = get_conversion_artefact(token)
+    file_bytes = artefact.output_path.read_bytes()
+    try:
+        return preview_excel(file_bytes=file_bytes, file_name=artefact.download_name)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Preview from conversion failed")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to read the converted workbook: {exc!s}",
+        ) from exc
+
+
+@router.post(
+    "/from-conversion",
+    response_model=ImportResult,
+    status_code=status.HTTP_201_CREATED,
+    summary="Import a previously converted EcoTEA workbook by token (no re-upload).",
+)
+def import_from_conversion(
+    token: str = Query(..., description="Token returned by POST /api/convert."),
+    imported_by: str | None = Form(default=None),
+    note: str | None = Form(default=None),
+    sheets: str | None = Form(default=None),
+    db: Session = Depends(get_db),
+) -> ImportResult:
+    artefact = get_conversion_artefact(token)
+    file_bytes = artefact.output_path.read_bytes()
+
+    selected_sheets: list[str] | None = None
+    if sheets:
+        selected_sheets = [s.strip() for s in sheets.split(",") if s.strip()]
+
+    try:
+        return import_excel(
+            db,
+            file_bytes=file_bytes,
+            file_name=artefact.download_name,
+            imported_by=imported_by,
+            note=note,
+            selected_sheets=selected_sheets,
+        )
+    except SchemaMappingRejected as exc:
+        db.rollback()
+        logger.warning(
+            "Import from conversion rejected by the column-alignment quality gate: %s", exc
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception("Import from conversion failed (database error)")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database write failed: {exc!s}",
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.exception("Import from conversion failed (unknown error)")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Import failed: {exc!s}",
+        ) from exc
+
+
 @router.get(
     "/conflicts",
     response_model=ConflictListResponse,
-    summary="列出所有待复核的 sector 冲突（按 sheet + A 列值分组）",
+    summary="List sector conflicts pending review, grouped by sheet and column A value",
 )
 def get_conflicts(db: Session = Depends(get_db)) -> ConflictListResponse:
     return list_pending_conflicts(db)
@@ -192,26 +267,26 @@ def get_conflicts(db: Session = Depends(get_db)) -> ConflictListResponse:
 @router.post(
     "/conflicts/resolve",
     response_model=ConflictResolveResponse,
-    summary="批量提交冲突复核结果",
+    summary="Submit conflict review decisions in bulk",
 )
 def post_resolve_conflicts(
     resolutions: list[ConflictResolution] = Body(
         ...,
-        description="决定列表，每条 {raw_row_id, decision: 'TRUST_SHEET'|'TRUST_A'|'SKIP'}",
+        description="Decision list. Each item is {raw_row_id, decision: 'TRUST_SHEET'|'TRUST_A'|'SKIP'}",
     ),
     db: Session = Depends(get_db),
 ) -> ConflictResolveResponse:
     if not resolutions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="resolutions 列表为空",
+            detail="resolutions list is empty",
         )
     try:
         return resolve_pending_conflicts(db, resolutions=resolutions)
     except SQLAlchemyError as exc:
         db.rollback()
-        logger.exception("复核冲突时数据库异常")
+        logger.exception("Database error while reviewing conflicts")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"数据库写入失败：{exc!s}",
+            detail=f"Database write failed: {exc!s}",
         ) from exc

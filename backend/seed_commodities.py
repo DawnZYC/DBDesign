@@ -1,8 +1,8 @@
-"""从 VT_SG_PWR_GREF.xlsx 的 Commodities sheet 灌入完整 commodity 字典。
+"""Seed the full commodity dictionary from the Commodities sheet in VT_SG_PWR_GREF.xlsx.
 
-支持重复执行（按 commodity_code upsert，已存在则覆盖元数据）。
+Safe to run repeatedly. Rows are upserted by commodity_code; existing metadata is overwritten.
 
-用法：
+Usage:
     python seed_commodities.py /path/to/VT_SG_PWR_GREF.xlsx
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# 让 app 包可被 import
+# Make the app package importable.
 sys.path.insert(0, str(Path(__file__).parent))
 
 from openpyxl import load_workbook
@@ -20,9 +20,9 @@ from sqlalchemy import select
 from app.database import SessionLocal
 from app import models
 
-# Commodities sheet 的列布局（B 起）。两个并排的块：左 NRG / 右 ENV，
-# 每块 7 列：Csets / CommName / CommDesc / Unit / LimType / CTSLvl / PeakTS / Ctype（注：
-# F-I 是 LimType / CTSLvl / PeakTS / Ctype）
+# Commodities sheet layout from column B onward. It has two side-by-side blocks:
+# NRG on the left and ENV on the right. Each block has 8 columns:
+# Csets / CommName / CommDesc / Unit / LimType / CTSLvl / PeakTS / Ctype.
 LEFT_COLS = {
     "set": "B",
     "code": "C",
@@ -65,12 +65,12 @@ def _read_block(sheet, cols: dict, max_row: int) -> list[dict]:
         code = _cell(sheet, cols["code"], row)
         if not _is_data_value(code):
             continue
-        # 跳过表头行（CommName / "Commodity name" 之类）
+        # Skip header rows such as CommName / "Commodity name".
         code_lower = str(code).strip().lower()
         if code_lower in {"commname", "commodity name"}:
             continue
         cs = _cell(sheet, cols["set"], row)
-        # set 必须是 NRG/ENV 这类数据值，否则视为分组标题或表头
+        # The set must be a data value such as NRG/ENV; otherwise treat it as a group title or header.
         if not _is_data_value(cs) or str(cs).strip().lower() in {"csets", "~fi_comm"}:
             continue
         out.append({
@@ -95,11 +95,11 @@ def _str_or_none(v: Any) -> str | None:
 
 def main(xlsx_path: Path) -> None:
     if not xlsx_path.exists():
-        sys.exit(f"找不到文件: {xlsx_path}")
+        sys.exit(f"File not found: {xlsx_path}")
 
     wb = load_workbook(filename=str(xlsx_path), data_only=True, read_only=True)
     if "Commodities" not in wb.sheetnames:
-        sys.exit(f"sheet 'Commodities' 不存在；现有 sheet: {wb.sheetnames}")
+        sys.exit(f"sheet 'Commodities' does not exist; available sheets: {wb.sheetnames}")
 
     sheet = wb["Commodities"]
     max_row = sheet.max_row or 0
@@ -108,17 +108,17 @@ def main(xlsx_path: Path) -> None:
     right = _read_block(sheet, RIGHT_COLS, max_row)
     all_rows = {row["commodity_code"]: row for row in left}
     for row in right:
-        all_rows[row["commodity_code"]] = row  # 右块覆盖（其实 code 不会重叠）
+        all_rows[row["commodity_code"]] = row  # Right block wins; codes should not overlap in practice.
     wb.close()
 
-    print(f"从 Commodities sheet 解析到 {len(all_rows)} 个 commodity:")
+    print(f"Parsed {len(all_rows)} commodities from the Commodities sheet:")
     for code, fields in all_rows.items():
         print(
             f"  {code:<18}  set={fields['commodity_set']:<6}  "
             f"unit={fields['unit'] or '-':<5}  desc={fields['commodity_description']}"
         )
 
-    # 写入数据库（upsert）
+    # Write to the database with upsert semantics.
     db = SessionLocal()
     try:
         upserts_new = 0
@@ -131,14 +131,14 @@ def main(xlsx_path: Path) -> None:
                 db.add(models.Commodity(**fields))
                 upserts_new += 1
             else:
-                # 已存在：覆盖元数据（不改 commodity_id）
+                # Existing row: overwrite metadata without changing commodity_id.
                 for key, val in fields.items():
                     if key != "commodity_code":
                         setattr(existing, key, val)
                 upserts_update += 1
         db.commit()
         print(
-            f"\n写入完成 ✓  新增 {upserts_new} 条，更新 {upserts_update} 条。"
+            f"\nWrite complete ✓  inserted {upserts_new} rows, updated {upserts_update} rows."
         )
     except Exception:
         db.rollback()
@@ -149,5 +149,5 @@ def main(xlsx_path: Path) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        sys.exit("用法: python seed_commodities.py /path/to/VT_SG_PWR_GREF.xlsx")
+        sys.exit("Usage: python seed_commodities.py /path/to/VT_SG_PWR_GREF.xlsx")
     main(Path(sys.argv[1]))

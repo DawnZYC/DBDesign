@@ -2,6 +2,7 @@
 
 纯规则引擎，无 LLM。Visualizer Agent 调用本工具拿一个骨架，再填充 dataset。
 """
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -40,9 +41,7 @@ class ChartRecommendation(BaseModel):
     echarts_skeleton: dict[str, Any] = Field(
         ..., description="ECharts option 骨架（不含 dataset，前端填）"
     )
-    suggested_dimensions: list[str] = Field(
-        ..., description="建议哪些列作为 x 轴 / 分组维度"
-    )
+    suggested_dimensions: list[str] = Field(..., description="建议哪些列作为 x 轴 / 分组维度")
 
 
 # -----------------------------------------------------------------------------
@@ -59,9 +58,7 @@ def _decide_chart_type(shape: DataShape, intent_text: str) -> ChartType:
 
     # 时间序列优先
     if shape.has_time_axis:
-        if shape.n_categories > 1 and any(
-            kw in intent_text for kw in ("堆叠", "stack", "组成")
-        ):
+        if shape.n_categories > 1 and any(kw in intent_text for kw in ("堆叠", "stack", "组成")):
             return "stacked_bar"
         return "line"
 
@@ -104,16 +101,12 @@ def _skeleton_for(chart_type: ChartType, unit: str | None) -> dict[str, Any]:
         return {
             **base,
             "tooltip": {"trigger": "item"},
-            "series": [
-                {"type": "pie", "radius": "60%", "data": []}
-            ],
+            "series": [{"type": "pie", "radius": "60%", "data": []}],
         }
     if chart_type == "sankey":
         return {
             "tooltip": {"trigger": "item"},
-            "series": [
-                {"type": "sankey", "data": [], "links": []}
-            ],
+            "series": [{"type": "sankey", "data": [], "links": []}],
         }
     raise ValueError(f"Unknown chart_type {chart_type}")
 
