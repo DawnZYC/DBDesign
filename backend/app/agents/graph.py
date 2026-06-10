@@ -52,6 +52,36 @@ NODE_VISUALIZER = "visualizer"
 # -----------------------------------------------------------------------------
 # 条件边：SQL 节点完成后的路由
 # -----------------------------------------------------------------------------
+def route_after_planner(state: AgentState) -> str:
+    """Planner 之后的意图分流。
+
+    * data_query（默认）→ SQL Agent，走完整数据链路
+    * direct_answer     → 直接到 Interpreter 对话式回答（不查库、不画图）
+    """
+    if state.get("intent") == "direct_answer":
+        logger.debug("route_after_planner → interpreter (direct answer)")
+        return NODE_INTERPRETER
+    return NODE_SQL
+
+
+def route_after_interpreter(state: AgentState) -> str:
+    """Interpreter 之后决定是否进 Visualizer。
+
+    跳过画图的情况：
+    * 直接回答模式（闲聊 / 概念问题）
+    * 没有 SQL 结果，或结果行数 < 2（单个聚合数字画图没有意义）
+    """
+    if state.get("intent") == "direct_answer":
+        logger.debug("route_after_interpreter → END (direct answer)")
+        return END
+    sql_result = state.get("sql_result") or {}
+    rows = sql_result.get("rows") or []
+    if len(rows) < 2:
+        logger.debug("route_after_interpreter → END (%d rows, chart skipped)", len(rows))
+        return END
+    return NODE_VISUALIZER
+
+
 def route_after_sql(state: AgentState) -> str:
     """决定 sql_gen 节点执行完后流向哪个节点。
 
@@ -117,9 +147,27 @@ def build_graph() -> CompiledGraph:
 
     # ---- 固定边 ----
     graph.add_edge(START, NODE_PLANNER)
-    graph.add_edge(NODE_PLANNER, NODE_SQL)
-    graph.add_edge(NODE_INTERPRETER, NODE_VISUALIZER)
     graph.add_edge(NODE_VISUALIZER, END)
+
+    # ---- 条件边：planner 之后按意图分流（闲聊不进 SQL）----
+    graph.add_conditional_edges(
+        NODE_PLANNER,
+        route_after_planner,
+        {
+            NODE_SQL: NODE_SQL,
+            NODE_INTERPRETER: NODE_INTERPRETER,
+        },
+    )
+
+    # ---- 条件边：interpreter 之后决定是否画图 ----
+    graph.add_conditional_edges(
+        NODE_INTERPRETER,
+        route_after_interpreter,
+        {
+            NODE_VISUALIZER: NODE_VISUALIZER,
+            END: END,
+        },
+    )
 
     # ---- 条件边：sql_gen 完成后路由 ----
     graph.add_conditional_edges(

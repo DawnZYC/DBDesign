@@ -174,9 +174,9 @@ class TestParsePlan:
 
         raw = "无法解析的内容"
         result = _parse_plan(raw)
-        # 兜底：把整段当一步
-        assert len(result) == 1
-        assert result[0] == "无法解析的内容"
+        # 解析不到 bullet 时返回空列表；「全文当一步」的兜底上移到了
+        # planner_node（仅 data_query 意图时触发，避免把 INTENT 行当步骤）
+        assert result == []
 
     def test_ignores_blank_lines(self):
         from app.agents.planner import _parse_plan
@@ -345,3 +345,87 @@ class TestBuildGraph:
         g1 = get_graph()
         g2 = get_graph()
         assert g1 is g2
+
+
+# =============================================================================
+# 意图分流（修复「闲聊也跑 SQL + 画图」）
+# =============================================================================
+
+
+class TestIntentRouting:
+    """Planner 意图解析 + 两条条件边的路由逻辑。"""
+
+    def test_parse_intent_chat(self):
+        from app.agents.planner import INTENT_DIRECT_ANSWER, _parse_intent
+
+        assert _parse_intent("INTENT: chat") == INTENT_DIRECT_ANSWER
+        assert _parse_intent("intent: chat\n") == INTENT_DIRECT_ANSWER
+
+    def test_parse_intent_data_query(self):
+        from app.agents.planner import INTENT_DATA_QUERY, _parse_intent
+
+        assert _parse_intent("INTENT: data_query\n- 查询 capex") == INTENT_DATA_QUERY
+        # 缺失 INTENT 行 → 保守默认 data_query（保持旧行为）
+        assert _parse_intent("- 查询 capex\n- 画图") == INTENT_DATA_QUERY
+
+    def test_planner_chat_intent(self):
+        """LLM 判定闲聊 → intent=direct_answer 且无步骤。"""
+        from app.agents.planner import INTENT_DIRECT_ANSWER, planner_node
+
+        with patch("app.agents.planner.get_chat_model") as factory:
+            factory.return_value = _fake_llm(["INTENT: chat"])
+            result = planner_node(_make_state())
+        assert result["intent"] == INTENT_DIRECT_ANSWER
+        assert result["plan"] == []
+        assert result["error"] is None
+
+    def test_planner_data_intent_keeps_steps(self):
+        from app.agents.planner import INTENT_DATA_QUERY, planner_node
+
+        with patch("app.agents.planner.get_chat_model") as factory:
+            factory.return_value = _fake_llm(["INTENT: data_query\n- 查询 capex\n- 画折线图"])
+            result = planner_node(_make_state())
+        assert result["intent"] == INTENT_DATA_QUERY
+        assert result["plan"] == ["查询 capex", "画折线图"]
+
+    def test_route_after_planner(self):
+        from app.agents.graph import NODE_INTERPRETER, NODE_SQL, route_after_planner
+
+        assert route_after_planner(_make_state(intent="direct_answer")) == NODE_INTERPRETER
+        assert route_after_planner(_make_state(intent="data_query")) == NODE_SQL
+        assert route_after_planner(_make_state()) == NODE_SQL  # intent 缺失 → 旧行为
+
+    def test_route_after_interpreter_skips_chart(self):
+        from langgraph.graph import END
+
+        from app.agents.graph import NODE_VISUALIZER, route_after_interpreter
+
+        # 闲聊 → 不画图
+        assert route_after_interpreter(_make_state(intent="direct_answer")) == END
+        # 单行聚合结果 → 不画图
+        one_row = {"rows": [{"value": 42}]}
+        assert route_after_interpreter(_make_state(sql_result=one_row)) == END
+        # 多行数据 → 画图
+        many = {"rows": [{"y": 2020, "v": 1}, {"y": 2030, "v": 2}]}
+        assert route_after_interpreter(_make_state(sql_result=many)) == NODE_VISUALIZER
+
+    def test_chat_message_end_to_end_skips_sql_and_chart(self):
+        """全图执行：闲聊消息 → planner→interpreter→END，不碰 SQL、不产图。"""
+        import asyncio
+
+        from langchain_core.messages import HumanMessage
+
+        from app.agents.graph import build_graph
+
+        with (
+            patch("app.agents.planner.get_chat_model") as planner_factory,
+            patch("app.agents.interpreter.get_chat_model") as interp_factory,
+        ):
+            planner_factory.return_value = _fake_llm(["INTENT: chat"])
+            interp_factory.return_value = _fake_llm(["你好！我是 SG-TIMES 数据助手。"])
+            g = build_graph()
+            final = asyncio.run(g.ainvoke(_make_state(messages=[HumanMessage(content="你好")])))
+
+        assert final.get("sql_params") is None, "闲聊不应触发 SQL Agent"
+        assert final.get("chart_spec") is None, "闲聊不应产出图表"
+        assert "SG-TIMES" in (final.get("interpretation") or "")

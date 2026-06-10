@@ -35,6 +35,9 @@ class AgentState(TypedDict):
 
     # Planner 产物
     plan: list[str]
+    # 意图："data_query"（需要查库）/ "direct_answer"（闲聊、概念解释等，
+    # 直接由 Interpreter 回答，不走 SQL / Visualizer）。None 视为 data_query。
+    intent: str | None
 
     # SQL Agent 产物
     sql_params: dict[str, Any] | None  # app.tools.sql_runner.QueryParams.model_dump()

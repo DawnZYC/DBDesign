@@ -86,7 +86,12 @@ async def interpreter_node(state: AgentState) -> dict:
 
     同步调用（测试/graph.invoke）时 LangGraph 会自动在事件循环中 await。
     """
-    logger.info("interpreter_node: start")
+    logger.info("interpreter_node: start (intent=%s)", state.get("intent"))
+
+    # 直接回答模式（Planner 判定为闲聊 / 概念问题）：不依赖 SQL 结果，
+    # 用对话 prompt 流式回答。流式 token 透出方式与数据解读模式完全一致。
+    if state.get("intent") == "direct_answer":
+        return await _direct_answer(state)
 
     sql_result = state.get("sql_result")
     if not sql_result:
@@ -116,5 +121,40 @@ async def interpreter_node(state: AgentState) -> dict:
         logger.exception("interpreter_node: LLM call failed")
         return {
             "interpretation": f"解读生成失败：{exc!s}",
+            "error": f"Interpreter 失败: {exc!s}",
+        }
+
+
+_DIRECT_SYSTEM = """你是 SG-TIMES 能源数据分析平台的 AI 助手，友好、简洁。
+
+你的能力（用户问起时可介绍）：
+- 用自然语言查询新加坡能源系统模型数据：capex / 运维成本 / 排放因子 / 容量等指标，
+  支持跨部门（Power、Industry、Transport 等 10 个）、跨年份的查询、对比与趋势图
+- 术语解释（如 PWRNGA 等商品编码）、单位换算（PJ/ktoe/GWh）、趋势预测
+
+回答要求：用中文、保持简短（闲聊 1-3 句即可）；如果用户的问题其实需要查数据，
+引导他直接提出具体的数据问题（举一个示例问法）。不要编造数据库里的数值。"""
+
+
+async def _direct_answer(state: AgentState) -> dict:
+    """对话式直接回答（不查库）。复用 astream 以便前端拿到流式 token。"""
+    user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
+    question = str(user_messages[-1].content) if user_messages else "你好"
+
+    llm = get_chat_model()
+    messages = [SystemMessage(content=_DIRECT_SYSTEM), HumanMessage(content=question)]
+    try:
+        chunks: list[str] = []
+        async for chunk in llm.astream(messages):
+            content = chunk.content
+            if isinstance(content, str):
+                chunks.append(content)
+        text = "".join(chunks)
+        logger.info("interpreter_node(direct): generated %d chars", len(text))
+        return {"interpretation": text, "error": None}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("interpreter_node(direct): LLM call failed")
+        return {
+            "interpretation": f"回答生成失败：{exc!s}",
             "error": f"Interpreter 失败: {exc!s}",
         }

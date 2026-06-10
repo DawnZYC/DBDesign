@@ -1,14 +1,18 @@
-"""Planner 节点 — 把用户问题分解为有序步骤列表。
+"""Planner 节点 — 意图分流 + 把数据问题分解为有序步骤列表。
 
 职责：
   1. 读取对话历史中的最新用户消息
-  2. 用 LLM 生成 3-5 条执行步骤（Markdown bullet list）
-  3. 把步骤写入 AgentState.plan；清空 error 字段
+  2. 用 LLM 判断意图（data_query / chat），并为数据问题生成 3-5 条执行步骤
+  3. 把意图写入 AgentState.intent，步骤写入 AgentState.plan；清空 error 字段
+
+意图分流（修复「闲聊也跑 SQL + 画图」）：
+  * data_query     → 走 SQL Agent → Interpreter → Visualizer 全链路
+  * direct_answer  → 直接交给 Interpreter 对话式回答，不查库、不画图
 
 特点：
-  * 普通 llm.invoke，不需要工具或结构化输出
-  * 输出 Markdown bullet list，后续节点解析为 plan: list[str]
-  * 调用方（graph.py）负责把步骤作为 SSE agent_start 事件推给前端
+  * 普通 llm.invoke，意图与步骤在同一次调用中产出（省一次 LLM 往返）
+  * 输出第一行为 `INTENT: ...`，后续为 Markdown bullet list
+  * 解析失败时保守地按 data_query 处理（保持旧行为）
 """
 
 from __future__ import annotations
@@ -22,31 +26,50 @@ from app.llm.provider import get_chat_model
 
 logger = logging.getLogger(__name__)
 
+INTENT_DATA_QUERY = "data_query"
+INTENT_DIRECT_ANSWER = "direct_answer"
+
 # -----------------------------------------------------------------------------
 # Prompt
 # -----------------------------------------------------------------------------
 _SYSTEM = """你是 SG-TIMES 数据分析平台的 Planner。
-你的任务：把用户的自然语言问题拆解为 3-5 条简洁的执行步骤，步骤之间有顺序依赖。
 
-输出格式要求（严格遵守）：
+第一步：判断用户消息的意图，在输出的第一行写：
+  INTENT: data_query   —— 用户在询问数据库中的数据（指标数值、趋势、对比、排名、某技术的参数等）
+  INTENT: chat         —— 问候、闲聊、感谢、问你是谁/平台能干什么、纯概念解释等不需要查数据库的消息
+
+第二步：仅当 INTENT 为 data_query 时，把问题拆解为 3-5 条简洁的执行步骤：
 - 用 Markdown 无序列表，每行一个步骤
 - 步骤从动词开始，简洁明确
 - 不超过 5 条，每条不超过 30 个字
-- 只输出步骤列表，不要解释或额外文字
+INTENT 为 chat 时不输出任何步骤，只输出 INTENT 行。
 
 数据库中可用的指标：capex, fixed_opex, variable_opex, emission_factor,
 tax_cost, subsidy_cost, efficiency_value, technology_efficiency, heat_rate,
 capacity_to_activity_factor, capacity, commodity_demand_value
 
-示例输出：
+示例 1（数据问题）：
+INTENT: data_query
 - 查询 Power 部门 2018-2050 年的 capex 原始数据
 - 按年份对 capex 求和聚合
 - 用折线图展示趋势
+
+示例 2（闲聊 / 问候）：
+INTENT: chat
 """
 
 
+def _parse_intent(raw: str) -> str:
+    """从 LLM 输出首部提取 INTENT；缺失或无法识别时默认 data_query（保守）。"""
+    for line in raw.splitlines()[:3]:
+        normalized = line.strip().lower()
+        if normalized.startswith("intent"):
+            return INTENT_DIRECT_ANSWER if "chat" in normalized else INTENT_DATA_QUERY
+    return INTENT_DATA_QUERY
+
+
 def _parse_plan(raw: str) -> list[str]:
-    """把 LLM 输出的 Markdown bullet list 转为 list[str]。"""
+    """把 LLM 输出的 Markdown bullet list 转为 list[str]（INTENT 行被自然跳过）。"""
     steps: list[str] = []
     for line in raw.splitlines():
         line = line.strip()
@@ -59,7 +82,7 @@ def _parse_plan(raw: str) -> list[str]:
             continue
         if step:
             steps.append(step)
-    return steps or [raw.strip()]  # 如果解析失败，把全文当一步兜底
+    return steps
 
 
 # -----------------------------------------------------------------------------
@@ -69,7 +92,7 @@ def planner_node(state: AgentState) -> dict:
     """LangGraph 节点：Planner。
 
     入参：AgentState（取 messages）
-    出参：{ plan, error }（partial state update）
+    出参：{ plan, intent, error }（partial state update）
     """
     logger.info("planner_node: start (retry_count=%d)", state.get("retry_count", 0))
 
@@ -77,7 +100,11 @@ def planner_node(state: AgentState) -> dict:
     user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
     if not user_messages:
         logger.warning("planner_node: no HumanMessage found in state")
-        return {"plan": ["无法理解问题，请重新提问"], "error": "missing user message"}
+        return {
+            "plan": ["无法理解问题，请重新提问"],
+            "intent": INTENT_DIRECT_ANSWER,
+            "error": "missing user message",
+        }
 
     latest_question = user_messages[-1].content
 
@@ -98,9 +125,13 @@ def planner_node(state: AgentState) -> dict:
     try:
         response = llm.invoke(messages)
         raw_text = response.content if isinstance(response.content, str) else str(response.content)
+        intent = _parse_intent(raw_text)
         plan = _parse_plan(raw_text)
-        logger.info("planner_node: generated %d steps", len(plan))
-        return {"plan": plan, "error": None}
+        if intent == INTENT_DATA_QUERY and not plan:
+            # 数据问题但没解析出步骤：把全文当一步兜底（旧行为）
+            plan = [raw_text.strip()]
+        logger.info("planner_node: intent=%s, %d steps", intent, len(plan))
+        return {"plan": plan, "intent": intent, "error": None}
     except Exception as exc:  # noqa: BLE001
         logger.exception("planner_node: LLM call failed")
-        return {"plan": [], "error": f"Planner 失败: {exc!s}"}
+        return {"plan": [], "intent": INTENT_DATA_QUERY, "error": f"Planner 失败: {exc!s}"}
