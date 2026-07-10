@@ -86,7 +86,14 @@ class TestCreateConversion:
                     "source.xlsx",
                     _make_workbook_bytes(),
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
+                ),
+                # Supply a template so the test does not depend on the (gitignored)
+                # bundled default template being present.
+                "ecotea_template": (
+                    "template.xlsx",
+                    _make_workbook_bytes(),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ),
             },
         )
         # The engine reports the unknown model, which surfaces as 400.
@@ -117,7 +124,14 @@ class TestCreateConversion:
                         "source.xlsx",
                         _make_workbook_bytes(),
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
+                    ),
+                    # Supply a template so the test does not depend on the (gitignored)
+                    # bundled default template being present.
+                    "ecotea_template": (
+                        "template.xlsx",
+                        _make_workbook_bytes(),
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    ),
                 },
             )
 

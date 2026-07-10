@@ -43,21 +43,12 @@ class TestJsonify:
 
 
 class TestGeographyFullName:
-    @pytest.mark.parametrize(
-        ("code", "name"),
-        [
-            ("SG", "Singapore"),
-            ("MY", "Malaysia"),
-            ("ID", "Indonesia"),
-            ("TH", "Thailand"),
-            ("CN", "China"),
-        ],
-    )
-    def test_known(self, code, name):
-        assert _geography_full_name(code) == name
-
-    def test_unknown(self):
-        assert _geography_full_name("ZZ") is None
+    # _geography_full_name is intentionally genericized to return None for every
+    # code (the importer no longer hard-codes country names). It only maps a code
+    # to a display name when one is supplied elsewhere.
+    @pytest.mark.parametrize("code", ["SG", "MY", "ID", "TH", "CN", "ZZ"])
+    def test_returns_none(self, code):
+        assert _geography_full_name(code) is None
 
 
 class TestNormalizeSheetFilter:

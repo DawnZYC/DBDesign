@@ -23,7 +23,7 @@ class TestConvertRecord:
         assert rec.year == 2018
         assert rec.start_year == 2018
         assert rec.ef_unit == "PJ"
-        assert rec.currency == "MSGD2016"
+        assert rec.currency == "BASECUR"
         assert rec.capex_unit == "GW"
         assert rec.fixed_opex_unit == "GW*yr(2018)"
         assert rec.variable_opex_unit == "PJ (2018)"
