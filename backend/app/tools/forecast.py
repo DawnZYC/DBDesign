@@ -46,7 +46,9 @@ class ForecastResult(BaseModel):
     history_count: int
     forecast: list[ForecastPoint]
     r_squared: float = Field(..., description="Goodness of fit (closer to 1 is better)")
-    coefficients: list[float] = Field(..., description="Polynomial coefficients (highest to lowest degree)")
+    coefficients: list[float] = Field(
+        ..., description="Polynomial coefficients (highest to lowest degree)"
+    )
 
 
 @tool("forecast_trend", args_schema=ForecastInput)

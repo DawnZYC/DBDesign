@@ -127,10 +127,16 @@ class QueryResult(BaseModel):
     rows: list[dict[str, Any]]
     metric: MetricName
     aggregation: Aggregation
-    metric_unit: str | None = Field(default=None, description="Most common unit in the result (mode when several)")
+    metric_unit: str | None = Field(
+        default=None, description="Most common unit in the result (mode when several)"
+    )
     row_count: int
-    truncated: bool = Field(default=False, description="Whether the limit was hit and rows were truncated")
-    sql_summary: str = Field(default="", description="Human-readable query summary (for debug / trace)")
+    truncated: bool = Field(
+        default=False, description="Whether the limit was hit and rows were truncated"
+    )
+    sql_summary: str = Field(
+        default="", description="Human-readable query summary (for debug / trace)"
+    )
 
 
 # -----------------------------------------------------------------------------

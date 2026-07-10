@@ -464,7 +464,9 @@ class TestIntentRouting:
         from app.agents.planner import INTENT_DATA_QUERY, planner_node
 
         with patch("app.agents.planner.get_chat_model") as factory:
-            factory.return_value = _fake_llm(["INTENT: data_query\n- query capex\n- draw a line chart"])
+            factory.return_value = _fake_llm(
+                ["INTENT: data_query\n- query capex\n- draw a line chart"]
+            )
             result = planner_node(_make_state())
         assert result["intent"] == INTENT_DATA_QUERY
         assert result["plan"] == ["query capex", "draw a line chart"]
@@ -574,7 +576,9 @@ class TestConversationContext:
             result = planner_node(state)
 
         human_prompt = str(captured[-1].content)
-        assert "power" in human_prompt, "the Planner prompt should include power from the previous turn"
+        assert (
+            "power" in human_prompt
+        ), "the Planner prompt should include power from the previous turn"
         assert result["intent"] == "data_query"
 
     def test_sql_agent_prompt_carries_history(self):
@@ -589,7 +593,9 @@ class TestConversationContext:
 
             def fake_invoke(msgs):
                 captured.extend(msgs)
-                raise RuntimeError("stop here")  # only verify the prompt, don't actually run the query
+                raise RuntimeError(
+                    "stop here"
+                )  # only verify the prompt, don't actually run the query
 
             structured.invoke = fake_invoke
             llm.with_structured_output.return_value = structured
@@ -600,4 +606,6 @@ class TestConversationContext:
             sql_agent_node(state)
 
         human_prompt = str(captured[-1].content)
-        assert "power" in human_prompt, "the SQL Agent prompt should include power from the previous turn"
+        assert (
+            "power" in human_prompt
+        ), "the SQL Agent prompt should include power from the previous turn"

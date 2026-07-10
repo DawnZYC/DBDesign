@@ -150,8 +150,7 @@ export function ColumnMappingReview({
                 const key = `${m.sheet_name}::${s.excel_column}`;
                 const selected = choice[key] ?? NONE;
                 const isConflict =
-                  selected !== NONE &&
-                  (conflictsBySheet[m.sheet_name]?.has(selected) ?? false);
+                  selected !== NONE && (conflictsBySheet[m.sheet_name]?.has(selected) ?? false);
                 return (
                   <tr
                     key={key}
@@ -174,9 +173,7 @@ export function ColumnMappingReview({
                           </option>
                         ))}
                       </select>
-                      {isConflict && (
-                        <span className="cmr-conflict-tag">duplicate target</span>
-                      )}
+                      {isConflict && <span className="cmr-conflict-tag">duplicate target</span>}
                     </td>
                     <td className="cmr-conf">
                       {s.target_field ? `${Math.round(s.confidence * 100)}%` : '—'}

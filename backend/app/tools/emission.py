@@ -27,7 +27,9 @@ class EmissionFactorHit(BaseModel):
     is_exact_year: bool
     emission_factor: float | None
     emission_factor_unit: str | None
-    raw_row_id: int | None = Field(default=None, description="Source Excel row ID (for M4 trace-back)")
+    raw_row_id: int | None = Field(
+        default=None, description="Source Excel row ID (for M4 trace-back)"
+    )
 
 
 class EmissionFactorResponse(BaseModel):

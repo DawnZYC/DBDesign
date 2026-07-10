@@ -34,7 +34,13 @@ def _commodity_to_doc(c: models.Commodity) -> Document:
     if c.commodity_description:
         parts.append(f"Description: {c.commodity_description}")
     if c.commodity_set:
-        kind = "Energy" if c.commodity_set == "NRG" else "Emission" if c.commodity_set == "ENV" else "Other"
+        kind = (
+            "Energy"
+            if c.commodity_set == "NRG"
+            else "Emission"
+            if c.commodity_set == "ENV"
+            else "Other"
+        )
         parts.append(f"Set (Csets): {c.commodity_set} ({kind})")
     if c.unit:
         parts.append(f"Unit: {c.unit}")

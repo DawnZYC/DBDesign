@@ -29,7 +29,9 @@ from app.llm.provider import get_chat_model
 
 logger = logging.getLogger(__name__)
 
-MAX_ROWS_FOR_LLM = 30  # Send at most this many rows to the LLM; the rest is replaced by a stats summary
+MAX_ROWS_FOR_LLM = (
+    30  # Send at most this many rows to the LLM; the rest is replaced by a stats summary
+)
 
 
 def _language_directive(state: AgentState) -> str:
@@ -41,6 +43,7 @@ def _language_directive(state: AgentState) -> str:
         f"\n\nIMPORTANT: Write your entire reply in {lang}, regardless of the language of the "
         "question or the data. Keep codes, units, and identifiers (e.g. commodity codes, capex, PJ) as-is."
     )
+
 
 # -----------------------------------------------------------------------------
 # Prompt

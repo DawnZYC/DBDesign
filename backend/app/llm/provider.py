@@ -38,7 +38,9 @@ class ProviderConfig(BaseModel):
     display_name: str
     adapter: Literal["openai_compat", "anthropic"]
     api_key_field: str  # the corresponding field name on Settings
-    base_url: str | None = None  # set for OpenAI-compatible; None uses the default (official OpenAI)
+    base_url: str | None = (
+        None  # set for OpenAI-compatible; None uses the default (official OpenAI)
+    )
     default_model: str
     docs_url: str | None = None
 

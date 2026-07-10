@@ -67,9 +67,7 @@ _artefact_cache: dict[str, ConversionArtefact] = {}
 def _prune_expired_locked() -> None:
     """Drop artefacts older than the TTL and delete their files. Caller must hold _cache_lock."""
     now = datetime.now(tz=UTC)
-    expired = [
-        tok for tok, a in _artefact_cache.items() if now - a.created_at > _ARTEFACT_TTL
-    ]
+    expired = [tok for tok, a in _artefact_cache.items() if now - a.created_at > _ARTEFACT_TTL]
     for tok in expired:
         artefact = _artefact_cache.pop(tok, None)
         if artefact is not None:

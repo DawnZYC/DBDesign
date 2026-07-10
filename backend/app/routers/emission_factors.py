@@ -67,9 +67,7 @@ def upsert_emission_factor(
 
         param = db.get(models.TechnologyYearEcoteaParameter, ty.technology_year_id)
         if param is None:
-            param = models.TechnologyYearEcoteaParameter(
-                technology_year_id=ty.technology_year_id
-            )
+            param = models.TechnologyYearEcoteaParameter(technology_year_id=ty.technology_year_id)
             db.add(param)
             created = True
 

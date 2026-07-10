@@ -32,7 +32,9 @@ from app.rag.ingest import ingest_dictionary, ingest_markdown
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed RAG knowledge base")
     parser.add_argument(
-        "--reset", action="store_true", help="Clear the collection before ingesting (use when switching embedding provider)"
+        "--reset",
+        action="store_true",
+        help="Clear the collection before ingesting (use when switching embedding provider)",
     )
     parser.add_argument("--skip-md", action="store_true", help="Skip markdown ingestion")
     parser.add_argument(

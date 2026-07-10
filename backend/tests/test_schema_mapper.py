@@ -116,7 +116,9 @@ def test_build_remap_prefers_higher_confidence_on_duplicate_target():
         ]
     )
     remap, _ = sm.build_remap(mapping)
-    assert remap == {"F": "R"}, "column F at confidence 0.98 should win, not column C which appears first"
+    assert remap == {
+        "F": "R"
+    }, "column F at confidence 0.98 should win, not column C which appears first"
 
 
 def test_validate_remap_rejects_missing_core_fields():
@@ -323,7 +325,9 @@ def test_end_to_end_renamed_and_shifted_import():
         )
         assert result.rows_imported > 0
         # ImportResult must surface column-alignment warnings (auto-alignment was enabled)
-        assert result.column_warnings, "there should be column-level warnings when Schema-Mapping is enabled"
+        assert (
+            result.column_warnings
+        ), "there should be column-level warnings when Schema-Mapping is enabled"
         assert any("Auto-aligned" in w for w in result.column_warnings)
 
         capex_rows = db.execute(
@@ -331,7 +335,9 @@ def test_end_to_end_renamed_and_shifted_import():
         ).scalar()
     finally:
         db.close()
-    assert capex_rows > 0, "capex should still be relocated to the canonical column after rename+shift"
+    assert (
+        capex_rows > 0
+    ), "capex should still be relocated to the canonical column after rename+shift"
 
 
 @pytest.mark.skipif(not HAS_TEMPLATE, reason="template file missing")
@@ -347,7 +353,9 @@ def test_preview_overrides_import_roundtrip():
     power = next(s for s in preview.sheets if s.sheet_name == "Power")
     assert power.column_mapping is not None
     assert power.column_mapping.layout_is_standard is False
-    assert preview.standard_fields, "preview should return the standard field list for the frontend dropdown"
+    assert (
+        preview.standard_fields
+    ), "preview should return the standard field list for the frontend dropdown"
 
     # Simulate the user accepting all suggestions in ColumnMappingReview (confirm both auto + review)
     overrides = {

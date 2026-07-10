@@ -95,7 +95,9 @@ function EmissionFactorPanel({ technologyId }: { technologyId: number | null }) 
   const patchRow = (year: number, patch: Partial<RowState>) =>
     setRows((prev) => prev.map((r) => (r.data_year === year ? { ...r, ...patch } : r)));
 
-  function parseValue(raw: string): { ok: true; value: number | null } | { ok: false; msg: string } {
+  function parseValue(
+    raw: string,
+  ): { ok: true; value: number | null } | { ok: false; msg: string } {
     const trimmed = raw.trim();
     if (trimmed === '') return { ok: true, value: null };
     const n = Number(trimmed);
@@ -157,9 +159,17 @@ function EmissionFactorPanel({ technologyId }: { technologyId: number | null }) 
       });
       // Insert the new row in year order, mark it saved.
       setRows((prev) =>
-        [...prev, { ...toRow(yr, parsed.value == null ? null : String(parsed.value), newUnit.trim() || null), saved: true }].sort(
-          (a, b) => a.data_year - b.data_year,
-        ),
+        [
+          ...prev,
+          {
+            ...toRow(
+              yr,
+              parsed.value == null ? null : String(parsed.value),
+              newUnit.trim() || null,
+            ),
+            saved: true,
+          },
+        ].sort((a, b) => a.data_year - b.data_year),
       );
       setNewYear('');
       setNewValue('');
@@ -226,7 +236,11 @@ function EmissionFactorPanel({ technologyId }: { technologyId: number | null }) 
                         value={row.value}
                         placeholder="(none)"
                         onChange={(e) =>
-                          patchRow(row.data_year, { value: e.target.value, saved: false, error: null })
+                          patchRow(row.data_year, {
+                            value: e.target.value,
+                            saved: false,
+                            error: null,
+                          })
                         }
                         aria-label={`Emission factor for ${row.data_year}`}
                       />
@@ -238,7 +252,11 @@ function EmissionFactorPanel({ technologyId }: { technologyId: number | null }) 
                         value={row.unit}
                         placeholder={DEFAULT_UNIT}
                         onChange={(e) =>
-                          patchRow(row.data_year, { unit: e.target.value, saved: false, error: null })
+                          patchRow(row.data_year, {
+                            unit: e.target.value,
+                            saved: false,
+                            error: null,
+                          })
                         }
                         aria-label={`Unit for ${row.data_year}`}
                       />

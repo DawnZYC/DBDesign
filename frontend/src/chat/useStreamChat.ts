@@ -99,82 +99,87 @@ export function useStreamChat(): UseStreamChatReturn {
     setIsStreaming(true);
 
     // 4. Start the SSE stream.
-    const ctrl = streamChat(text, history, {
-      onAgentStart: (node) => {
-        setMessages((prev) =>
-          updateById(prev, assistantId, (m) => ({
-            ...m,
-            currentNode: node as ChatMessage['currentNode'],
-          })),
-        );
-      },
+    const ctrl = streamChat(
+      text,
+      history,
+      {
+        onAgentStart: (node) => {
+          setMessages((prev) =>
+            updateById(prev, assistantId, (m) => ({
+              ...m,
+              currentNode: node as ChatMessage['currentNode'],
+            })),
+          );
+        },
 
-      onPlan: (steps) => {
-        setMessages((prev) => updateById(prev, assistantId, (m) => ({ ...m, plan: steps })));
-      },
+        onPlan: (steps) => {
+          setMessages((prev) => updateById(prev, assistantId, (m) => ({ ...m, plan: steps })));
+        },
 
-      onToken: (delta) => {
-        setMessages((prev) =>
-          updateById(prev, assistantId, (m) => ({
-            ...m,
-            content: m.content + delta,
-          })),
-        );
-      },
+        onToken: (delta) => {
+          setMessages((prev) =>
+            updateById(prev, assistantId, (m) => ({
+              ...m,
+              content: m.content + delta,
+            })),
+          );
+        },
 
-      onToolCall: (tool, args) => {
-        const event: ToolCallEvent = { tool, args };
-        setMessages((prev) =>
-          updateById(prev, assistantId, (m) => ({
-            ...m,
-            toolCalls: [...(m.toolCalls ?? []), event],
-          })),
-        );
-      },
+        onToolCall: (tool, args) => {
+          const event: ToolCallEvent = { tool, args };
+          setMessages((prev) =>
+            updateById(prev, assistantId, (m) => ({
+              ...m,
+              toolCalls: [...(m.toolCalls ?? []), event],
+            })),
+          );
+        },
 
-      onToolResult: (data) => {
-        const event: ToolResultEvent = {
-          tool: data.tool as string,
-          row_count: data.row_count as number | undefined,
-          truncated: data.truncated as boolean | undefined,
-          metric: data.metric as string | undefined,
-          sql_summary: data.sql_summary as string | undefined,
-          output_summary: data.output_summary as string | undefined,
-        };
-        setMessages((prev) =>
-          updateById(prev, assistantId, (m) => ({
-            ...m,
-            toolResults: [...(m.toolResults ?? []), event],
-          })),
-        );
-      },
+        onToolResult: (data) => {
+          const event: ToolResultEvent = {
+            tool: data.tool as string,
+            row_count: data.row_count as number | undefined,
+            truncated: data.truncated as boolean | undefined,
+            metric: data.metric as string | undefined,
+            sql_summary: data.sql_summary as string | undefined,
+            output_summary: data.output_summary as string | undefined,
+          };
+          setMessages((prev) =>
+            updateById(prev, assistantId, (m) => ({
+              ...m,
+              toolResults: [...(m.toolResults ?? []), event],
+            })),
+          );
+        },
 
-      onChart: (spec) => {
-        setMessages((prev) => updateById(prev, assistantId, (m) => ({ ...m, chartSpec: spec })));
-      },
+        onChart: (spec) => {
+          setMessages((prev) => updateById(prev, assistantId, (m) => ({ ...m, chartSpec: spec })));
+        },
 
-      onError: (message) => {
-        setMessages((prev) =>
-          updateById(prev, assistantId, (m) => ({
-            ...m,
-            errorMessage: message,
-            status: 'error',
-          })),
-        );
-      },
+        onError: (message) => {
+          setMessages((prev) =>
+            updateById(prev, assistantId, (m) => ({
+              ...m,
+              errorMessage: message,
+              status: 'error',
+            })),
+          );
+        },
 
-      onDone: () => {
-        setMessages((prev) =>
-          updateById(prev, assistantId, (m) => ({
-            ...m,
-            status: m.status === 'error' ? 'error' : 'done',
-            currentNode: undefined,
-          })),
-        );
-        setIsStreaming(false);
-        ctrlRef.current = null;
+        onDone: () => {
+          setMessages((prev) =>
+            updateById(prev, assistantId, (m) => ({
+              ...m,
+              status: m.status === 'error' ? 'error' : 'done',
+              currentNode: undefined,
+            })),
+          );
+          setIsStreaming(false);
+          ctrlRef.current = null;
+        },
       },
-    }, language);
+      language,
+    );
 
     ctrlRef.current = ctrl;
   }, []); // No deps: all state reads go through refs or functional updates.

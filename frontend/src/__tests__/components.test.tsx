@@ -22,7 +22,7 @@ describe('FileUpload', () => {
       screen.getByRole('button', { name: /select or drop an excel file/i }),
     ).toBeInTheDocument();
     expect(screen.getByText(/click to choose a file/i)).toBeInTheDocument();
-    expect(screen.getByText(/\.xlsx or \.xlsm/i)).toBeInTheDocument();
+    expect(screen.getByText(/excel workbook/i)).toBeInTheDocument();
   });
 
   it('applies disabled class when disabled prop is true', () => {

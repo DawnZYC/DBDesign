@@ -609,7 +609,9 @@
   font-size: 13px;
   color: var(--text, #111827);
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 .chat-example-chip:hover:not(:disabled) {
   border-color: var(--primary, #2563eb);

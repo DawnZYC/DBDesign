@@ -91,9 +91,7 @@ def get_raw_row(
     )
 
     # Strip M5 meta keys (e.g. "__column_remap__") so the trace shows only real Excel cells.
-    raw_cells = {
-        k: v for k, v in (row.raw_cells or {}).items() if not str(k).startswith("__")
-    }
+    raw_cells = {k: v for k, v in (row.raw_cells or {}).items() if not str(k).startswith("__")}
 
     return RawRowDetail(
         raw_row_id=row.raw_row_id,

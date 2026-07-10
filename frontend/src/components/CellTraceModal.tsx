@@ -153,7 +153,7 @@ function CellTraceContent({ data }: { data: RawRowDetail }) {
   // Non-empty cells, sorted by column (single letters before double).
   const cellEntries = Object.entries(raw_cells)
     .filter(([, v]) => v !== null && v !== '' && v !== undefined)
-    .sort(([a], [b]) => (a.length - b.length || (a < b ? -1 : 1)));
+    .sort(([a], [b]) => a.length - b.length || (a < b ? -1 : 1));
 
   const importedAt = new Date(import_batch.imported_at).toLocaleString('en-US', {
     year: 'numeric',

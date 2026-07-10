@@ -100,7 +100,11 @@ STANDARD_FIELDS: tuple[FieldSpec, ...] = (
     ),
     FieldSpec("data_user", "F", "data user", "Data user", ("user", "data user")),
     FieldSpec(
-        "usage_purpose", "G", "usage purpose", "Usage purpose", ("purpose", "usage", "usage purpose")
+        "usage_purpose",
+        "G",
+        "usage purpose",
+        "Usage purpose",
+        ("purpose", "usage", "usage purpose"),
     ),
     FieldSpec(
         "technology_code",
@@ -217,9 +221,15 @@ STANDARD_FIELDS: tuple[FieldSpec, ...] = (
         ("variable opex unit", "vom unit", "variable opex ref unit", "activity unit"),
     ),
     FieldSpec("tax_cost", "X", "Tax cost", "Tax cost", ("tax", "tax cost")),
-    FieldSpec("subsidy_cost", "Y", "Sub cost", "Subsidy cost", ("subsidy", "sub cost", "subsidy cost")),
     FieldSpec(
-        "efficiency", "Z", "efficiency", "Efficiency (WP-specific technology descriptor)", ("efficiency", "act_eff", "eff")
+        "subsidy_cost", "Y", "Sub cost", "Subsidy cost", ("subsidy", "sub cost", "subsidy cost")
+    ),
+    FieldSpec(
+        "efficiency",
+        "Z",
+        "efficiency",
+        "Efficiency (WP-specific technology descriptor)",
+        ("efficiency", "act_eff", "eff"),
     ),
     FieldSpec(
         "technology_efficiency",
@@ -236,10 +246,18 @@ STANDARD_FIELDS: tuple[FieldSpec, ...] = (
         ("commodity share", "flo_share", "share", "by energy use"),
     ),
     FieldSpec(
-        "commodity_code", "AC", "commodity", "Commodity code", ("commodity", "commodity code", "fuel")
+        "commodity_code",
+        "AC",
+        "commodity",
+        "Commodity code",
+        ("commodity", "commodity code", "fuel"),
     ),
     FieldSpec(
-        "commodity_demand", "AD", "Commodity Demand", "Commodity demand", ("commodity demand", "demand")
+        "commodity_demand",
+        "AD",
+        "Commodity Demand",
+        "Commodity demand",
+        ("commodity demand", "demand"),
     ),
     FieldSpec(
         "interpolation_rule",
@@ -310,7 +328,9 @@ STANDARD_FIELD_NAMES: tuple[str, ...] = tuple(f.field for f in STANDARD_FIELDS)
 class ColumnSuggestion(BaseModel):
     """Match result for a single column."""
 
-    excel_column: str = Field(..., description="Column letter in the unfamiliar Excel, e.g. 'A'/'B'/'AB'")
+    excel_column: str = Field(
+        ..., description="Column letter in the unfamiliar Excel, e.g. 'A'/'B'/'AB'"
+    )
     excel_header: str = Field(default="", description="Original header text of this column")
     target_field: str | None = Field(
         default=None,
@@ -502,7 +522,8 @@ def _col_sort_key(letter: str) -> tuple[int, str]:
 # -----------------------------------------------------------------------------
 def _build_llm_prompt(blobs: dict[str, str]) -> tuple[str, str]:
     field_lines = "\n".join(
-        f"  - {spec.field} (canonical column {spec.column}): {spec.description}" for spec in STANDARD_FIELDS
+        f"  - {spec.field} (canonical column {spec.column}): {spec.description}"
+        for spec in STANDARD_FIELDS
     )
     system = (
         "You are the Schema-Mapping Agent for EcoTEA data onboarding.\n"
@@ -559,7 +580,9 @@ def map_columns(blobs: dict[str, str], *, use_llm: bool = False) -> ColumnMappin
         try:
             return map_columns_llm(blobs)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("LLM column matching failed, falling back to the deterministic backend: %s", exc)
+            logger.warning(
+                "LLM column matching failed, falling back to the deterministic backend: %s", exc
+            )
     return map_columns_deterministic(blobs)
 
 

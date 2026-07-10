@@ -22,16 +22,21 @@ class DataShape(BaseModel):
     has_time_axis: bool = Field(
         default=False, description="Whether there is a year/time axis (dimension 'data_year' etc.)"
     )
-    n_categories: int = Field(default=0, description="Number of non-time categories (e.g. count of sectors / commodities)")
+    n_categories: int = Field(
+        default=0, description="Number of non-time categories (e.g. count of sectors / commodities)"
+    )
     n_metrics: int = Field(default=1, description="Number of value columns")
-    is_aggregated: bool = Field(default=False, description="Whether it is an aggregated result (no raw_row_id)")
+    is_aggregated: bool = Field(
+        default=False, description="Whether it is an aggregated result (no raw_row_id)"
+    )
     metric_unit: str | None = None
 
 
 class RecommendChartInput(BaseModel):
     data_shape: DataShape
     intent: str | None = Field(
-        default=None, description="Natural-language intent, e.g. 'compare', 'trend', 'share', 'flow'"
+        default=None,
+        description="Natural-language intent, e.g. 'compare', 'trend', 'share', 'flow'",
     )
 
 
@@ -41,7 +46,9 @@ class ChartRecommendation(BaseModel):
     echarts_skeleton: dict[str, Any] = Field(
         ..., description="ECharts option skeleton (no dataset; the frontend fills it)"
     )
-    suggested_dimensions: list[str] = Field(..., description="Which columns to use as x-axis / grouping dimensions")
+    suggested_dimensions: list[str] = Field(
+        ..., description="Which columns to use as x-axis / grouping dimensions"
+    )
 
 
 # -----------------------------------------------------------------------------

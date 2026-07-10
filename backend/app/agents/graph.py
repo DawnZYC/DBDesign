@@ -158,7 +158,9 @@ def build_graph() -> CompiledGraph:
 
     # ---- Fixed edges ----
     graph.add_edge(START, NODE_PLANNER)
-    graph.add_edge(NODE_TOOL_AGENT, NODE_INTERPRETER)  # tool results -> Interpreter composes the answer
+    graph.add_edge(
+        NODE_TOOL_AGENT, NODE_INTERPRETER
+    )  # tool results -> Interpreter composes the answer
     graph.add_edge(NODE_VISUALIZER, END)
 
     # ---- Conditional edge: route by intent after the planner ----

@@ -36,7 +36,11 @@ class SearchResponse(BaseModel):
     hits: list[SearchResultItem]
 
 
-@router.post("/search", response_model=SearchResponse, summary="Semantic search over the domain knowledge base")
+@router.post(
+    "/search",
+    response_model=SearchResponse,
+    summary="Semantic search over the domain knowledge base",
+)
 def rag_search(req: SearchRequest) -> SearchResponse:
     try:
         hits = search(req.query, k=req.k)
@@ -77,7 +81,10 @@ _MAX_DOC_SIZE_BYTES = 2 * 1024 * 1024  # 2 MB, plenty for a knowledge document
 
 class UploadDocResponse(BaseModel):
     file: str
-    chunks: int = Field(..., description="Number of chunks (vectors); split by H2 headings, or aggregated by paragraph when no headings")
+    chunks: int = Field(
+        ...,
+        description="Number of chunks (vectors); split by H2 headings, or aggregated by paragraph when no headings",
+    )
 
 
 class UploadedDocInfo(BaseModel):
