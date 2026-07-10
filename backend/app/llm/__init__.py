@@ -1,12 +1,12 @@
-"""LLM 抽象层（M0）。
+"""LLM abstraction layer (M0).
 
-把多种 LLM provider 统一到 LangChain 的 BaseChatModel 接口下。
-对外只暴露三个 API：
-  - get_chat_model(): 工厂函数，按当前配置返回 BaseChatModel
-  - list_available_providers(): 枚举所有 provider 及配置状态
-  - test_connectivity(): 健康检查用，对当前 provider 做最小请求
+Unifies multiple LLM providers under LangChain's BaseChatModel interface.
+Only three APIs are exposed:
+  - get_chat_model(): factory returning a BaseChatModel for the current config
+  - list_available_providers(): enumerate all providers and their config status
+  - test_connectivity(): for health checks, makes a minimal request to the current provider
 
-业务代码统一用：
+Business code uses:
     from app.llm import get_chat_model
     llm = get_chat_model()
 """

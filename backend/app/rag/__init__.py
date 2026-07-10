@@ -1,10 +1,10 @@
-"""RAG 抽象层（M1）。
+"""RAG abstraction layer (M1).
 
-对外暴露：
-  - get_embedder(): Embedding 工厂（LangChain Embeddings 接口）
-  - get_vectorstore(): ChromaDB 持久化向量库
-  - search(query, k): 简单语义检索接口
-  - ingest_dictionary(db) / ingest_markdown(path): 灌库
+Public API:
+  - get_embedder(): embedding factory (LangChain Embeddings interface)
+  - get_vectorstore(): ChromaDB persistent vector store
+  - search(query, k): simple semantic retrieval interface
+  - ingest_dictionary(db) / ingest_markdown(path): ingestion
 """
 
 from app.rag.chroma_client import get_vectorstore, reset_collection

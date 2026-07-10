@@ -1,19 +1,19 @@
-"""③ run_sql — Pydantic 参数化的 SQL 执行工具。
+"""(3) run_sql — Pydantic-parameterized SQL execution tool.
 
-设计要点：
-  * 输入是 Pydantic 模型 QueryParams，**不接收原始 SQL 字符串**，杜绝注入
-  * 字段白名单（metric / aggregation / group_by 等都是 Literal 枚举）
-  * 用 SQLAlchemy 2.0 select() 表达式 + bindparam，绝不字符串拼接
-  * 结果一定带 raw_row_id（除非 aggregation != raw），M4 图表反查源单元格的依赖
-  * 结果默认 limit 1000，硬上限 10000
+Design points:
+  * Input is the Pydantic model QueryParams; it **never accepts raw SQL strings**, ruling out injection.
+  * Field whitelist (metric / aggregation / group_by etc. are all Literal enums).
+  * Uses SQLAlchemy 2.0 select() expressions + bindparam, never string concatenation.
+  * Results always include raw_row_id (unless aggregation != raw); the M4 chart cell-trace depends on it.
+  * Results default to limit 1000, hard cap 10000.
 
-支持的 metric:
+Supported metrics:
   - capex / fixed_opex / variable_opex / emission_factor / tax_cost / subsidy_cost
-    （来自 technology_year_ecotea_parameter）
+    (from technology_year_ecotea_parameter)
   - efficiency_value / technology_efficiency / heat_rate / capacity_to_activity_factor
-    （来自 technology_year_wp_descriptor）
-  - capacity（来自 technology_year_constraint）
-  - commodity_demand_value（来自 technology_year_commodity）
+    (from technology_year_wp_descriptor)
+  - capacity (from technology_year_constraint)
+  - commodity_demand_value (from technology_year_commodity)
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from app.database import SessionLocal
 from app.tools._base import with_observability
 
 # -----------------------------------------------------------------------------
-# Metric 注册表 — 把 metric 名映射到 (model_class, 数值列, 单位列|None)
+# Metric registry — map a metric name to (model_class, value column, unit column|None)
 # -----------------------------------------------------------------------------
 _E = models.TechnologyYearEcoteaParameter
 _W = models.TechnologyYearWpDescriptor
@@ -58,7 +58,7 @@ MetricName = Literal[
 class _MetricInfo:
     model: Any
     value_col: Column
-    unit_col: Column | None  # 该 metric 是否有 *_unit 字段
+    unit_col: Column | None  # whether this metric has a *_unit field
 
 
 METRICS: dict[str, _MetricInfo] = {
@@ -84,33 +84,33 @@ DEFAULT_LIMIT = 1_000
 
 
 # -----------------------------------------------------------------------------
-# Pydantic 入参
+# Pydantic input
 # -----------------------------------------------------------------------------
 class QueryParams(BaseModel):
-    """SQL Agent 的结构化输出。Agent 不写 SQL，只填这个对象。"""
+    """The SQL Agent's structured output. The Agent writes no SQL; it only fills this object."""
 
-    metric: MetricName = Field(..., description="目标指标")
+    metric: MetricName = Field(..., description="Target metric")
     aggregation: Aggregation = Field(default="raw")
 
-    # 过滤
+    # Filters
     sector_codes: list[str] | None = Field(
-        default=None, description="按 sector_code 过滤，如 ['POWER', 'INDUSTRY']"
+        default=None, description="Filter by sector_code, e.g. ['POWER', 'INDUSTRY']"
     )
-    geography_codes: list[str] | None = Field(default=None, description="如 ['SG']")
+    geography_codes: list[str] | None = Field(default=None, description="e.g. ['SG']")
     technology_codes: list[str] | None = Field(
-        default=None, description="精确技术代码，如 ['PWRNGACCF01']"
+        default=None, description="Exact technology codes, e.g. ['NGCC01']"
     )
     technology_code_like: str | None = Field(
-        default=None, description="技术代码模糊匹配（ILIKE %X%），如 'PWRSOL'"
+        default=None, description="Fuzzy match on technology code (ILIKE %X%), e.g. 'SOLAR'"
     )
     commodity_codes: list[str] | None = Field(default=None)
     year_min: int | None = None
     year_max: int | None = None
 
-    # 分组（仅当 aggregation != 'raw' 时生效）
+    # Grouping (only effective when aggregation != 'raw')
     group_by: list[GroupBy] = Field(default_factory=list)
 
-    # 限制
+    # Limit
     limit: int = Field(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT)
 
     @field_validator("sector_codes", "geography_codes", "technology_codes", "commodity_codes")
@@ -127,33 +127,39 @@ class QueryResult(BaseModel):
     rows: list[dict[str, Any]]
     metric: MetricName
     aggregation: Aggregation
-    metric_unit: str | None = Field(default=None, description="结果中最常见的单位（多种时取众数）")
+    metric_unit: str | None = Field(
+        default=None, description="Most common unit in the result (mode when several)"
+    )
     row_count: int
-    truncated: bool = Field(default=False, description="是否触达 limit 被截断")
-    sql_summary: str = Field(default="", description="人类可读的查询摘要（debug / trace 用）")
+    truncated: bool = Field(
+        default=False, description="Whether the limit was hit and rows were truncated"
+    )
+    sql_summary: str = Field(
+        default="", description="Human-readable query summary (for debug / trace)"
+    )
 
 
 # -----------------------------------------------------------------------------
-# 编译：QueryParams → SQLAlchemy select()
+# Compile: QueryParams -> SQLAlchemy select()
 # -----------------------------------------------------------------------------
 def _build_query(params: QueryParams) -> tuple[Select, list[str]]:
-    """构造 select() 与结果列名列表。"""
+    """Build the select() and the list of result column names."""
     info = METRICS[params.metric]
     metric_table = info.model
     value_col = info.value_col
 
-    # 基础 join：satellite ← technology_year ← technology_process ← sector / geography
+    # Base join: satellite <- technology_year <- technology_process <- sector / geography
     ty = models.TechnologyYear
     tp = models.TechnologyProcess
     sector = models.Sector
     geo = models.Geography
 
-    # 选列（每行身份 + metric 值）
+    # Selected columns (per-row identity + metric value)
     select_cols: list[Any] = []
     col_names: list[str] = []
 
     if params.aggregation == "raw":
-        # 原始行：必带 raw_row_id 用于反查
+        # Raw rows: always carry raw_row_id for tracing
         select_cols.extend(
             [
                 ty.data_year.label("data_year"),
@@ -178,7 +184,7 @@ def _build_query(params: QueryParams) -> tuple[Select, list[str]]:
             select_cols.append(info.unit_col.label("unit"))
             col_names.append("unit")
     else:
-        # 聚合
+        # Aggregation
         agg_func = {
             "sum": func.sum,
             "avg": func.avg,
@@ -188,7 +194,7 @@ def _build_query(params: QueryParams) -> tuple[Select, list[str]]:
         }[params.aggregation]
         select_cols.append(agg_func(value_col).label("value"))
         col_names.append("value")
-        # 加上分组列
+        # Add the grouping columns
         gb_cols = _resolve_group_by(params.group_by, sector, geo, tp, ty)
         for gb_name, gb_col in gb_cols:
             select_cols.insert(0, gb_col.label(gb_name))
@@ -196,21 +202,27 @@ def _build_query(params: QueryParams) -> tuple[Select, list[str]]:
 
     stmt: Select = select(*select_cols)
 
-    # JOIN 链路：先 metric 表 → technology_year → technology_process → sector & geography
+    # JOIN chain: metric table -> technology_year -> technology_process -> sector & geography
     stmt = stmt.select_from(metric_table)
 
-    # commodity metric 比较特殊：tech_year_id 反查
+    # The commodity metric is special: trace via tech_year_id
     stmt = stmt.join(ty, metric_table.technology_year_id == ty.technology_year_id)
     stmt = stmt.join(tp, ty.technology_id == tp.technology_id)
     stmt = stmt.join(sector, tp.sector_id == sector.sector_id)
     stmt = stmt.join(geo, tp.geography_id == geo.geography_id)
 
-    # 如果 metric 是 commodity_demand_value，还要 join commodity 表（可选，用于过滤）
-    if params.metric == "commodity_demand_value" and params.commodity_codes:
+    # Join the commodity tables whenever a commodity GROUPING or commodity FILTER is requested.
+    # For the commodity_demand_value metric the metric table already IS technology_year_commodity;
+    # for any other metric we must bring it in via technology_year first, otherwise the query would
+    # reference Commodity without a join (an invalid query / accidental cross join).
+    needs_commodity = ("commodity" in params.group_by) or bool(params.commodity_codes)
+    if needs_commodity:
+        if metric_table is not _CM:
+            stmt = stmt.join(_CM, _CM.technology_year_id == ty.technology_year_id)
         stmt = stmt.join(models.Commodity, models.Commodity.commodity_id == _CM.commodity_id)
 
     # ---- WHERE ----
-    where: list[Any] = [value_col.is_not(None)]  # 永远过滤掉 NULL 指标
+    where: list[Any] = [value_col.is_not(None)]  # always filter out NULL metric values
     if params.sector_codes:
         where.append(sector.sector_code.in_(params.sector_codes))
     if params.geography_codes:
@@ -219,7 +231,7 @@ def _build_query(params: QueryParams) -> tuple[Select, list[str]]:
         where.append(tp.technology_code.in_(params.technology_codes))
     if params.technology_code_like:
         where.append(tp.technology_code.ilike(f"%{params.technology_code_like}%"))
-    if params.commodity_codes and params.metric == "commodity_demand_value":
+    if params.commodity_codes:
         where.append(models.Commodity.commodity_code.in_(params.commodity_codes))
     if params.year_min is not None:
         where.append(ty.data_year >= params.year_min)
@@ -231,7 +243,7 @@ def _build_query(params: QueryParams) -> tuple[Select, list[str]]:
     if params.aggregation != "raw":
         gb_cols = _resolve_group_by(params.group_by, sector, geo, tp, ty)
         stmt = stmt.group_by(*[c for _, c in gb_cols])
-        # 排序也按这些列
+        # Order by the same columns
         stmt = stmt.order_by(*[c for _, c in gb_cols])
     else:
         stmt = stmt.order_by(ty.data_year, tp.technology_code)
@@ -253,11 +265,11 @@ def _resolve_group_by(gb: list[GroupBy], sector, geo, tp, ty) -> list[tuple[str,
 
 
 # -----------------------------------------------------------------------------
-# 执行
+# Execution
 # -----------------------------------------------------------------------------
 def _execute(db: Session, params: QueryParams) -> QueryResult:
     effective_limit = min(params.limit, MAX_LIMIT)
-    # 多取 1 行探测是否被截断，避免恰好等于 limit 时误判
+    # Fetch 1 extra row to detect truncation, avoiding a false positive when count == limit exactly
     stmt, _ = _build_query(params)
     stmt = stmt.limit(effective_limit + 1)
     rows = db.execute(stmt).mappings().all()
@@ -265,16 +277,16 @@ def _execute(db: Session, params: QueryParams) -> QueryResult:
 
     truncated = len(rows_list) > effective_limit
     if truncated:
-        rows_list = rows_list[:effective_limit]  # 去掉多取的那 1 行
+        rows_list = rows_list[:effective_limit]  # drop the extra row we fetched
 
-    # 单位推断（取众数）
+    # Unit inference (mode)
     unit: str | None = None
     if rows_list and "unit" in rows_list[0]:
         units = [r.get("unit") for r in rows_list if r.get("unit")]
         if units:
             unit = max(set(units), key=units.count)
 
-    # SQL 摘要（人类可读）
+    # SQL summary (human-readable)
     summary_parts = [f"metric={params.metric}", f"agg={params.aggregation}"]
     if params.sector_codes:
         summary_parts.append(f"sectors={params.sector_codes}")
@@ -301,7 +313,7 @@ def _execute(db: Session, params: QueryParams) -> QueryResult:
 
 
 # -----------------------------------------------------------------------------
-# 工具入口（LangChain @tool）
+# Tool entry point (LangChain @tool)
 # -----------------------------------------------------------------------------
 @tool("run_sql", args_schema=QueryParams)
 @with_observability("run_sql")

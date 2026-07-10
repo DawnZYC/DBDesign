@@ -1,4 +1,4 @@
-"""② convert_unit 单测。"""
+"""(2) convert_unit unit tests."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from app.tools.unit_convert import convert_unit  # noqa: E402
 
 
 def _call(value, frm, to):
-    """工具是 LangChain Tool；用 invoke 调。"""
+    """The tool is a LangChain Tool; call it via invoke."""
     return convert_unit.invoke({"value": value, "from_unit": frm, "to_unit": to})
 
 
@@ -52,7 +52,7 @@ def test_t_to_kt_co2():
 
 
 def test_unicode_subscript_co2():
-    """容忍 'kt-CO₂' 这种带下标的写法。"""
+    """Tolerate subscript notation like 'kt-CO₂'."""
     out = _call(100.0, "kt-CO₂", "Mt-CO2")
     assert out["family"] == "co2"
     assert abs(out["value"] - 0.1) < 1e-9
@@ -69,7 +69,7 @@ def test_unknown_unit_rejected():
 
 
 def test_factor_audit():
-    """factor 字段应让人类能复算。"""
+    """The factor field should let a human re-compute the result."""
     out = _call(2.0, "PJ", "GWh")
     assert abs(out["factor"] - 277.778) < 0.1
     assert abs(out["value"] - 2 * out["factor"]) < 1e-3

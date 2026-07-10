@@ -1,10 +1,10 @@
 /**
- * MessageList — 消息列表容器。
+ * MessageList — message list container.
  *
- * 职责：
- *  - 渲染 ChatMessage[] → MessageBubble[]
- *  - 每次 messages 变化自动滚到底部（流式追加时跟随）
- *  - 列表为空时显示引导语
+ * Renders ChatMessage[] as bubbles and follows streaming by auto-scrolling to the
+ * bottom — but ONLY when the user is already near the bottom. If the user scrolls up
+ * (e.g. to re-read an earlier answer while a new one streams), we stop pinning so they
+ * are not yanked back down. Scrolling back to the bottom re-enables following.
  */
 import { useEffect, useRef } from 'react';
 import type { ChatMessage } from '../types';
@@ -15,20 +15,34 @@ interface Props {
   onPointClick: (rawRowId: number) => void;
 }
 
-export function MessageList({ messages, onPointClick }: Props) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+// How close to the bottom (px) still counts as "following the stream".
+const NEAR_BOTTOM_PX = 80;
 
-  // messages 变化（新消息 or 流式追加）时滚到底
+export function MessageList({ messages, onPointClick }: Props) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  // Whether the user is currently pinned to the bottom (a ref, to avoid re-renders).
+  const atBottomRef = useRef(true);
+
+  const updateAtBottom = () => {
+    const el = listRef.current;
+    if (!el) return;
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
+  };
+
+  // Follow the stream only when the user hasn't scrolled away from the bottom.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (atBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   return (
-    <div className="message-list">
+    <div className="message-list" ref={listRef} onScroll={updateAtBottom}>
       {messages.map((msg) => (
         <MessageBubble key={msg.id} message={msg} onPointClick={onPointClick} />
       ))}
-      {/* 滚动锚点 */}
+      {/* scroll anchor */}
       <div ref={bottomRef} />
     </div>
   );

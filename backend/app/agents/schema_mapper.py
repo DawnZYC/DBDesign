@@ -1,29 +1,34 @@
-"""Schema-Mapping Agent（M5）— 自动对齐 SG-TIMES 版本迭代的列布局变化。
+"""Schema-Mapping Agent (M5) — auto-align column-layout changes across template versions.
 
-定位（与 M3 的查询四 Agent 解耦）：
-  * M3 的 Planner→SQL→Interpreter→Visualizer 是 **查询时** 的 LangGraph 链路。
-  * 本模块是 **数据接入时** 的独立 Agent，不在那张图里，单独被导入流程调用。
+Positioning (decoupled from M3's query agents):
+  * M3's Planner->SQL->Interpreter->Visualizer is the **query-time** LangGraph pipeline.
+  * This module is a standalone **ingestion-time** Agent, not part of that graph; it is
+    called separately by the import flow.
 
-要解决的问题：
-  现有 excel_importer 把列位置写死（capex 永远在 R 列、ef 在 O 列……），
-  默认输入 Excel 和标准模板列布局完全一致。一旦 SG-TIMES 换版本——列改名 /
-  换位 / 增删列——R 列就不再是 capex，导入会静默错位。
+The problem it solves:
+  The existing excel_importer hard-codes column positions (capex is always column R, ef
+  is always column O, ...), assuming the input Excel matches the canonical template layout
+  exactly. Once the upstream model changes version — columns renamed / reordered / added /
+  removed — column R is no longer capex and the import silently misaligns.
 
-本模块的职责正是补这个缺口：
-  给定一个陌生 Excel 的表头，产出映射 `{陌生列 -> 标准列}`，让“搬运”之后
-  importer 的硬编码 `field_to_column` 依然成立。importer 一行不改。
+This module fills that gap:
+  Given the headers of an unfamiliar Excel, it produces a mapping `{source column ->
+  canonical column}` so that after "relocation" the importer's hard-coded
+  `field_to_column` still holds. The importer doesn't change a line.
 
-两条路：
-  1. 快路径：表头和标准模板一致 → headers_match_canonical() 返回 True →
-     不调 LLM，直接走原硬编码导入（日常 99% 情况，零成本）。
-  2. 慢路径：表头对不上 → map_columns() 语义匹配 → 每列给置信度：
-       confidence ≥ 0.9        自动应用
-       0.6 ≤ confidence < 0.9   交人工复核（写 data_quality_issue / 前端列对齐）
-       confidence < 0.6        当未匹配，置 NULL
+Two paths:
+  1. Fast path: headers match the canonical template -> headers_match_canonical() returns
+     True -> no LLM call, go straight to the original hard-coded import (the 99% daily case,
+     zero cost).
+  2. Slow path: headers don't match -> map_columns() does semantic matching and assigns a
+     confidence per column:
+       confidence >= 0.9        auto-apply
+       0.6 <= confidence < 0.9   send to human review (write data_quality_issue / frontend alignment)
+       confidence < 0.6         treated as unmatched, left NULL
 
-匹配实现有两种后端，靠 `use_llm` 切换：
-  * LLM 后端：llm.with_structured_output(ColumnMapping)，强类型、防幻觉字段。
-  * 确定性后端：纯 token/别名匹配，**无需 API key**，供 CI / 离线 / LLM 失败兜底。
+Matching has two backends, switched via `use_llm`:
+  * LLM backend: llm.with_structured_output(ColumnMapping), strongly typed, hallucination-safe fields.
+  * Deterministic backend: pure token/alias matching, **no API key needed**, for CI / offline / LLM fallback.
 """
 
 from __future__ import annotations
@@ -40,23 +45,24 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-# 表头所在行：模板 row 2 是最易读的主表头，row 1/3-9 是 WP 各层补充别名。
-# 做语义匹配时把 1-9 行同列文本拼成一个 “表头 blob”，给匹配器最大信号量。
+# Header rows: template row 2 is the most readable primary header; rows 1/3-9 hold the
+# WP-layer supplementary aliases. For semantic matching we concatenate the text of rows
+# 1-9 in the same column into one "header blob" to give the matcher maximum signal.
 HEADER_ROW_RANGE = range(1, 10)
 PRIMARY_HEADER_ROW = 2
 
 
 # -----------------------------------------------------------------------------
-# 标准字段表（单一事实来源）
-#   column 就是 importer 里硬编码的标准列位；label 是模板 row 2 的人类表头；
-#   aliases 覆盖 SG-TIMES 各 WP 层 / 常见同义改名。
+# Standard field table (single source of truth)
+#   column is the canonical position hard-coded in the importer; label is the human
+#   header in template row 2; aliases cover the upstream WP layers / common rename synonyms.
 # -----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class FieldSpec:
-    field: str  # 标准字段名（业务语义）
-    column: str  # 标准列位（Excel 列字母，importer 硬编码的那个）
-    label: str  # 模板主表头（row 2）
-    description: str  # 给 LLM 的字段说明
+    field: str  # standard field name (business semantics)
+    column: str  # canonical position (Excel column letter, the one hard-coded in the importer)
+    label: str  # template primary header (row 2)
+    description: str  # field description for the LLM
     aliases: tuple[str, ...] = dc_field(default_factory=tuple)
 
 
@@ -65,42 +71,46 @@ STANDARD_FIELDS: tuple[FieldSpec, ...] = (
         "wp_title",
         "A",
         "WP6 Title",
-        "工作包标题 / 所属部门标签（也是 sector 文本来源）",
+        "Work-package title / owning sector label (also the source of sector text)",
         ("wp title", "wp6 title", "sector", "work package", "title"),
     ),
     FieldSpec(
-        "data_owner", "B", "data owner", "数据所有者", ("owner", "owner of data", "data owner")
+        "data_owner", "B", "data owner", "Data owner", ("owner", "owner of data", "data owner")
     ),
     FieldSpec(
         "data_provider",
         "C",
         "data provider",
-        "数据提供方",
+        "Data provider",
         ("provider", "data provider", "source provider"),
     ),
     FieldSpec(
         "data_source",
         "D",
         "data source",
-        "数据来源 / 模型运行名",
+        "Data source / model run name",
         ("source", "data source", "model run name", "dataset"),
     ),
     FieldSpec(
         "data_source_description",
         "E",
         "data source description",
-        "数据来源描述",
+        "Data source description",
         ("source description", "data source desc", "source desc"),
     ),
-    FieldSpec("data_user", "F", "data user", "数据使用方", ("user", "data user")),
+    FieldSpec("data_user", "F", "data user", "Data user", ("user", "data user")),
     FieldSpec(
-        "usage_purpose", "G", "usage purpose", "使用目的", ("purpose", "usage", "usage purpose")
+        "usage_purpose",
+        "G",
+        "usage purpose",
+        "Usage purpose",
+        ("purpose", "usage", "usage purpose"),
     ),
     FieldSpec(
         "technology_code",
         "H",
         "technology/process",
-        "技术 / 工艺代码（anchor 主键）",
+        "Technology / process code (anchor primary key)",
         (
             "technology",
             "process",
@@ -115,235 +125,254 @@ STANDARD_FIELDS: tuple[FieldSpec, ...] = (
         "technology_description",
         "I",
         "technology/process description",
-        "技术 / 工艺描述",
+        "Technology / process description",
         ("technology description", "process description", "asset description", "tech desc"),
     ),
     FieldSpec(
         "geography",
         "J",
         "Geography",
-        "地理 / 国家 / 区域",
+        "Geography / country / region",
         ("geography", "country", "region", "geo"),
     ),
     FieldSpec(
         "data_year",
         "K",
         "year of data",
-        "数据年份（anchor 的时间维）",
+        "Data year (the anchor's time dimension)",
         ("year", "year of data", "data year"),
     ),
     FieldSpec(
         "technology_start_year",
         "L",
         "Technology Start Year",
-        "技术最早建设 / 起始年",
+        "Earliest build / start year of the technology",
         ("start year", "technology start year", "earliest build year", "ncap_start"),
     ),
     FieldSpec(
         "technology_lifetime_years",
         "M",
         "technology lifetime (years)",
-        "技术寿命（年）",
+        "Technology lifetime (years)",
         ("lifetime", "technology lifetime", "tlife", "ncap_tlife"),
     ),
-    FieldSpec("grade", "N", "Grade", "等级 / 分级", ("grade",)),
+    FieldSpec("grade", "N", "Grade", "Grade / tier", ("grade",)),
     FieldSpec(
         "emission_factor",
         "O",
         "ef",
-        "排放因子",
+        "Emission factor",
         ("ef", "emission factor", "emissions factor", "vda_emcb", "emcb"),
     ),
     FieldSpec(
         "emission_factor_unit",
         "P",
         "ef ref unit",
-        "排放因子参考单位",
+        "Emission factor reference unit",
         ("ef unit", "ef ref unit", "emission factor unit"),
     ),
     FieldSpec(
         "base_currency",
         "Q",
         "base currency",
-        "基准货币（分子）",
+        "Base currency (numerator)",
         ("currency", "base currency", "numerator currency"),
     ),
     FieldSpec(
         "capex",
         "R",
         "capex",
-        "资本支出",
+        "Capital expenditure",
         ("capex", "build cost", "investment", "capital cost", "ncap_cost", "capital expenditure"),
     ),
     FieldSpec(
         "capex_unit",
         "S",
         "capex ref unit",
-        "capex 参考单位（分母）",
+        "Capex reference unit (denominator)",
         ("capex unit", "capex ref unit", "capacity unit"),
     ),
     FieldSpec(
         "fixed_opex",
         "T",
         "fixed opex",
-        "固定运维成本",
+        "Fixed O&M cost",
         ("fixed opex", "fom", "fo&m", "fixed o&m", "ncap_fom", "fixed operating cost"),
     ),
     FieldSpec(
         "fixed_opex_unit",
         "U",
         "fixed opex ref unit",
-        "固定运维参考单位",
+        "Fixed O&M reference unit",
         ("fixed opex unit", "fom unit", "fixed opex ref unit"),
     ),
     FieldSpec(
         "variable_opex",
         "V",
         "variable opex",
-        "可变运维成本",
+        "Variable O&M cost",
         ("variable opex", "vom", "vo&m", "act_cost", "variable operating cost"),
     ),
     FieldSpec(
         "variable_opex_unit",
         "W",
         "variable opex ref unit",
-        "可变运维参考单位",
+        "Variable O&M reference unit",
         ("variable opex unit", "vom unit", "variable opex ref unit", "activity unit"),
     ),
-    FieldSpec("tax_cost", "X", "Tax cost", "税成本", ("tax", "tax cost")),
-    FieldSpec("subsidy_cost", "Y", "Sub cost", "补贴成本", ("subsidy", "sub cost", "subsidy cost")),
+    FieldSpec("tax_cost", "X", "Tax cost", "Tax cost", ("tax", "tax cost")),
     FieldSpec(
-        "efficiency", "Z", "efficiency", "效率（WP 特定技术描述）", ("efficiency", "act_eff", "eff")
+        "subsidy_cost", "Y", "Sub cost", "Subsidy cost", ("subsidy", "sub cost", "subsidy cost")
+    ),
+    FieldSpec(
+        "efficiency",
+        "Z",
+        "efficiency",
+        "Efficiency (WP-specific technology descriptor)",
+        ("efficiency", "act_eff", "eff"),
     ),
     FieldSpec(
         "technology_efficiency",
         "AA",
         "technology efficiency",
-        "技术效率",
+        "Technology efficiency",
         ("technology efficiency", "tech efficiency"),
     ),
     FieldSpec(
         "commodity_share",
         "AB",
         "commodity share",
-        "商品份额",
+        "Commodity share",
         ("commodity share", "flo_share", "share", "by energy use"),
     ),
     FieldSpec(
-        "commodity_code", "AC", "commodity", "商品代码", ("commodity", "commodity code", "fuel")
+        "commodity_code",
+        "AC",
+        "commodity",
+        "Commodity code",
+        ("commodity", "commodity code", "fuel"),
     ),
     FieldSpec(
-        "commodity_demand", "AD", "Commodity Demand", "商品需求量", ("commodity demand", "demand")
+        "commodity_demand",
+        "AD",
+        "Commodity Demand",
+        "Commodity demand",
+        ("commodity demand", "demand"),
     ),
     FieldSpec(
         "interpolation_rule",
         "AE",
         "Interpolation rule",
-        "插值规则",
+        "Interpolation rule",
         ("interpolation rule", "interpolation", "interp rule"),
     ),
     FieldSpec(
         "capacity_to_activity_factor",
         "AF",
         "capacity to activity factor",
-        "容量到活动转换系数",
+        "Capacity-to-activity factor",
         ("capacity to activity factor", "afa", "c2a"),
     ),
-    FieldSpec("heat_rate", "AG", "heat rate", "热耗率", ("heat rate", "heatrate")),
+    FieldSpec("heat_rate", "AG", "heat rate", "Heat rate", ("heat rate", "heatrate")),
     FieldSpec(
         "capacity",
         "AH",
         "capacity",
-        "容量约束值",
+        "Capacity constraint value",
         ("capacity", "wp1 constraints", "capacity constraint"),
     ),
     FieldSpec(
         "bound_type",
         "AI",
         "capacity type",
-        "容量约束类型（fixed/up/lo）",
+        "Capacity constraint type (fixed/up/lo)",
         ("capacity type", "bound type", "capacity constraint type"),
     ),
     FieldSpec(
         "max_import_possible",
         "AJ",
         "max import possible",
-        "最大可进口量",
+        "Maximum import possible",
         ("max import possible", "act_bnd", "max import"),
     ),
     FieldSpec(
         "max_solar_output_allowed",
         "AK",
         "max solar output allowed",
-        "最大允许太阳能出力",
+        "Maximum allowed solar output",
         ("max solar output allowed", "uc_rhsrt", "max solar output"),
     ),
-    # 注意：label 必须与模板 row 2 原文一致（headers_match_canonical 依赖它），
-    # 模板里 AH / AL 的 row 2 都是 "capacity"，靠 aliases / description 区分语义。
-    # "uc_rhsrt" 别名只留给 AK（其 blob 还有 "max solar output allowed" 强信号），
-    # 避免 AK / AL 两列在确定性匹配里抢同一个别名。
+    # Note: label must match the template row-2 text exactly (headers_match_canonical depends on it).
+    # In the template both AH and AL have "capacity" in row 2; semantics are distinguished via
+    # aliases / description. The "uc_rhsrt" alias is reserved for AK (whose blob also carries the
+    # strong "max solar output allowed" signal), to avoid AK / AL fighting over the same alias in
+    # deterministic matching.
     FieldSpec(
         "capacity_special",
         "AL",
         "capacity",
-        "特殊容量约束（UC 约束右端项 UC_RHSRT，区别于 AH 的常规容量约束）",
+        "Special capacity constraint (UC right-hand-side term UC_RHSRT, distinct from AH's regular capacity constraint)",
         ("capacity special", "special capacity", "uc capacity"),
     ),
 )
 
-# 索引
+# Indexes
 FIELD_BY_NAME: dict[str, FieldSpec] = {f.field: f for f in STANDARD_FIELDS}
 FIELD_BY_COLUMN: dict[str, FieldSpec] = {f.column: f for f in STANDARD_FIELDS}
 STANDARD_FIELD_NAMES: tuple[str, ...] = tuple(f.field for f in STANDARD_FIELDS)
 
 
 # -----------------------------------------------------------------------------
-# 结构化输出 schema（LLM 用 with_structured_output 强约束）
+# Structured-output schema (the LLM is strongly constrained via with_structured_output)
 # -----------------------------------------------------------------------------
 class ColumnSuggestion(BaseModel):
-    """单列的匹配结果。"""
+    """Match result for a single column."""
 
-    excel_column: str = Field(..., description="陌生 Excel 的列字母，如 'A'/'B'/'AB'")
-    excel_header: str = Field(default="", description="该列表头原文")
+    excel_column: str = Field(
+        ..., description="Column letter in the unfamiliar Excel, e.g. 'A'/'B'/'AB'"
+    )
+    excel_header: str = Field(default="", description="Original header text of this column")
     target_field: str | None = Field(
         default=None,
-        description="匹配到的标准字段名（STANDARD_FIELD_NAMES 之一）；无法匹配填 null",
+        description="Matched standard field name (one of STANDARD_FIELD_NAMES); null when no match",
     )
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="0-1 置信度")
-    reasoning: str = Field(default="", description="匹配理由（简短）")
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0, description="Confidence in [0, 1]")
+    reasoning: str = Field(default="", description="Short reason for the match")
 
 
 class ColumnMapping(BaseModel):
-    """整张 sheet 的列匹配结果。"""
+    """Column match result for the whole sheet."""
 
     suggestions: list[ColumnSuggestion] = Field(default_factory=list)
 
 
-# 置信度阈值（与 PlanReadme M5 一致）
+# Confidence thresholds (consistent with PlanReadme M5)
 AUTO_APPLY_THRESHOLD = 0.9
 REVIEW_THRESHOLD = 0.6
 
-# 自动应用的质量门槛（“大量改名 → 拒绝并提示”三档验收的第三档）
-#   - 核心列：anchor 主键来源，缺了导入只会产出空数据或脏数据
-#   - 覆盖率：自动对齐列数 / 标准字段数 低于此值说明布局变化太大，不可盲导
+# Quality gate for auto-apply (the third tier of the "many renames -> reject and warn" acceptance)
+#   - core columns: sources of the anchor primary key; missing them yields empty/dirty data
+#   - coverage: auto-aligned columns / standard fields below this means the layout changed
+#     too much to import blindly
 CORE_FIELDS: tuple[str, ...] = ("technology_code", "data_year")
 MIN_AUTO_MAPPED_RATIO = 0.5
 
 
 class SchemaMappingRejected(ValueError):  # noqa: N818 - public API name kept stable
-    """自动列对齐质量不达标，拒绝静默导入。
+    """Auto column alignment failed the quality gate; refuse a silent import.
 
-    由导入流程捕获并转成 4xx，提示用户走 preview 的列对齐复核（人工 override）。
+    Caught by the import flow and turned into a 4xx, prompting the user to go through the
+    column-alignment review in preview (manual override).
     """
 
 
 # -----------------------------------------------------------------------------
-# 表头读取 & 规范化
+# Header reading & normalization
 # -----------------------------------------------------------------------------
 def _normalize(text: object) -> str:
-    """小写、去标点、压空白，用于鲁棒比较。"""
+    """Lowercase, strip punctuation, collapse whitespace, for robust comparison."""
     s = str(text or "").lower()
-    s = re.sub(r"[^a-z0-9一-鿿]+", " ", s)
+    s = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", s)  # keep CJK so Chinese headers still normalize
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -354,10 +383,10 @@ def _tokens(text: str) -> set[str]:
 def extract_header_blobs(
     worksheet: Worksheet, *, header_rows: Iterable[int] = HEADER_ROW_RANGE
 ) -> dict[str, str]:
-    """逐列把表头行（1-9）的非空文本拼成一个 blob，返回 {列字母: blob}。
+    """Concatenate the non-empty header text (rows 1-9) per column into one blob; return {column letter: blob}.
 
-    用 iter_rows 实现，read_only / 普通模式都适用。
-    只保留至少有一处非空表头的列。
+    Implemented with iter_rows, so it works in both read_only and normal modes.
+    Only columns with at least one non-empty header are kept.
     """
     rows = set(header_rows)
     max_row = max(rows)
@@ -376,7 +405,7 @@ def extract_header_blobs(
 def extract_primary_headers(
     worksheet: Worksheet, *, row: int = PRIMARY_HEADER_ROW
 ) -> dict[str, str]:
-    """取某一行（默认 row 2 主表头）每列原文，返回 {列字母: 文本}。前端展示用。"""
+    """Return each column's text from one row (default row 2, the primary header); {column letter: text}. For frontend display."""
     out: dict[str, str] = {}
     for r_idx, values in enumerate(
         worksheet.iter_rows(min_row=1, max_row=row, values_only=True), start=1
@@ -390,13 +419,14 @@ def extract_primary_headers(
 
 
 # -----------------------------------------------------------------------------
-# 快路径：表头是否就是标准模板
+# Fast path: is this header already the canonical template?
 # -----------------------------------------------------------------------------
 def headers_match_canonical(blobs: dict[str, str]) -> bool:
-    """判断这张表头是否已是标准布局（→ 走快路径，不调 Agent）。
+    """Decide whether this header is already the canonical layout (-> fast path, no Agent).
 
-    判据：每个标准字段的列位上，表头 blob 必须包含该字段的标准 label。
-    只要有一个核心列对不上，就判为“布局变了”，走慢路径。
+    Criterion: at each standard field's column position, the header blob must contain that
+    field's canonical label. If any single core column doesn't match, the layout is deemed
+    "changed" and we take the slow path.
     """
     for spec in STANDARD_FIELDS:
         blob = blobs.get(spec.column)
@@ -409,10 +439,10 @@ def headers_match_canonical(blobs: dict[str, str]) -> bool:
 
 
 # -----------------------------------------------------------------------------
-# 确定性匹配后端（无需 API key；CI / 离线 / LLM 兜底）
+# Deterministic matching backend (no API key; CI / offline / LLM fallback)
 # -----------------------------------------------------------------------------
 def _score_field(blob: str, spec: FieldSpec) -> float:
-    """给 (列 blob, 标准字段) 打 0-1 相似分。"""
+    """Score (column blob, standard field) in [0, 1]."""
     norm_blob = _normalize(blob)
     if not norm_blob:
         return 0.0
@@ -423,11 +453,11 @@ def _score_field(blob: str, spec: FieldSpec) -> float:
         norm_cand = _normalize(cand)
         if not norm_cand:
             continue
-        # 整串包含 → 强匹配
+        # Whole-string containment -> strong match
         if norm_cand in norm_blob or norm_blob in norm_cand:
             best = max(best, 0.97 if norm_cand == norm_blob else 0.92)
             continue
-        # token 重叠（Jaccard）
+        # Token overlap (Jaccard)
         bt, ct = _tokens(blob), _tokens(cand)
         if bt and ct:
             overlap = len(bt & ct) / len(bt | ct)
@@ -436,8 +466,8 @@ def _score_field(blob: str, spec: FieldSpec) -> float:
 
 
 def map_columns_deterministic(blobs: dict[str, str]) -> ColumnMapping:
-    """纯规则匹配：每列挑最相似的标准字段，做全局去重（一个标准字段只给一列）。"""
-    # 收集所有 (列, 字段, 分数)
+    """Pure rule-based matching: each column picks its most similar standard field, with global dedup (one standard field per column)."""
+    # Collect all (column, field, score)
     scored: list[tuple[str, FieldSpec, float]] = []
     for col, blob in blobs.items():
         for spec in STANDARD_FIELDS:
@@ -466,7 +496,7 @@ def map_columns_deterministic(blobs: dict[str, str]) -> ColumnMapping:
                     excel_header=blob,
                     target_field=spec.field,
                     confidence=score,
-                    reasoning=f"确定性匹配：表头与字段 '{spec.field}'（标准列 {spec.column}）相似度 {score}",
+                    reasoning=f"Deterministic match: header resembles field '{spec.field}' (canonical column {spec.column}), similarity {score}",
                 )
             )
         else:
@@ -476,7 +506,7 @@ def map_columns_deterministic(blobs: dict[str, str]) -> ColumnMapping:
                     excel_header=blob,
                     target_field=None,
                     confidence=0.0,
-                    reasoning="无相似标准字段",
+                    reasoning="No similar standard field",
                 )
             )
     suggestions.sort(key=lambda s: _col_sort_key(s.excel_column))
@@ -488,40 +518,43 @@ def _col_sort_key(letter: str) -> tuple[int, str]:
 
 
 # -----------------------------------------------------------------------------
-# LLM 匹配后端
+# LLM matching backend
 # -----------------------------------------------------------------------------
 def _build_llm_prompt(blobs: dict[str, str]) -> tuple[str, str]:
     field_lines = "\n".join(
-        f"  - {spec.field}（标准列 {spec.column}）：{spec.description}" for spec in STANDARD_FIELDS
+        f"  - {spec.field} (canonical column {spec.column}): {spec.description}"
+        for spec in STANDARD_FIELDS
     )
     system = (
-        "你是 SG-TIMES 数据接入的 Schema-Mapping Agent。\n"
-        "给你一张新版 Excel 每一列的表头文本，你要把每列匹配到下面 38 个标准字段之一，"
-        "并给出 0-1 的置信度。表头可能改名、换位、或多了无关列。\n\n"
-        f"标准字段清单：\n{field_lines}\n\n"
-        "规则：\n"
-        "1. target_field 只能取上面的标准字段名，或在无法匹配时填 null。\n"
-        "2. 一个标准字段最多匹配一列（择优）。\n"
-        "3. confidence：完全同义≈0.95+，明显相关≈0.7-0.9，勉强≈0.4-0.6，无关填 0 且 target_field=null。\n"
-        "4. reasoning 用一句话说明依据（比如同义词、单位线索）。\n"
-        "对每一列都要输出一条 suggestion。\n\n"
-        "示例（表头 → 匹配）：\n"
-        '  - "owner of data" → data_owner（confidence≈0.95，同义改写）\n'
-        '  - "build cost" / "investment" / "NCAP_COST" → capex（confidence≈0.9，'
-        "TIMES 参数名 NCAP_COST 即资本支出）\n"
-        '  - "FO&M" → fixed_opex（confidence≈0.9，Fixed O&M 缩写）\n'
-        '  - "Remarks for internal use" → null（confidence=0，备注列与任何标准字段无关）'
+        "You are the Schema-Mapping Agent for EcoTEA data onboarding.\n"
+        "Given the header text of every column in a new Excel version, map each "
+        "column to one of the 38 standard fields below with a confidence in [0, 1]. "
+        "Headers may be renamed, reordered, or include unrelated extra columns.\n\n"
+        f"Standard fields:\n{field_lines}\n\n"
+        "Rules:\n"
+        "1. target_field must be one of the standard field names, or null when no match.\n"
+        "2. Each standard field may be claimed by at most one column (pick the best).\n"
+        "3. confidence: exact synonym ~0.95+, clearly related ~0.7-0.9, weak ~0.4-0.6, "
+        "unrelated -> 0 with target_field=null.\n"
+        "4. reasoning: one short sentence (synonym, unit clue, ...).\n"
+        "Output one suggestion for EVERY column.\n\n"
+        "Examples (header -> match):\n"
+        '  - "owner of data" -> data_owner (confidence ~0.95, synonym rewrite)\n'
+        '  - "build cost" / "investment" / "NCAP_COST" -> capex (confidence ~0.9, '
+        "NCAP_COST is the TIMES parameter for capital expenditure)\n"
+        '  - "FO&M" -> fixed_opex (confidence ~0.9, Fixed O&M abbreviation)\n'
+        '  - "Remarks for internal use" -> null (confidence 0, notes column matches nothing)'
     )
     col_lines = "\n".join(
-        f"  列 {col}：{blob}"
+        f"  Column {col}: {blob}"
         for col, blob in sorted(blobs.items(), key=lambda x: _col_sort_key(x[0]))
     )
-    user = f"新版 Excel 的列表头如下：\n{col_lines}\n\n请输出 ColumnMapping。"
+    user = f"Column headers of the new Excel version:\n{col_lines}\n\nProduce the ColumnMapping."
     return system, user
 
 
 def map_columns_llm(blobs: dict[str, str]) -> ColumnMapping:
-    """用 LLM 结构化输出做匹配。失败时抛异常，由 map_columns 兜底。"""
+    """Match via LLM structured output. Raises on failure; map_columns provides the fallback."""
     from langchain_core.messages import HumanMessage, SystemMessage
 
     from app.llm.provider import get_chat_model
@@ -532,44 +565,47 @@ def map_columns_llm(blobs: dict[str, str]) -> ColumnMapping:
     mapping: ColumnMapping = structured.invoke(
         [SystemMessage(content=system), HumanMessage(content=user)]
     )
-    # 清洗：丢弃非法 target_field
+    # Sanitize: drop invalid target_field values
     for s in mapping.suggestions:
         if s.target_field is not None and s.target_field not in FIELD_BY_NAME:
-            logger.warning("LLM 返回未知字段 %s，置空", s.target_field)
+            logger.warning("LLM returned unknown field %s, clearing it", s.target_field)
             s.target_field = None
             s.confidence = 0.0
     return mapping
 
 
 def map_columns(blobs: dict[str, str], *, use_llm: bool = False) -> ColumnMapping:
-    """对外主入口：根据 use_llm 选后端，LLM 失败自动回退确定性。"""
+    """Main entry point: pick a backend by use_llm; fall back to deterministic if the LLM fails."""
     if use_llm:
         try:
             return map_columns_llm(blobs)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("LLM 列匹配失败，回退确定性后端：%s", exc)
+            logger.warning(
+                "LLM column matching failed, falling back to the deterministic backend: %s", exc
+            )
     return map_columns_deterministic(blobs)
 
 
 # -----------------------------------------------------------------------------
-# 搬运：映射 -> {陌生列 -> 标准列}，再把行 cells 搬到标准列位
+# Relocation: mapping -> {source column -> canonical column}, then move a row's cells into canonical positions
 # -----------------------------------------------------------------------------
 def build_remap(
     mapping: ColumnMapping, *, min_confidence: float = AUTO_APPLY_THRESHOLD
 ) -> tuple[dict[str, str], list[ColumnSuggestion]]:
-    """把匹配结果拆成「可自动应用的 remap」和「待人工复核的低置信列」。
+    """Split the match result into an "auto-applicable remap" and "low-confidence columns to review".
 
-    返回:
-      remap: {陌生列 -> 标准列}，只含 confidence >= min_confidence 的列
-      needs_review: REVIEW_THRESHOLD <= confidence < min_confidence 的列
-    confidence < REVIEW_THRESHOLD 的列被丢弃（当未匹配）。
+    Returns:
+      remap: {source column -> canonical column}, only columns with confidence >= min_confidence
+      needs_review: columns with REVIEW_THRESHOLD <= confidence < min_confidence
+    Columns with confidence < REVIEW_THRESHOLD are dropped (treated as unmatched).
     """
     remap: dict[str, str] = {}
     needs_review: list[ColumnSuggestion] = []
     used_targets: set[str] = set()
     used_cols: set[str] = set()
-    # 按置信度降序占坑：确定性后端已全局去重，但 LLM 后端可能返回
-    # 多列指向同一 target——必须保证高分列赢，而不是列表里先出现的赢。
+    # Claim slots in descending confidence order: the deterministic backend already dedups
+    # globally, but the LLM backend may return multiple columns pointing at the same target —
+    # the higher-scoring column must win, not whichever appears first in the list.
     ordered = sorted(mapping.suggestions, key=lambda s: s.confidence, reverse=True)
     for s in ordered:
         if s.target_field is None or s.target_field not in FIELD_BY_NAME:
@@ -577,7 +613,7 @@ def build_remap(
         target_col = FIELD_BY_NAME[s.target_field].column
         if s.confidence >= min_confidence:
             if target_col in used_targets or s.excel_column in used_cols:
-                continue  # 同一标准列 / 源列已被更高分占用
+                continue  # this canonical column / source column was already claimed by a higher score
             remap[s.excel_column] = target_col
             used_targets.add(target_col)
             used_cols.add(s.excel_column)
@@ -593,9 +629,9 @@ def validate_remap(
     *,
     sheet_name: str = "",
 ) -> None:
-    """自动应用前的质量门槛，不达标抛 SchemaMappingRejected。
+    """Quality gate before auto-apply; raises SchemaMappingRejected when it doesn't pass.
 
-    只用于 Agent 自动路径；用户在 preview 里人工确认的 override 不走此门槛。
+    Used only on the Agent auto path; a user-confirmed override from preview skips this gate.
     """
     mapped_cols = set(remap.values())
     missing_core = [f for f in CORE_FIELDS if FIELD_BY_NAME[f].column not in mapped_cols]
@@ -604,27 +640,29 @@ def validate_remap(
     problems: list[str] = []
     if missing_core:
         problems.append(
-            "核心列未能自动对齐："
-            + ", ".join(f"{f}（标准列 {FIELD_BY_NAME[f].column}）" for f in missing_core)
+            "core columns could not be auto-aligned: "
+            + ", ".join(f"{f} (canonical column {FIELD_BY_NAME[f].column})" for f in missing_core)
         )
     if ratio < MIN_AUTO_MAPPED_RATIO:
         problems.append(
-            f"自动对齐覆盖率过低：{len(remap)}/{len(STANDARD_FIELDS)}"
-            f" = {ratio:.0%}（门槛 {MIN_AUTO_MAPPED_RATIO:.0%}），列布局变化太大"
+            f"auto-alignment coverage too low: {len(remap)}/{len(STANDARD_FIELDS)}"
+            f" = {ratio:.0%} (threshold {MIN_AUTO_MAPPED_RATIO:.0%}); the column layout differs too much"
         )
     if problems:
-        review_hint = f"；另有 {len(needs_review)} 列置信度在复核区间" if needs_review else ""
+        review_hint = (
+            f"; {len(needs_review)} more column(s) fall in the review band" if needs_review else ""
+        )
         raise SchemaMappingRejected(
-            f"sheet '{sheet_name}' 列布局自动对齐被拒绝：{'；'.join(problems)}"
-            f"{review_hint}。请先调用 POST /api/imports/preview 查看列对齐建议，"
-            "人工确认后通过 column_overrides 重新导入。"
+            f"Automatic column alignment rejected for sheet '{sheet_name}': {'; '.join(problems)}"
+            f"{review_hint}. Call POST /api/imports/preview to inspect the suggested mapping, "
+            "then re-import with confirmed column_overrides."
         )
 
 
 def remap_cells(cells: dict[str, object], remap: dict[str, str]) -> dict[str, object]:
-    """按 remap 把一行 cells 从陌生列位搬到标准列位。
+    """Move a row's cells from source positions to canonical positions per remap.
 
-    未在 remap 里的列被丢弃（视为未匹配，importer 自然读到 None）。
+    Columns not in remap are dropped (treated as unmatched; the importer naturally reads None).
     """
     return {std_col: cells.get(src_col) for src_col, std_col in remap.items()}
 

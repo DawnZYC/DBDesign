@@ -1,13 +1,16 @@
-"""Agent 编排模块。
+"""Agent orchestration package.
 
-包含两类彼此解耦的 Agent：
-  * 查询侧（M3）：Planner → SQL → Interpreter → Visualizer，LangGraph 编排。
-    通过 build_graph() / AgentState 暴露。
-  * 接入侧（M5）：schema_mapper —— 导入时对齐列布局，**不在** M3 的图里。
+Contains two decoupled kinds of Agent:
+  * Query side (M3): Planner -> SQL -> Interpreter -> Visualizer, orchestrated by
+    LangGraph. Exposed via build_graph() / AgentState.
+  * Ingestion side (M5): schema_mapper — aligns column layout at import time, and is
+    NOT part of the M3 graph.
 
-为让接入侧（仅依赖 openpyxl/pydantic）能在没装 langgraph 的环境里独立 import，
-M3 的入口走 PEP 562 惰性加载：只有真正访问 build_graph/AgentState 时才 import
-langgraph 相关模块。`from app.agents import schema_mapper` 不会触发这些重依赖。
+So the ingestion side (which only depends on openpyxl/pydantic) can be imported
+independently in environments without langgraph, the M3 entry points use PEP 562 lazy
+loading: langgraph-related modules are imported only when build_graph/AgentState is
+actually accessed. `from app.agents import schema_mapper` does not pull in those heavy
+dependencies.
 """
 
 from __future__ import annotations

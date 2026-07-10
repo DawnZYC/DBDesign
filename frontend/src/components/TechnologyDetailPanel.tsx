@@ -112,6 +112,7 @@ export function TechnologyDetailPanel({ technologyId }: TechnologyDetailPanelPro
         <h4>Yearly data</h4>
         <span className="detail-section-meta">
           {detail.years.length} {detail.years.length === 1 ? 'record' : 'records'}
+          {detail.years.length > 0 ? ' · click a row for full parameters' : ''}
         </span>
       </div>
 
@@ -164,42 +165,125 @@ export function TechnologyDetailPanel({ technologyId }: TechnologyDetailPanelPro
 }
 
 function YearRow({ year }: { year: TechnologyYearOut }) {
+  const [open, setOpen] = useState(false);
+  const toggle = () => setOpen((o) => !o);
   return (
-    <tr>
-      <td className="year-cell-year">{year.data_year}</td>
-      <td className="num">
-        <ValueWithUnit value={year.emission_factor} unit={year.emission_factor_unit} />
-      </td>
-      <td className="num group-divider">
-        <ValueWithUnit value={year.capex} unit={year.capex_unit} />
-      </td>
-      <td className="num">
-        <ValueWithUnit value={year.fixed_opex} unit={year.fixed_opex_unit} />
-      </td>
-      <td className="num">
-        <ValueWithUnit value={year.variable_opex} unit={year.variable_opex_unit} />
-      </td>
-      <td className="efficiency-cell group-divider">
-        {year.efficiency_text ? (
-          <div className="year-cell-pair">
-            <span>{year.efficiency_text}</span>
-            {year.efficiency_unit && <span className="year-cell-unit">{year.efficiency_unit}</span>}
+    <>
+      <tr
+        className={`year-row ${open ? 'expanded' : ''}`}
+        onClick={toggle}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggle();
+          }
+        }}
+      >
+        <td className="year-cell-year">
+          <span className={`year-row-chevron ${open ? 'open' : ''}`} aria-hidden="true">
+            ▶
+          </span>{' '}
+          {year.data_year}
+        </td>
+        <td className="num">
+          <ValueWithUnit value={year.emission_factor} unit={year.emission_factor_unit} />
+        </td>
+        <td className="num group-divider">
+          <ValueWithUnit value={year.capex} unit={year.capex_unit} />
+        </td>
+        <td className="num">
+          <ValueWithUnit value={year.fixed_opex} unit={year.fixed_opex_unit} />
+        </td>
+        <td className="num">
+          <ValueWithUnit value={year.variable_opex} unit={year.variable_opex_unit} />
+        </td>
+        <td className="efficiency-cell group-divider">
+          {year.efficiency_text ? (
+            <div className="year-cell-pair">
+              <span>{year.efficiency_text}</span>
+              {year.efficiency_unit && (
+                <span className="year-cell-unit">{year.efficiency_unit}</span>
+              )}
+            </div>
+          ) : (
+            <span className="year-cell-empty">—</span>
+          )}
+        </td>
+        <td className="num">{formatNum(year.heat_rate)}</td>
+        <td className="num group-divider">{formatNum(year.capacity_value)}</td>
+        <td>
+          {year.capacity_bound_type ? (
+            <span>{year.capacity_bound_type}</span>
+          ) : (
+            <span className="year-cell-empty">—</span>
+          )}
+        </td>
+        <td className="group-divider">{renderCommodities(year.commodities)}</td>
+      </tr>
+      {open && (
+        <tr className="year-detail-row">
+          <td colSpan={10}>
+            <YearDetailGrid year={year} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+/** Less-common parameters, shown when a year row is expanded. */
+function YearDetailGrid({ year }: { year: TechnologyYearOut }) {
+  const items: Array<[string, string]> = [
+    ['Base currency', year.base_currency ?? '—'],
+    ['Tax cost', formatNum(year.tax_cost)],
+    ['Subsidy cost', formatNum(year.subsidy_cost)],
+    ['Technology efficiency', formatNum(year.technology_efficiency)],
+    ['Capacity → activity factor', formatNum(year.capacity_to_activity_factor)],
+  ];
+  const demandRows = year.commodities.filter(
+    (c) => c.demand_value != null || c.demand_text != null,
+  );
+  return (
+    <div className="year-detail">
+      <div className="year-detail-grid">
+        {items.map(([label, val]) => (
+          <div key={label} className="year-detail-item">
+            <span className="year-detail-label">{label}</span>
+            <span className="year-detail-value">{val}</span>
           </div>
-        ) : (
-          <span className="year-cell-empty">—</span>
-        )}
-      </td>
-      <td className="num">{formatNum(year.heat_rate)}</td>
-      <td className="num group-divider">{formatNum(year.capacity_value)}</td>
-      <td>
-        {year.capacity_bound_type ? (
-          <span>{year.capacity_bound_type}</span>
-        ) : (
-          <span className="year-cell-empty">—</span>
-        )}
-      </td>
-      <td className="group-divider">{renderCommodities(year.commodities)}</td>
-    </tr>
+        ))}
+      </div>
+
+      {year.constraint_details.length > 0 && (
+        <div className="year-detail-block">
+          <div className="year-detail-block-title">Constraint details</div>
+          <ul className="year-detail-list">
+            {year.constraint_details.map((cd, i) => (
+              <li key={i}>
+                {cd.detail_type}: {formatNum(cd.detail_value)}
+                {cd.detail_unit ? ` ${cd.detail_unit}` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {demandRows.length > 0 && (
+        <div className="year-detail-block">
+          <div className="year-detail-block-title">Commodity demand</div>
+          <ul className="year-detail-list">
+            {demandRows.map((c, i) => (
+              <li key={i}>
+                {c.commodity_code}: {c.demand_text ?? formatNum(c.demand_value)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -235,7 +319,11 @@ function formatNum(value: string | null): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return value;
   if (n === 0) return '0';
-  if (Math.abs(n) >= 100) return n.toFixed(2);
-  if (Math.abs(n) >= 1) return n.toFixed(3);
-  return n.toFixed(4);
+  const abs = Math.abs(n);
+  if (abs >= 100) return n.toFixed(2);
+  if (abs >= 1) return n.toFixed(3);
+  if (abs >= 1e-4) return n.toFixed(4);
+  // Very small but non-zero: fixed decimals would round to 0.0000 and hide the value,
+  // so keep significant digits (switches to exponential for the tiniest values).
+  return n.toPrecision(3);
 }

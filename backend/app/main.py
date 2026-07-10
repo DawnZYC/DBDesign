@@ -8,7 +8,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import browse, chat, convert, health, imports, rag, raw_rows
+from app.routers import (
+    browse,
+    chat,
+    convert,
+    emission_factors,
+    health,
+    imports,
+    rag,
+    raw_rows,
+)
 
 settings = get_settings()
 
@@ -18,19 +27,25 @@ logging.basicConfig(
 )
 
 app = FastAPI(
-    title="SG-TIMES Multi-Agent Analysis Platform",
+    title="Strata — Multi-Agent Energy Model Analytics",
     description=(
-        "EcoTEA WP1 data import tool + LangGraph 4-agent analysis system.\n\n"
+        "Strata: a LangGraph multi-agent analysis system over the EcoTEA WP1 energy-model "
+        "dataset.\n\n"
         "Natural-language query -> SQL execution -> interpretation -> ECharts "
         "visualization (SSE streaming), plus VT-to-EcoTEA workbook conversion."
     ),
     version="0.3.0",
 )
 
+# A wildcard origin cannot be combined with credentials (browsers reject it per the
+# CORS spec), so disable credentials when origins are "*".
+_cors_origins = settings.cors_origins
+_allow_credentials = "*" not in _cors_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -42,6 +57,7 @@ app.include_router(browse.router)
 app.include_router(rag.router)  # M1: POST /api/rag/search
 app.include_router(chat.router)  # M3: POST /api/chat/stream (SSE)
 app.include_router(raw_rows.router)  # M4: GET /api/raw-rows/{id} (chart cell trace)
+app.include_router(emission_factors.router)  # PUT /api/technologies/{id}/emission-factors
 
 
 @app.get("/", include_in_schema=False)

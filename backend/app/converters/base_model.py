@@ -3,7 +3,7 @@
 To add a new model (for example ``VT_SG_IND``):
   1. Create ``models/vt_sg_ind.py``
   2. Subclass :class:`BaseConverter`
-  3. Implement :meth:`extract_power_records` (and future sector methods)
+  3. Implement :meth:`extract_records` (and future sector methods)
   4. Register the new class in :mod:`app.converters.engine`
 """
 
@@ -16,7 +16,7 @@ MISSING = "-"  # Standard placeholder for missing values in EcoTEA
 
 
 @dataclass
-class PowerRecord:
+class ConvertRecord:
     """One row in the EcoTEA Power sheet (one process x one year)."""
 
     # Traceability columns (A-G) — constant per model
@@ -40,7 +40,7 @@ class PowerRecord:
     grade: str = MISSING
     ef: object = MISSING
     ef_unit: str = "PJ"
-    currency: str = "MSGD2016"
+    currency: str = "BASECUR"
     capex: object = MISSING
     capex_unit: str = "GW"
     fixed_opex: object = MISSING
@@ -79,5 +79,5 @@ class BaseConverter(ABC):
             self._sheets = pd.read_excel(self.file_path, sheet_name=None, header=None)
 
     @abstractmethod
-    def extract_power_records(self) -> list[PowerRecord]:
-        """Return all PowerRecord rows for the EcoTEA Power sheet."""
+    def extract_records(self) -> list[ConvertRecord]:
+        """Return all ConvertRecord rows for the EcoTEA Power sheet."""

@@ -50,8 +50,9 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 COPY app ./app
 # Seed scripts + domain knowledge so RAG can be seeded inside the container:
-#   docker compose exec backend python seed_commodities.py && python seed_rag.py
-COPY seed_commodities.py seed_rag.py domain_knowledge.md ./
+#   docker compose exec backend python scripts/seed_commodities.py && python scripts/seed_rag.py
+COPY scripts/seed_commodities.py scripts/seed_rag.py ./scripts/
+COPY data ./data
 
 # Writable ChromaDB persistence dir (mounted as a volume by docker-compose).
 RUN mkdir -p /app/chroma_data && chown -R app:app /app/chroma_data

@@ -1,11 +1,9 @@
 /**
- * CellTraceModal — 源单元格反查浮层（M4）。
+ * CellTraceModal — source-cell trace overlay (M4).
  *
- * 当用户点击 ECharts 图表上的数据点时打开，
- * 调用 GET /api/raw-rows/{id} 拉取该数据点对应的原始 Excel 行，
- * 展示：来源 sheet / 行号 / raw_cells JSONB / import_batch 信息。
- *
- * 关闭方式：点击遮罩 | 点击 × 按钮 | 按 Escape。
+ * Opens when the user clicks a chart data point; fetches the original Excel
+ * row via GET /api/raw-rows/{id} and shows sheet / row number / raw_cells
+ * JSONB / import batch info. Close: backdrop click, ×, or Escape.
  */
 import { useEffect, useState } from 'react';
 
@@ -25,7 +23,7 @@ type FetchState =
 export function CellTraceModal({ rawRowId, onClose }: Props) {
   const [state, setState] = useState<FetchState>({ status: 'loading' });
 
-  // 拉取数据
+  // Fetch data.
   useEffect(() => {
     setState({ status: 'loading' });
     let cancelled = false;
@@ -43,7 +41,7 @@ export function CellTraceModal({ rawRowId, onClose }: Props) {
     };
   }, [rawRowId]);
 
-  // Escape 关闭
+  // Close on Escape.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -64,11 +62,11 @@ export function CellTraceModal({ rawRowId, onClose }: Props) {
         <div className="modal-header">
           <div>
             <h2 className="modal-title" style={{ margin: 0, fontSize: 17 }}>
-              源单元格追溯
+              Source cell trace
             </h2>
             <p className="modal-subtitle">raw_row_id = {rawRowId}</p>
           </div>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
             ×
           </button>
         </div>
@@ -78,13 +76,13 @@ export function CellTraceModal({ rawRowId, onClose }: Props) {
           {state.status === 'loading' && (
             <div className="modal-empty">
               <span className="spinner" style={{ display: 'inline-block', marginRight: 8 }} />
-              加载中…
+              Loading…
             </div>
           )}
 
           {state.status === 'error' && (
             <div className="modal-error">
-              <strong>加载失败</strong>
+              <strong>Failed to load</strong>
               <pre>{state.message}</pre>
             </div>
           )}
@@ -94,10 +92,10 @@ export function CellTraceModal({ rawRowId, onClose }: Props) {
 
         {/* Footer */}
         <div className="modal-footer">
-          <span className="modal-meta">点击图表数据点可追溯原始数据来源</span>
+          <span className="modal-meta">Click chart data points to trace their original source</span>
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
-              关闭
+              Close
             </button>
           </div>
         </div>
@@ -106,14 +104,58 @@ export function CellTraceModal({ rawRowId, onClose }: Props) {
   );
 }
 
-/* ---- 内容区域（数据加载成功后渲染） ---- */
+// Canonical EcoTEA column letter -> human field label (matches the importer's fixed layout).
+const COLUMN_LABELS: Record<string, string> = {
+  A: 'WP / sector',
+  B: 'data owner',
+  C: 'data provider',
+  D: 'data source',
+  E: 'data source description',
+  F: 'data user',
+  G: 'usage purpose',
+  H: 'technology code',
+  I: 'technology description',
+  J: 'geography',
+  K: 'year',
+  L: 'start year',
+  M: 'lifetime (yr)',
+  N: 'grade',
+  O: 'emission factor',
+  P: 'emission factor unit',
+  Q: 'base currency',
+  R: 'capex',
+  S: 'capex unit',
+  T: 'fixed opex',
+  U: 'fixed opex unit',
+  V: 'variable opex',
+  W: 'variable opex unit',
+  X: 'tax cost',
+  Y: 'subsidy cost',
+  Z: 'efficiency',
+  AA: 'technology efficiency',
+  AB: 'commodity share',
+  AC: 'commodity code',
+  AD: 'commodity demand',
+  AE: 'interpolation rule',
+  AF: 'capacity-to-activity factor',
+  AG: 'heat rate',
+  AH: 'capacity',
+  AI: 'capacity type',
+  AJ: 'max import possible',
+  AK: 'max solar output allowed',
+  AL: 'capacity (special)',
+};
+
+/* ---- Body (rendered after data loads) ---- */
 function CellTraceContent({ data }: { data: RawRowDetail }) {
   const { source_sheet_name, excel_row_number, raw_cells, import_batch } = data;
 
-  // 把 raw_cells 格式化为可读的 JSON，每个 key 一行
-  const cellsJson = JSON.stringify(raw_cells, null, 2);
+  // Non-empty cells, sorted by column (single letters before double).
+  const cellEntries = Object.entries(raw_cells)
+    .filter(([, v]) => v !== null && v !== '' && v !== undefined)
+    .sort(([a], [b]) => a.length - b.length || (a < b ? -1 : 1));
 
-  const importedAt = new Date(import_batch.imported_at).toLocaleString('zh-CN', {
+  const importedAt = new Date(import_batch.imported_at).toLocaleString('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -123,35 +165,45 @@ function CellTraceContent({ data }: { data: RawRowDetail }) {
 
   return (
     <>
-      {/* Excel 位置信息 */}
+      {/* Excel location */}
       <div className="cell-trace-meta">
         <div className="cell-trace-meta-row">
           <dt>Sheet</dt>
           <dd>{source_sheet_name}</dd>
         </div>
         <div className="cell-trace-meta-row">
-          <dt>行号</dt>
-          <dd>第 {excel_row_number} 行</dd>
+          <dt>Row</dt>
+          <dd>Row {excel_row_number}</dd>
         </div>
         <div className="cell-trace-meta-row">
-          <dt>来源文件</dt>
+          <dt>Source file</dt>
           <dd>{import_batch.file_name}</dd>
         </div>
         <div className="cell-trace-meta-row">
-          <dt>导入时间</dt>
+          <dt>Imported at</dt>
           <dd>{importedAt}</dd>
         </div>
         {import_batch.note && (
           <div className="cell-trace-meta-row">
-            <dt>情景注记</dt>
+            <dt>Scenario note</dt>
             <dd>{import_batch.note}</dd>
           </div>
         )}
       </div>
 
-      {/* 原始单元格内容 */}
-      <div className="cell-trace-section-title">原始单元格（raw_cells）</div>
-      <pre className="cell-trace-raw">{cellsJson}</pre>
+      {/* Raw cell contents */}
+      <div className="cell-trace-section-title">Source cells</div>
+      <table className="cell-trace-table">
+        <tbody>
+          {cellEntries.map(([col, val]) => (
+            <tr key={col}>
+              <td className="cell-trace-col">{col}</td>
+              <td className="cell-trace-label">{COLUMN_LABELS[col] ?? '—'}</td>
+              <td className="cell-trace-val">{String(val)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </>
   );
 }

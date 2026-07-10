@@ -1,4 +1,4 @@
-"""工具基础设施：日志 hook、错误信封、便捷的 @tool 包装。"""
+"""Tool infrastructure: logging hooks, error envelopes, and convenient @tool wrappers."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ T = TypeVar("T")
 
 
 def with_observability(name: str) -> Callable[[Callable[..., T]], Callable[..., T]]:
-    """装饰器：给工具调用加结构化日志（耗时 / 异常）。
+    """Decorator: add structured logging (duration / exceptions) to a tool call.
 
-    Agent 系统接入 LangSmith 之后，每次工具调用都会自动转 trace span。
-    在没有 LangSmith 的本地开发环境，至少也能看到 stdout 日志。
+    Once the Agent system is wired to LangSmith, each tool call automatically becomes a trace span.
+    In local dev without LangSmith, you at least get stdout logs.
     """
 
     def decorator(fn: Callable[..., T]) -> Callable[..., T]:

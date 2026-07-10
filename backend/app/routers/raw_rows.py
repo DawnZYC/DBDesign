@@ -1,12 +1,13 @@
-"""raw_rows 路由（M4）— GET /api/raw-rows/{raw_row_id}。
+"""raw_rows router (M4) — GET /api/raw-rows/{raw_row_id}.
 
-用途：图表点击事件的源单元格反查。
-  前端 ECharts dataset 把 raw_row_id 编进隐藏维度，用户点击数据点时
-  取出该 id，调本端点拿回原始 Excel 行信息（sheet / 行号 / 原始单元格 JSON）。
+Purpose: source-cell trace-back for chart click events.
+  The frontend ECharts dataset encodes raw_row_id as a hidden dimension; when the user
+  clicks a data point, it takes that id and calls this endpoint to retrieve the original
+  Excel row info (sheet / row number / original cell JSON).
 
-响应包含：
+The response contains:
   - raw_row_id / source_sheet_name / excel_row_number / raw_cells (JSONB)
-  - import_batch.file_name / imported_at / note（情景标签）
+  - import_batch.file_name / imported_at / note (scenario label)
 """
 
 from __future__ import annotations
@@ -26,10 +27,10 @@ router = APIRouter(prefix="/api", tags=["raw-rows"])
 
 
 # -----------------------------------------------------------------------------
-# 响应 schema
+# Response schema
 # -----------------------------------------------------------------------------
 class ImportBatchBrief(BaseModel):
-    """import_batch 的简要信息（避免把整张 batch 表都透传）。"""
+    """Brief import_batch info (avoid passing through the entire batch table)."""
 
     import_batch_id: int
     file_name: str
@@ -38,47 +39,47 @@ class ImportBatchBrief(BaseModel):
 
 
 class RawRowDetail(BaseModel):
-    """单条原始 Excel 行的完整信息。"""
+    """Full info for a single raw Excel row."""
 
     raw_row_id: int
     source_sheet_name: str
     excel_row_number: int
-    raw_cells: dict  # JSONB 原文，保持 dict 格式
+    raw_cells: dict  # JSONB original, kept as a dict
     import_batch: ImportBatchBrief
 
 
 # -----------------------------------------------------------------------------
-# 端点
+# Endpoint
 # -----------------------------------------------------------------------------
 @router.get(
     "/raw-rows/{raw_row_id}",
     response_model=RawRowDetail,
-    summary="反查源 Excel 单元格（图表点击用）",
+    summary="Trace back to the source Excel cell (for chart clicks)",
 )
 def get_raw_row(
     raw_row_id: int,
     db: Session = Depends(get_db),
 ) -> RawRowDetail:
-    """根据 raw_row_id 返回原始 Excel 行信息。
+    """Return the original Excel row info for a given raw_row_id.
 
-    前端图表点击时携带 raw_row_id，调用本端点展示：
-      - 来源 sheet 名 + Excel 行号
-      - raw_cells JSONB（原始单元格内容，key=列字母，value=原始值）
-      - 所属 import_batch（文件名 + 导入时间 + 情景注记）
+    On a chart click, the frontend passes raw_row_id and calls this endpoint to show:
+      - source sheet name + Excel row number
+      - raw_cells JSONB (original cell content, key=column letter, value=original value)
+      - the owning import_batch (file name + import time + scenario note)
     """
     row = db.query(models.RawExcelRow).filter(models.RawExcelRow.raw_row_id == raw_row_id).first()
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"raw_row_id={raw_row_id} 不存在",
+            detail=f"raw_row_id={raw_row_id} does not exist",
         )
 
     batch = row.batch
     if batch is None:
-        # 关联 batch 已被删除（理论上外键 CASCADE 不会发生，防御性检查）
+        # The associated batch was deleted (shouldn't happen with the FK CASCADE; defensive check)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"raw_row_id={raw_row_id} 对应的 import_batch 不存在",
+            detail=f"the import_batch for raw_row_id={raw_row_id} does not exist",
         )
 
     logger.info(
@@ -89,11 +90,14 @@ def get_raw_row(
         batch.import_batch_id,
     )
 
+    # Strip M5 meta keys (e.g. "__column_remap__") so the trace shows only real Excel cells.
+    raw_cells = {k: v for k, v in (row.raw_cells or {}).items() if not str(k).startswith("__")}
+
     return RawRowDetail(
         raw_row_id=row.raw_row_id,
         source_sheet_name=row.source_sheet_name,
         excel_row_number=row.excel_row_number,
-        raw_cells=row.raw_cells or {},
+        raw_cells=raw_cells,
         import_batch=ImportBatchBrief(
             import_batch_id=batch.import_batch_id,
             file_name=batch.file_name,

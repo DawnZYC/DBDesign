@@ -1,10 +1,10 @@
-"""AgentState — LangGraph 图节点之间共享的状态结构。
+"""AgentState — shared state structure passed between LangGraph nodes.
 
-设计原则：
-  * 只存节点之间需要传递的「跨越节点边界」的数据
-  * messages 走 LangChain add_messages reducer（append-only）
-  * 其余字段用最后写入值（LangGraph 默认 last-write-wins）
-  * 所有可选字段默认 None，节点负责填写并向后传
+Design principles:
+  * Only store data that needs to cross node boundaries.
+  * messages use the LangChain add_messages reducer (append-only).
+  * Other fields use last-write-wins (LangGraph default).
+  * All optional fields default to None; nodes fill them in and pass them forward.
 """
 
 from __future__ import annotations
@@ -17,37 +17,50 @@ from typing_extensions import TypedDict
 
 
 class AgentState(TypedDict):
-    """4-Agent 流水线的全局状态。
+    """Global state for the 4-agent pipeline.
 
-    字段流向：
-        messages      — 对话历史（用户 + assistant），add_messages 累加
-        plan          — Planner 输出的步骤列表（自然语言 / Markdown bullet）
-        sql_params    — SQL Agent 输出的结构化查询参数（QueryParams 序列化后的 dict）
-        sql_result    — run_sql 工具的执行结果（QueryResult.model_dump()）
-        interpretation — Interpreter 输出的自然语言分析文本
-        chart_spec    — Visualizer 输出的 ECharts spec（完整 option dict）
-        retry_count   — 当前已重试次数（SQL 失败 → 回 Planner）
-        error         — 最新错误描述；节点正常完成后清为 None
+    Field flow:
+        messages       — conversation history (user + assistant), accumulated via add_messages
+        plan           — step list produced by the Planner (natural language / Markdown bullets)
+        sql_params     — structured query params from the SQL Agent (serialized QueryParams dict)
+        sql_result     — result of the run_sql tool (QueryResult.model_dump())
+        interpretation — natural-language analysis text from the Interpreter
+        chart_spec     — ECharts spec from the Visualizer (full option dict)
+        retry_count    — current retry count (SQL failure -> back to Planner)
+        error          — latest error description; cleared to None once a node finishes normally
     """
 
-    # 对话历史：使用 add_messages reducer，每次 update 是 append 而非覆盖
+    # Conversation history: uses the add_messages reducer, so each update appends instead of overwriting.
     messages: Annotated[list[BaseMessage], add_messages]
 
-    # Planner 产物
+    # Planner output
     plan: list[str]
+    # Intent: "data_query" (needs a DB query, full SQL pipeline) / "tool_query" (terminology /
+    # unit conversion / emission factor / forecast, handled by the function-calling tool agent) /
+    # "direct_answer" (small talk, answered directly by the Interpreter without tools).
+    # None is treated as data_query.
+    intent: str | None
 
-    # SQL Agent 产物
+    # SQL Agent output
     sql_params: dict[str, Any] | None  # app.tools.sql_runner.QueryParams.model_dump()
 
-    # run_sql 工具产物
+    # run_sql tool output
     sql_result: dict[str, Any] | None  # QueryResult.model_dump()
 
-    # Interpreter 产物
+    # Tool Agent output: a human-readable transcript of the function-calling tools the LLM
+    # chose to run (name, args, result), consumed by the Interpreter for the final answer.
+    tool_context: str | None
+
+    # Interpreter output
     interpretation: str | None
 
-    # Visualizer 产物
+    # Visualizer output
     chart_spec: dict[str, Any] | None  # EChartsSpec.model_dump()
 
-    # 流控
+    # User preference: the language the assistant should reply in (e.g. "English",
+    # "Chinese"). Empty / None means "match the language of the question" (auto).
+    language: str | None
+
+    # Flow control
     retry_count: int
     error: str | None

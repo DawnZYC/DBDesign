@@ -1,4 +1,4 @@
-"""Golden-question evaluation runner for the SG-TIMES multi-agent platform.
+"""Golden-question evaluation runner for the EcoTEA multi-agent platform.
 
 Streams each question in eval/golden_questions.yaml through
 POST /api/chat/stream, collects the final answer / tool calls / chart spec,

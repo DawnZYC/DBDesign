@@ -1,4 +1,4 @@
-"""Writes ``PowerRecord`` lists into an EcoTEA Excel template.
+"""Writes ``ConvertRecord`` lists into an EcoTEA Excel template.
 
 If the template format changes, update :data:`POWER_COL_ORDER` and the header
 rows preserved at the top of :func:`write_output`.
@@ -12,7 +12,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 
-from app.converters.base_model import MISSING, PowerRecord
+from app.converters.base_model import MISSING, ConvertRecord
 
 POWER_COL_ORDER = [
     "wp6_title",  # A
@@ -60,7 +60,7 @@ POWER_DATA_START_ROW = 10
 
 
 def write_output(
-    records: list[PowerRecord],
+    records: list[ConvertRecord],
     template_path: str,
     output_path: str,
     sheet_name: str = "Power",

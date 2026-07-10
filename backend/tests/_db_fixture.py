@@ -1,7 +1,7 @@
-"""测试用 SQLite 内存数据库 fixture。
+"""SQLite in-memory database fixture for tests.
 
-复用 verify_browse.py 里的 schema 创建 + seeding 逻辑，但只暴露最小数据，
-方便 DB 相关工具的单测都用它。
+Reuses the schema-creation + seeding logic from verify_browse.py, but exposes only minimal
+data so the DB-related tool unit tests can all share it.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# 必须在 import app.* 之前
+# Must come before importing app.*
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 
 from sqlalchemy import (
@@ -34,10 +34,10 @@ from app import database as dbmod
 
 
 def setup_test_db() -> None:
-    """在共享 engine 上建表 + 灌测试数据。重复调用安全（DROP + CREATE）。"""
+    """Create tables + seed test data on the shared engine. Safe to call repeatedly (DROP + CREATE)."""
     md = MetaData()
 
-    # 14 张业务表的精简版（SQLite 兼容：JSONB → JSON、BigInteger 主键 → Integer）
+    # Slimmed-down versions of the 14 business tables (SQLite-compatible: JSONB -> JSON, BigInteger PK -> Integer)
     Table(
         "import_batch",
         md,
@@ -212,7 +212,7 @@ def setup_test_db() -> None:
     md.create_all(dbmod.engine)
 
     with dbmod.engine.begin() as conn:
-        # 字典
+        # Dictionaries
         conn.execute(
             text(
                 "INSERT INTO sector(sector_code, sector_name) VALUES "
@@ -220,18 +220,18 @@ def setup_test_db() -> None:
             )
         )
         conn.execute(
-            text("INSERT INTO geography(geography_code, geography_name) VALUES ('SG', 'Singapore')")
+            text("INSERT INTO geography(geography_code, geography_name) VALUES ('SG', 'Region SG')")
         )
         conn.execute(
             text(
                 "INSERT INTO commodity(commodity_code, commodity_set, commodity_description, unit) VALUES "
-                "('PWRNGA', 'NRG', 'Power Natural Gas', 'PJ'), "
-                "('PWRCOA', 'NRG', 'Power Coal', 'PJ'), "
-                "('PWRCO2', 'ENV', 'Power Carbon Dioxide', 'kt')"
+                "('NGAS01', 'NRG', 'Natural gas for power', 'PJ'), "
+                "('COAL01', 'NRG', 'Coal for power', 'PJ'), "
+                "('CO2_01', 'ENV', 'Power-sector CO2', 'kt')"
             )
         )
 
-        # raw_excel_row（用于 raw_row_id 反查）
+        # raw_excel_row (for raw_row_id trace-back)
         import json as _json
 
         for i in range(1, 5):
@@ -241,20 +241,20 @@ def setup_test_db() -> None:
                     "INSERT INTO raw_excel_row(import_batch_id, source_sheet_name, "
                     "excel_row_number, raw_cells) "
                     "VALUES (:b, 'Power', :rn, :cells)"
-                ).bindparams(b=i, rn=10 + i, cells=_json.dumps({"H": "PWRNGACCF01"}))
+                ).bindparams(b=i, rn=10 + i, cells=_json.dumps({"H": "NGCC01"}))
             )
 
-        # technology_process 两条
+        # two technology_process rows
         conn.execute(
             text(
                 "INSERT INTO technology_process(sector_id, geography_id, technology_code, "
                 "technology_description, technology_start_year, technology_lifetime_years) VALUES "
-                "(1, 1, 'PWRNGACCF01', 'Natural gas combined cycle', 2018, 25), "
-                "(1, 1, 'PWRSOLLPV00', 'Solar PV', 2018, 25)"
+                "(1, 1, 'NGCC01', 'Natural gas combined cycle', 2018, 25), "
+                "(1, 1, 'SOLAR01', 'Solar PV', 2018, 25)"
             )
         )
 
-        # technology_year + ecotea_parameter（4 个年份给 PWRNGACCF01）
+        # technology_year + ecotea_parameter (4 years for NGCC01)
         years = [
             (2018, 1572.78, 56.1, "PJ"),
             (2024, 1500.0, 56.1, "PJ"),
@@ -276,7 +276,7 @@ def setup_test_db() -> None:
                 ).bindparams(tyi=i, c=capex, ef=ef, u=ef_u)
             )
 
-        # PWRSOLLPV00 一年（capex 不一样、emission_factor=0）
+        # SOLAR01 one year (different capex, emission_factor=0)
         conn.execute(text("INSERT INTO technology_year(technology_id, data_year) VALUES (2, 2018)"))
         conn.execute(
             text(
@@ -288,4 +288,4 @@ def setup_test_db() -> None:
 
 
 def teardown_test_db() -> None:
-    pass  # in-memory，会随进程结束销毁
+    pass  # in-memory; destroyed when the process ends

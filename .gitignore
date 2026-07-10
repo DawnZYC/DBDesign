@@ -11,6 +11,7 @@ venv/
 env/
 *.egg-info/
 .pytest_cache/
+pytest-cache-files-*/
 .mypy_cache/
 .ruff_cache/
 .coverage
@@ -99,3 +100,7 @@ langsmith_cache/
 *.whl
 build/
 sdist/
+
+# Confidential data — keep locally, never commit (supply your own; see *.example placeholders)
+backend/app/assets/*.xlsx
+backend/data/domain_knowledge.md

@@ -252,10 +252,15 @@ button {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 36px 40px 64px;
+  padding: 36px 40px 40px;
   max-width: 1280px;
   width: 100%;
   min-width: 0;
+  /* Own the viewport height and scroll internally: long views (Browse/Import)
+     scroll inside main, while flex children (Chat) can fill the remaining
+     height exactly without hard-coded vh math. */
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .page-header {
@@ -1575,6 +1580,60 @@ button {
   font-size: 11.5px;
 }
 
+/* Expandable year rows (full parameter set on demand) */
+.year-table tbody tr.year-row {
+  cursor: pointer;
+}
+.year-table tbody tr.year-row.expanded td {
+  background: var(--surface-alt);
+}
+.year-row-chevron {
+  display: inline-block;
+  font-size: 9px;
+  color: var(--text-muted, #6b7280);
+  transition: transform 0.15s;
+}
+.year-row-chevron.open {
+  transform: rotate(90deg);
+}
+.year-detail-row td {
+  background: #f7f9fc;
+  padding: 12px 16px !important;
+}
+.year-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 18px;
+}
+.year-detail-item {
+  display: flex;
+  flex-direction: column;
+}
+.year-detail-label {
+  font-size: 11px;
+  color: var(--text-muted, #6b7280);
+}
+.year-detail-value {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.year-detail-block {
+  margin-top: 10px;
+}
+.year-detail-block-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted, #6b7280);
+  margin-bottom: 4px;
+}
+.year-detail-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
 .year-cell-year {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1937,7 +1996,7 @@ button {
   }
 }
 
-/* ===== M5: 列对齐复核（Schema-Mapping） ===== */
+/* ===== M5: column alignment review (Schema-Mapping) ===== */
 .column-mapping-review {
   margin: 16px 0;
   border: 1px solid var(--border, #d9dde3);
@@ -2033,4 +2092,201 @@ button {
 }
 .cmr-row.cmr-review .cmr-col {
   color: #b8860b;
+}
+
+/* Duplicate-target conflict (two columns mapped to the same field) */
+.cmr-conflict-banner {
+  display: block;
+  margin-top: 6px;
+  color: #b91c1c;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.cmr-row.cmr-conflict {
+  background: #fef2f2;
+}
+.cmr-select-conflict {
+  border: 1px solid #dc2626 !important;
+  outline: none;
+}
+.cmr-conflict-tag {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #b91c1c;
+  white-space: nowrap;
+}
+
+/* Keep-alive view panes: all tab views stay mounted, inactive ones hidden.
+   [hidden] already means display:none, the !important guards against any
+   descendant display rules with higher specificity. */
+.view-pane[hidden] {
+  display: none !important;
+}
+
+/* The active pane joins the .app-main flex column and may stretch to fill
+   the remaining height (Chat relies on this); long content still scrolls
+   via .app-main. */
+.view-pane:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
+/* Chat must fit exactly (its message list scrolls internally), so its pane
+   is the one place we forbid growing past the viewport. */
+.view-pane:has(> .chat-page):not([hidden]) {
+  flex: 1 1 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Emission Factors editor
+   ----------------------------------------------------------------------------- */
+.ef-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.ef-body {
+  padding: 16px 18px 20px;
+}
+
+.ef-hint {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.ef-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ef-table thead th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 0 10px 8px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.ef-table tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--divider);
+  vertical-align: middle;
+}
+
+.ef-year {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.ef-empty-cell {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px 10px;
+}
+
+.ef-input {
+  width: 100%;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  background: var(--surface);
+  color: var(--text);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.ef-input.ef-unit {
+  min-width: 90px;
+}
+
+.ef-input:hover {
+  border-color: var(--border-strong);
+}
+
+.ef-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.ef-action {
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ef-save-btn,
+.ef-add-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
+}
+
+.ef-save-btn:disabled,
+.ef-add-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ef-save-btn:not(:disabled):hover,
+.ef-add-btn:not(:disabled):hover {
+  background: var(--primary-strong, var(--primary));
+}
+
+.ef-saved {
+  font-size: 12px;
+  color: var(--ok, #2e7d32);
+  font-weight: 600;
+}
+
+.ef-row-error {
+  font-size: 12px;
+  color: var(--err);
+}
+
+.ef-add {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+
+.ef-add h4 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ef-add-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 120px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.ef-add-error {
+  margin-top: 8px;
 }

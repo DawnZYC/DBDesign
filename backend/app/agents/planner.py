@@ -1,14 +1,23 @@
-"""Planner 节点 — 把用户问题分解为有序步骤列表。
+"""Planner node — intent routing + decomposing a data question into ordered steps.
 
-职责：
-  1. 读取对话历史中的最新用户消息
-  2. 用 LLM 生成 3-5 条执行步骤（Markdown bullet list）
-  3. 把步骤写入 AgentState.plan；清空 error 字段
+Responsibilities:
+  1. Read the latest user message from the conversation history.
+  2. Use the LLM to classify intent (data_query / chat) and, for data questions,
+     generate 3-5 execution steps.
+  3. Write the intent into AgentState.intent and the steps into AgentState.plan;
+     clear the error field.
 
-特点：
-  * 普通 llm.invoke，不需要工具或结构化输出
-  * 输出 Markdown bullet list，后续节点解析为 plan: list[str]
-  * 调用方（graph.py）负责把步骤作为 SSE agent_start 事件推给前端
+Intent routing (fixes "small talk also runs SQL + charts"):
+  * data_query     -> full pipeline: SQL Agent -> Interpreter -> Visualizer
+  * tool_query     -> Tool Agent (function-calling: terminology / unit / emission / forecast)
+                      -> Interpreter, no SQL, no chart
+  * direct_answer  -> straight to the Interpreter for a conversational answer, no
+                      tools, no DB query, no chart
+
+Notes:
+  * Plain llm.invoke; intent and steps are produced in a single call (saves one LLM round-trip).
+  * First output line is `INTENT: ...`, the rest is a Markdown bullet list.
+  * On parse failure, conservatively treat it as data_query (preserves old behavior).
 """
 
 from __future__ import annotations
@@ -17,90 +26,145 @@ import logging
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.agents.context import with_context
 from app.agents.state import AgentState
 from app.llm.provider import get_chat_model
 
 logger = logging.getLogger(__name__)
 
+INTENT_DATA_QUERY = "data_query"
+INTENT_TOOL_QUERY = "tool_query"
+INTENT_DIRECT_ANSWER = "direct_answer"
+
 # -----------------------------------------------------------------------------
 # Prompt
 # -----------------------------------------------------------------------------
-_SYSTEM = """你是 SG-TIMES 数据分析平台的 Planner。
-你的任务：把用户的自然语言问题拆解为 3-5 条简洁的执行步骤，步骤之间有顺序依赖。
+_SYSTEM = """You are the Planner of the EcoTEA data analysis platform.
 
-输出格式要求（严格遵守）：
-- 用 Markdown 无序列表，每行一个步骤
-- 步骤从动词开始，简洁明确
-- 不超过 5 条，每条不超过 30 个字
-- 只输出步骤列表，不要解释或额外文字
+Step 1 — classify the user's intent and write it on the FIRST line:
+  INTENT: data_query   -- asking about data in the database: metric VALUES, trends,
+                          comparisons, rankings, totals, technology parameters by year/sector
+  INTENT: tool_query   -- can be answered by a helper tool rather than a DB query:
+                          * what a commodity/technology code MEANS (e.g. "what is BIOMASS01?")
+                          * unit conversion (e.g. "1 PJ natural gas in ktoe")
+                          * a single technology's emission factor for a year
+                          * forecasting / extrapolating a trend the user provides
+  INTENT: chat         -- greetings, small talk, thanks, "who are you / what can you do",
+                          pure concept explanations -- needs neither a DB query nor a tool
 
-数据库中可用的指标：capex, fixed_opex, variable_opex, emission_factor,
-tax_cost, subsidy_cost, efficiency_value, technology_efficiency, heat_rate,
-capacity_to_activity_factor, capacity, commodity_demand_value
+Note: the message may include a [Conversation context] block. Use it when
+classifying and planning -- e.g. if the assistant previously asked "which
+metric?" and the user replies just "capex", that continues the earlier data
+question (intent data_query), and the plan must merge the sector / years /
+metric mentioned earlier in the context.
 
-示例输出：
-- 查询 Power 部门 2018-2050 年的 capex 原始数据
-- 按年份对 capex 求和聚合
-- 用折线图展示趋势
+Step 2 — ONLY when INTENT is data_query, break the question into 3-5 concise steps:
+- Markdown bullet list, one step per line
+- start each step with a verb, keep it specific
+- at most 5 steps, each under 15 words
+When INTENT is tool_query or chat, output the INTENT line only — no steps.
+
+Metrics available in the database: capex, fixed_opex, variable_opex,
+emission_factor, tax_cost, subsidy_cost, efficiency_value,
+technology_efficiency, heat_rate, capacity_to_activity_factor, capacity,
+commodity_demand_value
+
+Example 1 (data question):
+INTENT: data_query
+- Query raw capex data for the Power sector, 2018-2050
+- Aggregate capex by year (sum)
+- Show the trend as a line chart
+
+Example 2 (terminology / unit / forecast):
+INTENT: tool_query
+
+Example 3 (small talk / greeting):
+INTENT: chat
 """
 
 
+def _parse_intent(raw: str) -> str:
+    """Extract INTENT from the start of the LLM output; default to data_query when
+    missing or unrecognized (conservative)."""
+    for line in raw.splitlines()[:3]:
+        normalized = line.strip().lower()
+        if normalized.startswith("intent"):
+            if "tool" in normalized:
+                return INTENT_TOOL_QUERY
+            if "chat" in normalized:
+                return INTENT_DIRECT_ANSWER
+            return INTENT_DATA_QUERY
+    return INTENT_DATA_QUERY
+
+
 def _parse_plan(raw: str) -> list[str]:
-    """把 LLM 输出的 Markdown bullet list 转为 list[str]。"""
+    """Convert the LLM's Markdown bullet list into list[str] (the INTENT line is skipped)."""
     steps: list[str] = []
     for line in raw.splitlines():
         line = line.strip()
         if line.startswith(("- ", "* ", "• ")):
             step = line[2:].strip()
         elif line and line[0].isdigit() and ". " in line:
-            # 兜底：处理 "1. xxx" 格式
+            # Fallback: handle the "1. xxx" format
             step = line.split(". ", 1)[-1].strip()
         else:
             continue
         if step:
             steps.append(step)
-    return steps or [raw.strip()]  # 如果解析失败，把全文当一步兜底
+    return steps
 
 
 # -----------------------------------------------------------------------------
-# 节点函数
+# Node function
 # -----------------------------------------------------------------------------
 def planner_node(state: AgentState) -> dict:
-    """LangGraph 节点：Planner。
+    """LangGraph node: Planner.
 
-    入参：AgentState（取 messages）
-    出参：{ plan, error }（partial state update）
+    In:  AgentState (reads messages)
+    Out: { plan, intent, error } (partial state update)
     """
     logger.info("planner_node: start (retry_count=%d)", state.get("retry_count", 0))
 
-    # 取最近一条用户消息作为核心问题
+    # Take the latest user message as the core question
     user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]
     if not user_messages:
         logger.warning("planner_node: no HumanMessage found in state")
-        return {"plan": ["无法理解问题，请重新提问"], "error": "missing user message"}
+        return {
+            "plan": ["Could not understand the question, please rephrase"],
+            "intent": INTENT_DIRECT_ANSWER,
+            "error": "missing user message",
+        }
 
     latest_question = user_messages[-1].content
 
-    # 如果是重试（retry_count > 0），把上一次的错误附在 prompt 里告知 LLM
+    # On a retry (retry_count > 0), attach the previous error to the prompt to inform the LLM
     retry_note = ""
     if state.get("retry_count", 0) > 0 and state.get("error"):
         retry_note = (
-            f"\n\n[重试提示] 上一次执行失败，错误：{state['error']}\n"
-            "请调整查询策略，尝试更宽泛的过滤条件或换一种聚合方式。"
+            f"\n\n[Retry hint] The previous attempt failed with: {state['error']}\n"
+            "Adjust the query strategy: try broader filters or a different aggregation."
         )
 
     llm = get_chat_model()
+    # Carry the last few turns: the user may have replied with only a metric name
+    # (e.g. "capex"), so the full intent must be reconstructed from context
+    # (e.g. "help me look at power data").
+    prompt = with_context(str(latest_question), state["messages"]) + retry_note
     messages = [
         SystemMessage(content=_SYSTEM),
-        HumanMessage(content=str(latest_question) + retry_note),
+        HumanMessage(content=prompt),
     ]
 
     try:
         response = llm.invoke(messages)
         raw_text = response.content if isinstance(response.content, str) else str(response.content)
+        intent = _parse_intent(raw_text)
         plan = _parse_plan(raw_text)
-        logger.info("planner_node: generated %d steps", len(plan))
-        return {"plan": plan, "error": None}
+        if intent == INTENT_DATA_QUERY and not plan:
+            # Data question but no steps parsed: fall back to treating the whole text as one step (old behavior)
+            plan = [raw_text.strip()]
+        logger.info("planner_node: intent=%s, %d steps", intent, len(plan))
+        return {"plan": plan, "intent": intent, "error": None}
     except Exception as exc:  # noqa: BLE001
         logger.exception("planner_node: LLM call failed")
-        return {"plan": [], "error": f"Planner 失败: {exc!s}"}
+        return {"plan": [], "intent": INTENT_DATA_QUERY, "error": f"Planner failed: {exc!s}"}

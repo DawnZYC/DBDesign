@@ -1,140 +1,147 @@
-# EcoTEA WP1 Import — Backend
+# Strata — Backend
 
-FastAPI 后端，负责把 EcoTEA Excel 文件导入到 PostgreSQL（15 张表 schema）。
+The FastAPI backend for Strata: a multi-agent analytics API that also imports EcoTEA WP1 Excel files into PostgreSQL (a 15-table schema).
 
-## 目录结构
+## Directory structure
 
 ```
 backend/
-├── app/
-│   ├── main.py                     # FastAPI 入口
-│   ├── config.py                   # 配置（.env 加载）
+├── app/                            # application code
+│   ├── main.py                     # FastAPI entry point
+│   ├── config.py                   # configuration (.env loading)
 │   ├── database.py                 # SQLAlchemy engine + Session
-│   ├── models.py                   # 15 张表的 ORM 模型
-│   ├── schemas.py                  # Pydantic API 模型
-│   ├── routers/
-│   │   ├── health.py               # GET /api/health
-│   │   └── imports.py              # POST /api/imports
-│   └── services/
-│       ├── value_cleaner.py        # 清洗 '-' / 'NA' / #VALUE! / 混合文本
-│       └── excel_importer.py       # 主导入流程
+│   ├── models.py                   # ORM models for the 15 tables
+│   ├── schemas.py                  # Pydantic API models
+│   ├── routers/                    # API routes (health / imports / chat / rag / ...)
+│   ├── agents/                     # LangGraph agents (planner / sql / tool / interpreter / ...)
+│   ├── tools/                      # 6 function-calling tools
+│   ├── rag/                        # ChromaDB vector store + embeddings
+│   └── services/                   # excel_importer, value_cleaner
+├── scripts/                        # one-off CLI scripts (run from backend/)
+│   ├── seed_commodities.py         # seed the commodity dictionary
+│   ├── seed_rag.py                 # seed the RAG vector store
+│   └── verify_*.py                 # acceptance / smoke-check scripts
+├── data/
+│   └── domain_knowledge.md         # hand-written RAG source content
+├── tests/
+├── chroma_data/                    # generated vector store (gitignored)
 ├── requirements.txt
 └── .env.example
 ```
 
-## 快速启动
+## Quick start
 
 ```bash
 cd backend
 
-# 1) 激活 conda 环境并装依赖
+# 1) Activate the conda env and install dependencies
 conda activate excelagent
 pip install -r requirements.txt
 
-# 2) 初始化 schema（用 sql/ 下的 DDL）
-#    先在你的本地 PG 里建一个数据库，比如 ecotea：
+# 2) Initialize the schema (using the DDL under sql/)
+#    First create a database in your local PG, e.g. ecotea:
 #    psql -U postgres -c "CREATE DATABASE ecotea;"
 psql -U postgres -d ecotea -f ../sql/001_init_schema.sql
 
-# 3) 配置环境变量
+# 3) Configure environment variables
 cp .env.example .env
-# 编辑 .env 把 DATABASE_URL 改成你本地 PG 的实际值
+# Edit .env to set DATABASE_URL to your local PG's actual value
 
-# 4) 启动 dev server
+# 4) Start the dev server
 uvicorn app.main:app --reload --port 8000
 ```
 
-> 如果你不用 conda，也可以用 venv：`python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+> If you don't use conda, venv works too: `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
 
-启动后：
-- API 文档：http://localhost:8000/docs
-- 健康检查：http://localhost:8000/api/health （`?check_llm=true` 真打一次 LLM）
-- LLM provider 列表：http://localhost:8000/api/llm/providers
-- 预览（拿 sheet 列表，不入库）：`POST http://localhost:8000/api/imports/preview`
-- 导入：`POST http://localhost:8000/api/imports`（multipart/form-data）
+After starting:
+- API docs: http://localhost:8000/docs
+- Health check: http://localhost:8000/api/health (`?check_llm=true` actually hits the LLM once)
+- LLM provider list: http://localhost:8000/api/llm/providers
+- Preview (get the sheet list, no DB write): `POST http://localhost:8000/api/imports/preview`
+- Import: `POST http://localhost:8000/api/imports` (multipart/form-data)
 
-## LLM 抽象层（M0）
+## LLM abstraction layer (M0)
 
-支持 6 个 provider，注册表模式，加新 provider 改一行：
+Supports 6 providers, registry pattern; add a new provider with one line:
 
-| provider | 适配器 | base_url | 默认模型 |
+| provider | adapter | base_url | default model |
 |---|---|---|---|
-| `openai`（默认） | OpenAI 协议 | (官方) | gpt-4o-mini |
-| `deepseek` | OpenAI 协议 | api.deepseek.com/v1 | deepseek-chat |
-| `qwen` | OpenAI 协议 | dashscope.aliyuncs.com/compatible-mode/v1 | qwen-plus |
-| `moonshot` | OpenAI 协议 | api.moonshot.cn/v1 | moonshot-v1-8k |
-| `zhipu` | OpenAI 协议 | open.bigmodel.cn/api/paas/v4/ | glm-4-plus |
-| `anthropic` | 独立 SDK | (官方) | claude-3-5-haiku-latest |
+| `openai` (default) | OpenAI protocol | (official) | gpt-4o-mini |
+| `deepseek` | OpenAI protocol | api.deepseek.com/v1 | deepseek-chat |
+| `qwen` | OpenAI protocol | dashscope.aliyuncs.com/compatible-mode/v1 | qwen-plus |
+| `moonshot` | OpenAI protocol | api.moonshot.cn/v1 | moonshot-v1-8k |
+| `zhipu` | OpenAI protocol | open.bigmodel.cn/api/paas/v4/ | glm-4-plus |
+| `anthropic` | standalone SDK | (official) | claude-3-5-haiku-latest |
 
-切换：`.env` 改 `LLM_PROVIDER=deepseek`，填 `DEEPSEEK_API_KEY=...`，重启即可。
+To switch: set `LLM_PROVIDER=deepseek` in `.env`, fill `DEEPSEEK_API_KEY=...`, and restart.
 
-业务代码统一：
+Business code, uniformly:
 
 ```python
 from app.llm import get_chat_model
-llm = get_chat_model()  # 按 .env 决定，返回 langchain BaseChatModel
+llm = get_chat_model()  # decided by .env, returns a langchain BaseChatModel
 result = llm.invoke([HumanMessage(content="...")])
 ```
 
-测试：
+Test:
 
 ```bash
 python -m pytest tests/test_llm_provider.py -v
 ```
 
-## RAG 知识库（M1）
+## RAG knowledge base (M1)
 
-ChromaDB 持久化向量库，承载 commodity / sector / geography 三张字典 + 手写 `domain_knowledge.md`（单位换算 / 行业术语 / SG-TIMES 工艺分类）。
+A persistent ChromaDB vector store, holding the three dictionaries (commodity / sector / geography) + the hand-written `domain_knowledge.md` (unit conversion / industry terminology / energy-system process classification).
 
-**Embedding provider 同样是注册表模式**，3 个 provider 走 LangChain `Embeddings` 抽象：
+**The embedding provider is also registry-based**; 3 providers go through the LangChain `Embeddings` abstraction:
 
-| provider | 说明 | 默认模型 | 维度 |
+| provider | description | default model | dimension |
 |---|---|---|---|
-| `huggingface`（默认） | 本地 sentence-transformers，零成本 | all-MiniLM-L6-v2 | 384 |
-| `openai` | OpenAI 在线 | text-embedding-3-small | 1536 |
-| `qwen` | 通义千问 DashScope | text-embedding-v3 | 1024 |
+| `huggingface` (default) | local sentence-transformers, zero cost | all-MiniLM-L6-v2 | 384 |
+| `openai` | OpenAI online | text-embedding-3-small | 1536 |
+| `qwen` | Tongyi Qianwen DashScope | text-embedding-v3 | 1024 |
 
-切 provider 后注意维度不同，需 `python seed_rag.py --reset` 重新灌库。
+After switching provider, note the dimensions differ; you must re-seed with `python scripts/seed_rag.py --reset`.
 
-### 一次性灌库
-
-```bash
-# 1) 先确保 PG 里 sector / commodity 字典已就位
-psql -U zyc -d ecotea -f ../sql/001_init_schema.sql           # 全新建表
-python seed_commodities.py /path/to/VT_SG_PWR_GREF.xlsx        # 灌入 commodity 完整元数据
-
-# 2) 灌入向量库
-python seed_rag.py                              # PG 字典 + domain_knowledge.md
-# 或
-python seed_rag.py --reset                      # 切了 embedding provider 后用
-```
-
-首次运行会下载 HuggingFace 模型（~80MB）到本机缓存（`~/.cache/huggingface`），之后离线可用。
-
-### 验证 recall
+### One-off seeding
 
 ```bash
-python verify_rag.py                            # 跑 15 个金标问题
+# 1) First ensure the sector / commodity dictionaries are in PG
+psql -U zyc -d ecotea -f ../sql/001_init_schema.sql                  # create tables from scratch
+python scripts/seed_commodities.py /path/to/your_source_workbook.xlsx   # ingest full commodity metadata
+
+# 2) Seed the vector store
+python scripts/seed_rag.py                      # PG dictionaries + data/domain_knowledge.md
+# or
+python scripts/seed_rag.py --reset              # use after switching embedding provider
 ```
 
-期望输出：
+The first run downloads the HuggingFace model (~80MB) to the local cache (`~/.cache/huggingface`); offline afterwards.
+
+### Verify recall
+
+```bash
+python scripts/verify_rag.py                    # run 15 golden questions
+```
+
+Expected output:
 
 ```
 recall@1  = 12/15 = 80%
 recall@3  = 14/15 = 93%
 ```
 
-### API 端点
+### API endpoints
 
-- `POST /api/rag/search` — 语义检索
+- `POST /api/rag/search` — semantic search
   ```bash
   curl -X POST http://localhost:8000/api/rag/search \
     -H "Content-Type: application/json" \
     -d '{"query": "natural gas power", "k": 3}'
   ```
-- `GET /api/rag/info` — 向量库大小 + embedding provider 状态
+- `GET /api/rag/info` — vector-store size + embedding provider status
 
-业务代码统一：
+Business code, uniformly:
 
 ```python
 from app.rag import search
@@ -143,66 +150,66 @@ for h in hits:
     print(h.text, h.score, h.metadata)
 ```
 
-### 测试
+### Test
 
 ```bash
 python -m pytest tests/test_rag.py -v
 ```
 
-## Function-Calling 工具集（M2）
+## Function-calling tool set (M2)
 
-6 个工具，每个 = Pydantic args_schema + 纯 Python 实现 + LangChain `@tool` 包装。
-LLM Agent 通过 function-calling 自动决定何时调用哪个。
+6 tools, each = Pydantic args_schema + pure-Python implementation + LangChain `@tool` wrapper.
+The LLM Agent uses function-calling to decide when to call which.
 
-| # | 工具 | 输入 | 用途 |
+| # | Tool | Input | Purpose |
 |---|---|---|---|
-| ① | `lookup_terminology` | term, k | RAG + PG 字典查商品 / 行业 / 地区 |
-| ② | `convert_unit` | value, from_unit, to_unit | 能源 (PJ/ktoe/GWh/...) 与 CO₂ (kt/Mt/...) 跨单位换算 |
-| ③ | `run_sql` | QueryParams（metric / 过滤 / 聚合 / group_by） | **Pydantic 强类型参数化 SQL**，杜绝注入；结果带 `raw_row_id` 反查 |
-| ④ | `lookup_emission_factor` | tech_code, year | 查某技术某年排放因子（年份不存在自动回退最近年） |
-| ⑤ | `forecast_trend` | series, horizon, method | numpy.polyfit 线性 / 二次外推 |
-| ⑥ | `recommend_chart` | data_shape, intent | 规则引擎，输出 ECharts option 骨架 |
+| 1 | `lookup_terminology` | term, k | RAG + PG dictionary lookup of commodity / sector / region |
+| 2 | `convert_unit` | value, from_unit, to_unit | Cross-unit conversion for energy (PJ/ktoe/GWh/...) and CO2 (kt/Mt/...) |
+| 3 | `run_sql` | QueryParams (metric / filters / aggregation / group_by) | **Pydantic strongly-typed parameterized SQL**, injection-proof; results carry `raw_row_id` for trace-back |
+| 4 | `lookup_emission_factor` | tech_code, year | Look up a technology's emission factor for a year (falls back to the nearest year if missing) |
+| 5 | `forecast_trend` | series, horizon, method | numpy.polyfit linear / quadratic extrapolation |
+| 6 | `recommend_chart` | data_shape, intent | Rule engine, outputs an ECharts option skeleton |
 
-### `run_sql` 安全要点
+### `run_sql` safety points
 
-- **不接收原始 SQL 字符串**，只接收 Pydantic `QueryParams`
-- metric / aggregation / group_by 都是 `Literal` 枚举（白名单）
-- WHERE 全部走 SQLAlchemy 2.0 `bindparam`
-- 默认 `LIMIT 1000`，硬上限 `MAX_LIMIT=10000`
-- raw 模式下结果一定带 `raw_row_id` 字段，供 M4 图表反查源单元格
+- **Does not accept raw SQL strings**; only a Pydantic `QueryParams`
+- metric / aggregation / group_by are all `Literal` enums (whitelist)
+- All WHERE clauses go through SQLAlchemy 2.0 `bindparam`
+- Default `LIMIT 1000`, hard cap `MAX_LIMIT=10000`
+- In raw mode, results always carry a `raw_row_id` field, for the M4 chart source-cell trace-back
 
-支持的 metric（12 个）涵盖 EcoTEA / WP / Constraint / Commodity 全部数值字段：
+The supported metrics (12) cover all numeric fields of EcoTEA / WP / Constraint / Commodity:
 `capex / fixed_opex / variable_opex / emission_factor / tax_cost / subsidy_cost /
 efficiency_value / technology_efficiency / heat_rate / capacity_to_activity_factor /
-capacity / commodity_demand_value`。
+capacity / commodity_demand_value`.
 
-### Agent 集成（M3 用）
+### Agent integration (used in M3)
 
 ```python
 from app.tools import ALL_TOOLS
 
-# 直接绑给 LangChain LLM
+# Bind directly to a LangChain LLM
 llm_with_tools = llm.bind_tools(ALL_TOOLS)
-response = llm_with_tools.invoke([HumanMessage(content="2030 年 Power 部门 CAPEX 总和")])
-# response.tool_calls 自动包含 LLM 决定调用 run_sql 的入参
+response = llm_with_tools.invoke([HumanMessage(content="Total CAPEX of the Power sector in 2030")])
+# response.tool_calls automatically contains the args the LLM decided to call run_sql with
 ```
 
-### 测试
+### Test
 
 ```bash
-# 6 个工具的全部单测
+# All unit tests for the 6 tools
 python -m pytest tests/test_tool_*.py -v
 ```
 
-## 命令行直接调用（不走前端）
+## Command-line invocation (without the frontend)
 
-预览（看文件里有哪些 sheet）：
+Preview (see which sheets are in the file):
 ```bash
 curl -X POST http://localhost:8000/api/imports/preview \
   -F "file=@../EcoTEA Endo WP1.xlsx" | python -m json.tool
 ```
 
-导入全部 sheet：
+Import all sheets:
 ```bash
 curl -X POST http://localhost:8000/api/imports \
   -F "file=@../EcoTEA Endo WP1.xlsx" \
@@ -210,35 +217,35 @@ curl -X POST http://localhost:8000/api/imports \
   -F "note=first run"
 ```
 
-只导入指定 sheet（白名单逗号分隔）：
+Import only specific sheets (comma-separated allowlist):
 ```bash
 curl -X POST http://localhost:8000/api/imports \
   -F "file=@../EcoTEA Endo WP1.xlsx" \
   -F "sheets=Power,Industry"
 ```
 
-## 设计要点
+## Design highlights
 
-- **数据清洗 3 类规则**（与 ER 图 v2 一致）：
-  - 占位符（`-`、`NA`、空）→ 直接 `NULL`，不留痕
-  - 公式错误（`#VALUE!`、`#REF!` 等）→ 主表 `NULL` + 写 `data_quality_issue` 记录原值
-  - 混合语义文本（`COP: 3.91`）→ 拆出 `_value` / `_text` / `_unit`
-- **粒度**：每条 `technology_year` = `(technology_id, data_year)`，5 张 satellite 都挂在它下面。
-- **upsert 策略**：sector / geography / commodity / data_source / technology_process 全部按业务唯一键 upsert；同一个文件重复导入不会爆唯一约束。
-- **审计**：每行原始 Excel 数据完整保留在 `raw_excel_row.raw_cells` (JSONB)。
+- **3 data-cleaning rule classes** (consistent with ER diagram v2):
+  - Placeholders (`-`, `NA`, empty) -> straight `NULL`, no trace
+  - Formula errors (`#VALUE!`, `#REF!`, etc.) -> master table `NULL` + write `data_quality_issue` recording the original value
+  - Mixed-semantic text (`COP: 3.91`) -> split into `_value` / `_text` / `_unit`
+- **Granularity**: each `technology_year` = `(technology_id, data_year)`; all 5 satellites hang off it.
+- **Upsert strategy**: sector / geography / commodity / data_source / technology_process are all upserted by business unique key; re-importing the same file won't blow a unique constraint.
+- **Audit**: each raw Excel row is fully preserved in `raw_excel_row.raw_cells` (JSONB).
 
-## 验证已写入数据
+## Verify written data
 
 ```sql
--- 最近一次导入的概况
+-- Overview of the most recent import
 SELECT * FROM import_batch ORDER BY imported_at DESC LIMIT 5;
 
--- 各 sheet 写入了多少行
+-- How many rows were written per sheet
 SELECT source_sheet_name, COUNT(*)
 FROM raw_excel_row
 WHERE import_batch_id = (SELECT MAX(import_batch_id) FROM import_batch)
 GROUP BY source_sheet_name;
 
--- 异常追踪
+-- Exception tracing
 SELECT * FROM data_quality_issue ORDER BY issue_id DESC LIMIT 20;
 ```

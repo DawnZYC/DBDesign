@@ -14,7 +14,7 @@ import shutil
 import tempfile
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock
 
@@ -40,6 +40,10 @@ DEFAULT_TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "assets" / "eco
 _CACHE_ROOT = Path(tempfile.gettempdir()) / "ecotea_convert_cache"
 _CACHE_ROOT.mkdir(parents=True, exist_ok=True)
 
+# Artefacts expire after this long; expired entries (and their on-disk files) are pruned
+# lazily on each store/lookup so the cache and tmp dir don't grow without bound.
+_ARTEFACT_TTL = timedelta(hours=2)
+
 
 @dataclass
 class ConversionArtefact:
@@ -60,9 +64,23 @@ _cache_lock = Lock()
 _artefact_cache: dict[str, ConversionArtefact] = {}
 
 
+def _prune_expired_locked() -> None:
+    """Drop artefacts older than the TTL and delete their files. Caller must hold _cache_lock."""
+    now = datetime.now(tz=UTC)
+    expired = [tok for tok, a in _artefact_cache.items() if now - a.created_at > _ARTEFACT_TTL]
+    for tok in expired:
+        artefact = _artefact_cache.pop(tok, None)
+        if artefact is not None:
+            # Each artefact lives in its own work dir (output_path.parent); remove the lot.
+            shutil.rmtree(artefact.output_path.parent, ignore_errors=True)
+    if expired:
+        logger.info("Pruned %d expired conversion artefact(s)", len(expired))
+
+
 def get_artefact(token: str) -> ConversionArtefact:
-    """Return the cached artefact for ``token`` or raise 404."""
+    """Return the cached artefact for ``token`` or raise 404 (also if it has expired)."""
     with _cache_lock:
+        _prune_expired_locked()
         artefact = _artefact_cache.get(token)
     if artefact is None or not artefact.output_path.exists():
         raise HTTPException(
@@ -74,6 +92,7 @@ def get_artefact(token: str) -> ConversionArtefact:
 
 def _store_artefact(artefact: ConversionArtefact) -> None:
     with _cache_lock:
+        _prune_expired_locked()
         _artefact_cache[artefact.token] = artefact
 
 

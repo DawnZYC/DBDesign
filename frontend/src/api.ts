@@ -5,6 +5,8 @@ import type {
   ConflictResolveResponse,
   ConvertModelInfo,
   ConvertResult,
+  EmissionFactorOut,
+  EmissionFactorUpsert,
   FilePreview,
   Geography,
   ImportResult,
@@ -146,12 +148,35 @@ export async function getTechnology(technologyId: number): Promise<TechnologyDet
 }
 
 /**
+ * Manually set (or clear) the emission factor for one technology-year.
+ * Creates the technology-year / parameter rows if they don't exist yet.
+ */
+export async function upsertEmissionFactor(
+  technologyId: number,
+  payload: EmissionFactorUpsert,
+): Promise<EmissionFactorOut> {
+  const response = await fetch(`${API_BASE}/technologies/${technologyId}/emission-factors`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as EmissionFactorOut;
+}
+
+/**
  * Health check.
  */
-export async function checkHealth(): Promise<{ status: string; database: string }> {
+export interface HealthInfo {
+  status: string;
+  database: string;
+  llm?: { provider: string; model?: string | null; configured: boolean; ok?: boolean } | null;
+}
+
+export async function checkHealth(): Promise<HealthInfo> {
   const response = await fetch(`${API_BASE}/health`);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return (await response.json()) as { status: string; database: string };
+  return (await response.json()) as HealthInfo;
 }
 
 // ---------------------------------------------------------------------------
@@ -201,12 +226,17 @@ export async function importFromConversion(args: {
   importedBy?: string;
   note?: string;
   sheets?: string[];
+  columnOverrides?: import('./types').ColumnOverrides;
 }): Promise<ImportResult> {
   const formData = new FormData();
   if (args.importedBy) formData.append('imported_by', args.importedBy);
   if (args.note) formData.append('note', args.note);
   if (args.sheets && args.sheets.length > 0) {
     formData.append('sheets', args.sheets.join(','));
+  }
+  // M5: user-confirmed column alignment for a converted workbook with a drifted layout
+  if (args.columnOverrides && Object.keys(args.columnOverrides).length > 0) {
+    formData.append('column_overrides', JSON.stringify(args.columnOverrides));
   }
   const response = await fetch(
     `${API_BASE}/imports/from-conversion?token=${encodeURIComponent(args.token)}`,
@@ -216,13 +246,13 @@ export async function importFromConversion(args: {
   return (await response.json()) as ImportResult;
 }
 // ---------------------------------------------------------------------------
-// Chat / AI 助手（M4）
+// Chat / AI assistant (M4)
 // ---------------------------------------------------------------------------
 import type { RawRowDetail } from './types';
 
 /**
- * SSE 回调集合（由 useStreamChat 提供）。
- * 每种 SSE event 对应一个可选回调，调用方按需实现。
+ * SSE callback set (provided by useStreamChat).
+ * One optional callback per SSE event type.
  */
 export interface StreamCallbacks {
   onAgentStart?: (node: string) => void;
@@ -241,18 +271,19 @@ export interface ChatHistoryMessage {
 }
 
 /**
- * POST /api/chat/stream — 发起 SSE 对话流。
+ * POST /api/chat/stream — start the SSE chat stream.
  *
- * 使用原生 fetch + ReadableStream 手动解析 SSE，避免引入额外依赖。
- * @microsoft/fetch-event-source 支持 POST SSE，是更完整的方案（见 M4 依赖），
- * 这里为了确保轻量可用，改用手动解析实现。
+ * Parses SSE manually with fetch + ReadableStream to avoid extra deps.
+ * @microsoft/fetch-event-source supports POST SSE and is the fuller option,
+ * but manual parsing keeps this light and dependency-free.
  *
- * @returns AbortController，调用方可在需要时 abort()
+ * @returns AbortController; call abort() to cancel.
  */
 export function streamChat(
   message: string,
   history: ChatHistoryMessage[],
   callbacks: StreamCallbacks,
+  language?: string,
 ): AbortController {
   const ctrl = new AbortController();
 
@@ -262,12 +293,12 @@ export function streamChat(
       response = await fetch(`${API_BASE}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, history }),
+        body: JSON.stringify({ message, history, language: language || undefined }),
         signal: ctrl.signal,
       });
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        callbacks.onError?.(`网络错误：${(err as Error).message}`);
+        callbacks.onError?.(`Network error: ${(err as Error).message}`);
         callbacks.onDone?.('');
       }
       return;
@@ -281,7 +312,7 @@ export function streamChat(
 
     const reader = response.body?.getReader();
     if (!reader) {
-      callbacks.onError?.('无法读取响应流');
+      callbacks.onError?.('Unable to read the response stream');
       callbacks.onDone?.('');
       return;
     }
@@ -289,20 +320,20 @@ export function streamChat(
     const decoder = new TextDecoder();
     let buffer = '';
 
-    // SSE 手动解析。
-    // 兼容性要点（这里栽过坑）：
-    //   - sse-starlette 2.x 在字段之间用 "\r\n"、事件之间用 "\r\n\r\n"。
-    //   - 之前用 buffer.split('\n\n') —— 在 "\r\n\r\n" 里两个 '\n' 中间夹着 '\r'，
-    //     永远 split 不出来，所以前端从来没拿到过任何事件。
-    //   - 标准 SSE 也允许 "\n\n" 或 "\r\r"，下面用正则一次性兼容。
-    //   - 一条事件内 "data:" 可能出现多次（SSE 规范允许多行 data，最终用 '\n' 拼接）。
+    // Manual SSE parsing.
+    // Compatibility notes (learned the hard way):
+    //   - sse-starlette 2.x uses "\r\n" between fields and "\r\n\r\n" between events.
+    //   - buffer.split('\n\n') never matched (a '\r' sits between the two '\n's),
+    //     so the frontend used to receive zero events.
+    //   - the SSE spec also allows "\n\n" / "\r\r"; the regex below covers all.
+    //   - "data:" may repeat within one event (multi-line data joined by '\n').
     const EVENT_DELIM = /\r\n\r\n|\n\n|\r\r/;
     const LINE_DELIM = /\r\n|\n|\r/;
 
     const processChunk = (text: string) => {
       buffer += text;
       const parts = buffer.split(EVENT_DELIM);
-      // 最后一段可能是被切断的、未完整的事件块，留在 buffer 里
+      // The trailing piece may be a truncated event block; keep it buffered.
       buffer = parts.pop() ?? '';
 
       for (const block of parts) {
@@ -311,15 +342,15 @@ export function streamChat(
         const dataLines: string[] = [];
         for (const line of block.split(LINE_DELIM)) {
           if (!line) continue;
-          if (line.startsWith(':')) continue; // SSE 注释行，忽略
+          if (line.startsWith(':')) continue; // SSE comment line, ignore
           if (line.startsWith('event:')) {
             eventType = line.slice(6).trimStart().trim();
           } else if (line.startsWith('data:')) {
-            // SSE 规范：'data:' 后面的首个空格要剥掉
+            // Per SSE spec, strip the single space after 'data:'.
             const v = line.slice(5);
             dataLines.push(v.startsWith(' ') ? v.slice(1) : v);
           }
-          // 其余字段（id:/retry:/etc.）暂不需要
+          // Other fields (id:/retry:/etc.) are not needed yet.
         }
         if (dataLines.length === 0) continue;
         const dataLine = dataLines.join('\n');
@@ -327,7 +358,7 @@ export function streamChat(
           const data = JSON.parse(dataLine) as Record<string, unknown>;
           handleSseEvent(eventType, data);
         } catch {
-          // 忽略非 JSON 行
+          // Ignore non-JSON lines.
         }
       }
     };
@@ -367,16 +398,16 @@ export function streamChat(
         if (done) break;
         processChunk(decoder.decode(value, { stream: true }));
       }
-      // 流结束时：把 decoder 内部还没刷出的字节也吐出来，并强制把 buffer 当作最后一个事件块解析
+      // On stream end, flush the decoder and parse the remaining buffer as a final block.
       const tail = decoder.decode();
       if (tail) buffer += tail;
       if (buffer.trim()) {
-        // 直接把剩余 buffer 当成一个完整 block 处理（追加分隔符触发 split）
+        // Treat the rest of the buffer as one complete block (separator forces the split).
         processChunk('\r\n\r\n');
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        callbacks.onError?.(`流读取错误：${(err as Error).message}`);
+        callbacks.onError?.(`Stream read error: ${(err as Error).message}`);
         callbacks.onDone?.('');
       }
     } finally {
@@ -389,10 +420,58 @@ export function streamChat(
 }
 
 /**
- * GET /api/raw-rows/{id} — 反查源 Excel 单元格。
+ * GET /api/raw-rows/{id} — trace back to the source Excel cells.
  */
 export async function fetchRawRow(rawRowId: number): Promise<RawRowDetail> {
   const response = await fetch(`${API_BASE}/raw-rows/${rawRowId}`);
   if (!response.ok) throw new Error(await parseError(response));
   return (await response.json()) as RawRowDetail;
+}
+
+// ---------------------------------------------------------------------------
+// RAG knowledge documents (upload / list / delete / search)
+// ---------------------------------------------------------------------------
+export interface RagDocumentInfo {
+  file: string;
+  chunks: number;
+  titles: string[];
+}
+
+export interface RagSearchHit {
+  text: string;
+  score: number;
+  metadata: Record<string, unknown>;
+}
+
+export async function uploadRagDocument(file: File): Promise<{ file: string; chunks: number }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await fetch(`${API_BASE}/rag/documents`, { method: 'POST', body: formData });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as { file: string; chunks: number };
+}
+
+export async function listRagDocuments(): Promise<RagDocumentInfo[]> {
+  const response = await fetch(`${API_BASE}/rag/documents`);
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as RagDocumentInfo[];
+}
+
+export async function deleteRagDocument(fileName: string): Promise<{ deleted: number }> {
+  const response = await fetch(`${API_BASE}/rag/documents/${encodeURIComponent(fileName)}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  return (await response.json()) as { deleted: number };
+}
+
+export async function ragSearch(query: string, k = 3): Promise<RagSearchHit[]> {
+  const response = await fetch(`${API_BASE}/rag/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, k }),
+  });
+  if (!response.ok) throw new Error(await parseError(response));
+  const data = (await response.json()) as { hits: RagSearchHit[] };
+  return data.hits;
 }

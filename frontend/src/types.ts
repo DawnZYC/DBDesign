@@ -1,8 +1,8 @@
 /**
- * 与后端 schemas.py 保持一致的类型定义。
+ * Type definitions mirrored from backend schemas.py.
  */
 
-// ---- M5: Schema-Mapping 列对齐 ----
+// ---- M5: schema-mapping column alignment ----
 export type ColumnMappingStatus = 'auto' | 'review' | 'unmatched';
 
 export interface ColumnSuggestion {
@@ -36,7 +36,7 @@ export interface SheetPreview {
   is_known: boolean;
   sector_code: string | null;
   data_rows: number;
-  /** M5 列对齐结果；标准布局 / 未知 sheet / 旧后端为 null 或缺省 */
+  /** M5 column alignment; null/absent for canonical layout, unknown sheets, or old backends */
   column_mapping?: SheetColumnMapping | null;
 }
 
@@ -47,7 +47,7 @@ export interface FilePreview {
   standard_fields?: StandardFieldInfo[];
 }
 
-/** 列对齐复核结果：{sheet: {陌生列: 标准列}}，回传给导入接口的 column_overrides。 */
+/** Review result {sheet: {source col: canonical col}}, sent as column_overrides. */
 export type ColumnOverrides = Record<string, Record<string, string>>;
 
 export interface ImportSheetSummary {
@@ -57,7 +57,7 @@ export interface ImportSheetSummary {
   rows_skipped: number;
   rows_pending: number;
   issues: number;
-  /** M5 列对齐警告（自动对齐启用 / 低置信列被丢弃等），空数组表示快路径 */
+  /** M5 column-alignment warnings (auto-mapping used / low-confidence dropped); empty = fast path */
   column_warnings?: string[];
 }
 
@@ -71,7 +71,7 @@ export interface ImportResult {
   issues: number;
   sheets: ImportSheetSummary[];
   duration_ms: number;
-  /** 全文件 M5 列对齐警告汇总（带 sheet 前缀） */
+  /** Aggregated M5 warnings for the whole file (prefixed with sheet name) */
   column_warnings?: string[];
 }
 
@@ -109,7 +109,7 @@ export interface ConflictResolveResponse {
 }
 
 // =============================================================================
-// 浏览
+// Browse
 // =============================================================================
 export interface Sector {
   sector_id: number;
@@ -204,55 +204,73 @@ export interface TechnologyDetail {
   years: TechnologyYearOut[];
 }
 
+export interface EmissionFactorUpsert {
+  data_year: number;
+  emission_factor: number | null;
+  emission_factor_unit: string | null;
+}
+
+export interface EmissionFactorOut {
+  technology_id: number;
+  technology_code: string;
+  technology_year_id: number;
+  data_year: number;
+  emission_factor: string | null;
+  emission_factor_unit: string | null;
+  created: boolean;
+}
+
 export interface ApiError {
   detail: string;
 }
 
 // =============================================================================
-// Chat / AI 助手（M4）
+// Chat / AI assistant (M4)
 // =============================================================================
 
-/** SSE 事件中 tool_call 的数据结构 */
+/** Payload of an SSE tool_call event */
 export interface ToolCallEvent {
   tool: string;
   args: Record<string, unknown>;
 }
 
-/** SSE 事件中 tool_result 的数据结构 */
+/** Payload of an SSE tool_result event */
 export interface ToolResultEvent {
   tool: string;
   row_count?: number;
   truncated?: boolean;
   metric?: string;
   sql_summary?: string;
+  /** Short summary of an auxiliary tool's output (terminology / unit / emission / forecast) */
+  output_summary?: string;
 }
 
-/** LangGraph 节点名称 */
-export type AgentNode = 'planner' | 'sql_gen' | 'interpreter' | 'visualizer';
+/** LangGraph node names */
+export type AgentNode = 'planner' | 'sql_gen' | 'tool_agent' | 'interpreter' | 'visualizer';
 
-/** 单条对话消息（用户或 AI） */
+/** A single chat message (user or assistant) */
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
-  /** 消息文本（用户消息 / AI 流式拼接文本） */
+  /** Message text (user input / streamed assistant text) */
   content: string;
-  /** Planner 步骤列表（assistant only） */
+  /** Planner steps (assistant only) */
   plan?: string[];
-  /** 工具调用列表（assistant only） */
+  /** Tool calls (assistant only) */
   toolCalls?: ToolCallEvent[];
-  /** 工具返回列表（assistant only，与 toolCalls 按顺序对应） */
+  /** Tool results (assistant only, ordered to match toolCalls) */
   toolResults?: ToolResultEvent[];
-  /** ECharts option（assistant only，Visualizer 输出） */
+  /** ECharts option (assistant only, Visualizer output) */
   chartSpec?: Record<string, unknown>;
-  /** 当前活跃节点（streaming 时显示） */
+  /** Active node (shown while streaming) */
   currentNode?: AgentNode;
-  /** 消息状态 */
+  /** Message status */
   status?: 'streaming' | 'done' | 'error';
-  /** 错误信息（status === 'error' 时） */
+  /** Error message (when status === 'error') */
   errorMessage?: string;
 }
 
-/** GET /api/raw-rows/{id} 响应 */
+/** Response of GET /api/raw-rows/{id} */
 export interface RawRowDetail {
   raw_row_id: number;
   source_sheet_name: string;

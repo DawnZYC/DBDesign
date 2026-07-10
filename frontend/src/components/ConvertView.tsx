@@ -151,7 +151,11 @@ export function ConvertView({ onHandoffToImport }: ConvertViewProps) {
             </button>
           </div>
         ) : (
-          <FileUpload onFileSelected={handleSourceSelect} disabled={isWorking} />
+          <FileUpload
+            onFileSelected={handleSourceSelect}
+            disabled={isWorking}
+            acceptSuffixes={['.xlsx', '.xlsm', '.xls']}
+          />
         )}
       </section>
 

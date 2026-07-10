@@ -1,9 +1,9 @@
-"""Function-Calling 工具集（M2）。
+"""Function-calling tool set (M2).
 
-每个工具 = Pydantic 入参 + 纯 Python 实现 + LangChain Tool 包装。
-直接调用工具用 `tool.invoke({...})`；Agent 集成走 LangChain ToolNode。
+Each tool = Pydantic input + pure-Python implementation + LangChain Tool wrapper.
+Call a tool directly with `tool.invoke({...})`; Agent integration goes through LangChain ToolNode.
 
-ALL_TOOLS 是给 Agent 注册用的列表，后续 LangGraph 直接引用。
+ALL_TOOLS is the list used to register tools with the Agent, referenced directly by LangGraph.
 """
 
 from app.tools.chart import recommend_chart
@@ -13,7 +13,7 @@ from app.tools.sql_runner import run_sql
 from app.tools.terminology import lookup_terminology
 from app.tools.unit_convert import convert_unit
 
-# Agent 注册表 — 顺序无关
+# Agent registry — order-independent
 ALL_TOOLS = [
     lookup_terminology,
     convert_unit,
@@ -23,8 +23,19 @@ ALL_TOOLS = [
     recommend_chart,
 ]
 
+# Tools the LLM picks via real function-calling in the Tool Agent node (M3+).
+# run_sql is excluded (it goes through the structured SQL Agent for injection safety);
+# recommend_chart is excluded (it is a rule engine called directly by the Visualizer).
+AUX_TOOLS = [
+    lookup_terminology,
+    convert_unit,
+    lookup_emission_factor,
+    forecast_trend,
+]
+
 __all__ = [
     "ALL_TOOLS",
+    "AUX_TOOLS",
     "convert_unit",
     "forecast_trend",
     "lookup_emission_factor",

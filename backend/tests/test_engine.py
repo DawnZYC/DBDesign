@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from app.converters import engine
-from app.converters.base_model import PowerRecord
+from app.converters.base_model import ConvertRecord
 
 
 class TestGetAvailableModels:
@@ -48,22 +48,22 @@ class _StubConverter:
     def __init__(self, file_path: str) -> None:
         self.file_path = file_path
 
-    def extract_power_records(self) -> list[PowerRecord]:
-        return [PowerRecord(process_code="STUB", year=2018)]
+    def extract_records(self) -> list[ConvertRecord]:
+        return [ConvertRecord(process_code="STUB", year=2018)]
 
 
 class _EmptyConverter(_StubConverter):
-    def extract_power_records(self) -> list[PowerRecord]:
+    def extract_records(self) -> list[ConvertRecord]:
         return []
 
 
 class _RaisingConverter(_StubConverter):
-    def extract_power_records(self) -> list[PowerRecord]:
+    def extract_records(self) -> list[ConvertRecord]:
         raise RuntimeError("kaboom")
 
 
 class _KeyErrorConverter(_StubConverter):
-    def extract_power_records(self) -> list[PowerRecord]:
+    def extract_records(self) -> list[ConvertRecord]:
         raise KeyError("Mining")
 
 

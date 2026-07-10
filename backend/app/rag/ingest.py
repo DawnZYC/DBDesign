@@ -1,11 +1,11 @@
-"""把 PG 字典 + 手工领域知识 灌入 ChromaDB。
+"""Ingest the PG dictionaries + manual domain knowledge into ChromaDB.
 
-支持两个数据源：
-  - PG 三张字典表（commodity / sector / geography）→ 每行一个 Document
-  - Markdown 文件（domain_knowledge.md）→ 按 H2 切段，每段一个 Document
+Two data sources are supported:
+  - The three PG dictionary tables (commodity / sector / geography) -> one Document per row
+  - A Markdown file (domain_knowledge.md) -> split by H2, one Document per section
 
-每个 Document 的 metadata 里都带 source 字段（'commodity' / 'sector' / ...），
-方便检索时过滤和回查。
+Every Document's metadata carries a `source` field ('commodity' / 'sector' / ...),
+for filtering and trace-back during retrieval.
 """
 
 from __future__ import annotations
@@ -25,28 +25,33 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
-# 字典 → Document
+# Dictionary -> Document
 # -----------------------------------------------------------------------------
 def _commodity_to_doc(c: models.Commodity) -> Document:
-    """把 commodity 一行拼成富文本 + 结构化 metadata。"""
+    """Assemble one commodity row into rich text + structured metadata."""
     parts: list[str] = []
-    parts.append(f"商品代码: {c.commodity_code}")
+    parts.append(f"Commodity code: {c.commodity_code}")
     if c.commodity_description:
-        parts.append(f"描述: {c.commodity_description}")
+        parts.append(f"Description: {c.commodity_description}")
     if c.commodity_set:
-        parts.append(
-            f"集合(Csets): {c.commodity_set} ({'能源' if c.commodity_set == 'NRG' else '排放' if c.commodity_set == 'ENV' else '其他'})"
+        kind = (
+            "Energy"
+            if c.commodity_set == "NRG"
+            else "Emission"
+            if c.commodity_set == "ENV"
+            else "Other"
         )
+        parts.append(f"Set (Csets): {c.commodity_set} ({kind})")
     if c.unit:
-        parts.append(f"单位: {c.unit}")
+        parts.append(f"Unit: {c.unit}")
     if c.lim_type:
-        parts.append(f"约束类型(LimType): {c.lim_type}")
+        parts.append(f"Constraint type (LimType): {c.lim_type}")
     if c.cts_lvl:
-        parts.append(f"时间片层级(CTSLvl): {c.cts_lvl}")
+        parts.append(f"Timeslice level (CTSLvl): {c.cts_lvl}")
     if c.peak_ts:
-        parts.append(f"峰值时间片(PeakTS): {c.peak_ts}")
+        parts.append(f"Peak timeslice (PeakTS): {c.peak_ts}")
     if c.ctype:
-        parts.append(f"商品类型(Ctype): {c.ctype}")
+        parts.append(f"Commodity type (Ctype): {c.ctype}")
     text = " | ".join(parts)
 
     metadata: dict[str, str | None] = {
@@ -56,13 +61,13 @@ def _commodity_to_doc(c: models.Commodity) -> Document:
         "unit": c.unit,
         "description": c.commodity_description,
     }
-    # Chroma 不支持 None metadata 值，过滤掉
+    # Chroma does not allow None metadata values; filter them out
     metadata = {k: v for k, v in metadata.items() if v is not None}
     return Document(page_content=text, metadata=metadata)
 
 
 def _sector_to_doc(s: models.Sector) -> Document:
-    text = f"行业(Sector): {s.sector_name}（代码 {s.sector_code}）"
+    text = f"Sector: {s.sector_name} (code {s.sector_code})"
     return Document(
         page_content=text,
         metadata={"source": "sector", "code": s.sector_code, "name": s.sector_name},
@@ -71,7 +76,7 @@ def _sector_to_doc(s: models.Sector) -> Document:
 
 def _geography_to_doc(g: models.Geography) -> Document:
     name = g.geography_name or g.geography_code
-    text = f"地区(Geography): {name}（代码 {g.geography_code}）"
+    text = f"Geography: {name} (code {g.geography_code})"
     md: dict[str, str] = {"source": "geography", "code": g.geography_code}
     if g.geography_name:
         md["name"] = g.geography_name
@@ -79,15 +84,16 @@ def _geography_to_doc(g: models.Geography) -> Document:
 
 
 # -----------------------------------------------------------------------------
-# Markdown 切段
+# Markdown splitting
 # -----------------------------------------------------------------------------
 _H2_RE = re.compile(r"^##\s+(.+?)\s*$", flags=re.MULTILINE)
 
 
 def _split_markdown_by_h2(md: str) -> list[tuple[str, str]]:
-    """按 ## 标题切段，返回 [(title, content), ...]。
+    """Split by ## headings, returning [(title, content), ...].
 
-    标题 # 一级被丢弃；H2 之前的内容（前言）与第一个 H2 合并。
+    The top-level # heading is discarded; content before the first H2 (the preamble) is
+    merged into the first H2.
     """
     matches = list(_H2_RE.finditer(md))
     if not matches:
@@ -121,10 +127,10 @@ def _markdown_to_docs(path: Path) -> list[Document]:
 
 
 # -----------------------------------------------------------------------------
-# 公开 API
+# Public API
 # -----------------------------------------------------------------------------
 def ingest_dictionary(db: Session) -> dict[str, int]:
-    """从 PG 读 sector / geography / commodity 全量灌入向量库。返回各类型条数。"""
+    """Read all of sector / geography / commodity from PG and ingest into the vector store. Returns per-type counts."""
     docs: list[Document] = []
     counts = {"sector": 0, "geography": 0, "commodity": 0}
 
@@ -150,7 +156,7 @@ def ingest_dictionary(db: Session) -> dict[str, int]:
 
 
 def ingest_markdown(path: Path) -> int:
-    """灌入一个 markdown 文件（按 H2 分段）。返回段数。"""
+    """Ingest one markdown file (split by H2). Returns the number of sections."""
     docs = _markdown_to_docs(path)
     if not docs:
         return 0
@@ -162,13 +168,14 @@ def ingest_markdown(path: Path) -> int:
 
 
 def _make_doc_id(doc: Document) -> str:
-    """构造稳定的 ID（重复灌库时 upsert 而非新增）。
+    """Build a stable ID (so re-ingestion upserts instead of duplicating).
 
-    格式：
-      commodity::PWRCOA
+    Format:
+      commodity::COAL01
       sector::POWER
       geography::SG
       manual::filename::title
+      upload::filename::chunk_index
     """
     md = doc.metadata or {}
     source = md.get("source", "unknown")
@@ -176,8 +183,91 @@ def _make_doc_id(doc: Document) -> str:
         return f"{source}::{md.get('code', '')}"
     if source == "manual":
         return f"manual::{md.get('file', '')}::{md.get('title', '')}"
-    # 兜底：用内容的 hash
+    if source == "upload":
+        return f"upload::{md.get('file', '')}::{md.get('chunk', 0)}"
+    # Fallback: hash of the content
     import hashlib
 
     h = hashlib.sha1(doc.page_content.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
     return f"{source}::{h}"
+
+
+# -----------------------------------------------------------------------------
+# Uploaded knowledge docs (source='upload', independent of manual/dictionary)
+# -----------------------------------------------------------------------------
+_FALLBACK_CHUNK_CHARS = 1200  # plain text without H2 headings is aggregated to this length
+
+
+def _chunk_plain_text(text: str) -> list[tuple[str, str]]:
+    """Fallback chunking for text without H2 structure: split by blank lines, aggregate to ~_FALLBACK_CHUNK_CHARS."""
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    chunks: list[str] = []
+    buf = ""
+    for p in paragraphs:
+        if buf and len(buf) + len(p) > _FALLBACK_CHUNK_CHARS:
+            chunks.append(buf)
+            buf = p
+        else:
+            buf = f"{buf}\n\n{p}" if buf else p
+    if buf:
+        chunks.append(buf)
+    return [("", c) for c in chunks] or [("", text.strip())]
+
+
+def ingest_uploaded_text(content: str, *, file_name: str) -> int:
+    """Ingest a user-uploaded markdown / plain-text knowledge doc. Returns the number of chunks.
+
+    Prefers chunking by H2 headings (same rule as domain_knowledge.md); without H2, aggregates
+    by paragraph. Re-uploading the same file name = overwrite (delete old chunks first, then write,
+    so stale chunks don't remain when a new version has fewer chunks).
+    """
+    content = content.strip()
+    if not content:
+        return 0
+
+    sections = _split_markdown_by_h2(content)
+    if len(sections) == 1 and not sections[0][0]:
+        sections = _chunk_plain_text(content)
+
+    docs = [
+        Document(
+            page_content=f"## {title}\n\n{body}" if title else body,
+            metadata={"source": "upload", "file": file_name, "title": title, "chunk": i},
+        )
+        for i, (title, body) in enumerate(sections)
+    ]
+    delete_uploaded_document(file_name)  # overwrite semantics
+    ids = [_make_doc_id(d) for d in docs]
+    vs = get_vectorstore()
+    vs.add_documents(documents=docs, ids=ids)
+    logger.info("Ingested uploaded doc %s: %d chunks", file_name, len(docs))
+    return len(docs)
+
+
+def list_uploaded_documents() -> list[dict]:
+    """List all uploaded docs: [{file, chunks, titles}]."""
+    vs = get_vectorstore()
+    got = vs._collection.get(where={"source": "upload"}, include=["metadatas"])  # noqa: SLF001
+    files: dict[str, dict] = {}
+    for md in got.get("metadatas") or []:
+        name = (md or {}).get("file", "unknown")
+        entry = files.setdefault(name, {"file": name, "chunks": 0, "titles": []})
+        entry["chunks"] += 1
+        title = (md or {}).get("title")
+        if title and title not in entry["titles"]:
+            entry["titles"].append(title)
+    return sorted(files.values(), key=lambda x: x["file"])
+
+
+def delete_uploaded_document(file_name: str) -> int:
+    """Delete all chunks of an uploaded doc. Returns the number deleted."""
+    vs = get_vectorstore()
+    got = vs._collection.get(  # noqa: SLF001
+        where={"$and": [{"source": "upload"}, {"file": file_name}]},
+        include=[],
+    )
+    ids = got.get("ids") or []
+    if ids:
+        vs._collection.delete(ids=ids)  # noqa: SLF001
+        logger.info("Deleted uploaded doc %s: %d chunks", file_name, len(ids))
+    return len(ids)

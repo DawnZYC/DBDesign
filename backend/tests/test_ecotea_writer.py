@@ -6,7 +6,7 @@ from pathlib import Path
 
 import openpyxl
 
-from app.converters.base_model import MISSING, PowerRecord
+from app.converters.base_model import MISSING, ConvertRecord
 from app.converters.ecotea_writer import (
     POWER_COL_ORDER,
     POWER_DATA_START_ROW,
@@ -38,7 +38,7 @@ class TestWriteOutput:
         _make_template(template)
 
         records = [
-            PowerRecord(
+            ConvertRecord(
                 process_code="PROC1",
                 description="First process",
                 geography="SG",
@@ -47,7 +47,7 @@ class TestWriteOutput:
                 capex=900,
                 commodity="PWRNGA",
             ),
-            PowerRecord(
+            ConvertRecord(
                 process_code="PROC2",
                 description="Second process",
                 geography="SG",
@@ -77,7 +77,7 @@ class TestWriteOutput:
         output = tmp_path / "out.xlsx"
         _make_template(template)
 
-        records = [PowerRecord(process_code="P", ef=float("nan"), capex=None)]
+        records = [ConvertRecord(process_code="P", ef=float("nan"), capex=None)]
         write_output(records, str(template), str(output))
 
         wb = openpyxl.load_workbook(output)
@@ -93,7 +93,7 @@ class TestWriteOutput:
         output = tmp_path / "out.xlsx"
         _make_template(template)
 
-        write_output([PowerRecord(process_code="HELLO")], str(template), str(output))
+        write_output([ConvertRecord(process_code="HELLO")], str(template), str(output))
         wb = openpyxl.load_workbook(output)
         ws = wb["Power"]
         # Row 9 should still contain the column labels from the template.

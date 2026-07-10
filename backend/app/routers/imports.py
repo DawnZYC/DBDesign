@@ -50,6 +50,26 @@ def _validate_upload(file: UploadFile, file_bytes: bytes) -> None:
         )
 
 
+def _parse_column_overrides(raw: str | None) -> dict[str, dict[str, str]] | None:
+    """Parse the M5 column_overrides JSON string into {sheet: {source col: canonical col}}."""
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError("column_overrides must be a JSON object")
+        return {
+            str(sheet): {str(k): str(v) for k, v in mapping.items()}
+            for sheet, mapping in parsed.items()
+            if isinstance(mapping, dict)
+        }
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to parse column_overrides: {exc!s}",
+        ) from exc
+
+
 @router.post(
     "/preview",
     response_model=FilePreview,
@@ -127,22 +147,7 @@ async def create_import(
     if sheets:
         selected_sheets = [s.strip() for s in sheets.split(",") if s.strip()]
 
-    overrides: dict[str, dict[str, str]] | None = None
-    if column_overrides:
-        try:
-            parsed = json.loads(column_overrides)
-            if not isinstance(parsed, dict):
-                raise ValueError("column_overrides must be a JSON object")
-            overrides = {
-                str(sheet): {str(k): str(v) for k, v in mapping.items()}
-                for sheet, mapping in parsed.items()
-                if isinstance(mapping, dict)
-            }
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to parse column_overrides: {exc!s}",
-            ) from exc
+    overrides = _parse_column_overrides(column_overrides)
 
     try:
         result = import_excel(
@@ -212,6 +217,24 @@ def import_from_conversion(
     imported_by: str | None = Form(default=None),
     note: str | None = Form(default=None),
     sheets: str | None = Form(default=None),
+    column_overrides: str | None = Form(
+        default=None,
+        description=(
+            "M5 column-alignment review result as a JSON string: "
+            "{sheet: {source column: canonical column}}. When given, it is applied as-is "
+            "and the Schema-Mapping Agent is not invoked."
+        ),
+    ),
+    auto_map_columns: bool = Form(
+        default=True,
+        description=(
+            "Whether to run the Schema-Mapping Agent automatically when there is no "
+            "override and headers differ from the canonical template."
+        ),
+    ),
+    use_llm_mapping: bool = Form(
+        default=False, description="Whether the Schema-Mapping Agent uses the LLM backend."
+    ),
     db: Session = Depends(get_db),
 ) -> ImportResult:
     artefact = get_conversion_artefact(token)
@@ -221,6 +244,8 @@ def import_from_conversion(
     if sheets:
         selected_sheets = [s.strip() for s in sheets.split(",") if s.strip()]
 
+    overrides = _parse_column_overrides(column_overrides)
+
     try:
         return import_excel(
             db,
@@ -229,6 +254,9 @@ def import_from_conversion(
             imported_by=imported_by,
             note=note,
             selected_sheets=selected_sheets,
+            column_overrides=overrides,
+            auto_map_columns=auto_map_columns,
+            use_llm_mapping=use_llm_mapping,
         )
     except SchemaMappingRejected as exc:
         db.rollback()

@@ -1,12 +1,12 @@
-"""Embedding Provider 抽象层 — 与 M0 LLM 同样的注册表 + 工厂模式。
+"""Embedding provider abstraction — the same registry + factory pattern as the M0 LLM layer.
 
-所有 provider 统一实现 langchain_core.embeddings.Embeddings 接口；
-业务代码只 import Embeddings 不耦合具体 provider。
+All providers implement the langchain_core.embeddings.Embeddings interface; business code
+only imports Embeddings and is not coupled to a specific provider.
 
-支持：
-  - huggingface (默认): 本地 sentence-transformers，零成本，离线可用
-  - openai           : OpenAI text-embedding-3-small / -large
-  - qwen             : 通义千问 DashScope text-embedding-v3
+Supported:
+  - huggingface (default): local sentence-transformers, zero cost, works offline
+  - openai              : OpenAI text-embedding-3-small / -large
+  - qwen                : Tongyi Qianwen DashScope text-embedding-v3
 """
 
 from __future__ import annotations
@@ -24,17 +24,17 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
-# Provider 配置卡片
+# Provider config card
 # -----------------------------------------------------------------------------
 class EmbeddingProviderConfig(BaseModel):
-    """单个 embedding provider 的配置卡片。"""
+    """Config card for a single embedding provider."""
 
     name: str
     display_name: str
     adapter: Literal["huggingface", "openai", "dashscope"]
-    api_key_field: str | None = None  # None 表示不需要 API key（本地）
+    api_key_field: str | None = None  # None means no API key needed (local)
     default_model: str
-    dimensions: int | None = None  # 输出向量维度（用于回归测试和文档）
+    dimensions: int | None = None  # output vector dimension (for regression tests and docs)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -42,7 +42,7 @@ class EmbeddingProviderConfig(BaseModel):
 EMBEDDING_REGISTRY: dict[str, EmbeddingProviderConfig] = {
     "huggingface": EmbeddingProviderConfig(
         name="huggingface",
-        display_name="HuggingFace 本地 (sentence-transformers)",
+        display_name="HuggingFace local (sentence-transformers)",
         adapter="huggingface",
         api_key_field=None,
         default_model="sentence-transformers/all-MiniLM-L6-v2",
@@ -58,7 +58,7 @@ EMBEDDING_REGISTRY: dict[str, EmbeddingProviderConfig] = {
     ),
     "qwen": EmbeddingProviderConfig(
         name="qwen",
-        display_name="通义千问 (DashScope)",
+        display_name="Tongyi Qianwen (DashScope)",
         adapter="dashscope",
         api_key_field="dashscope_api_key",
         default_model="text-embedding-v3",
@@ -68,7 +68,7 @@ EMBEDDING_REGISTRY: dict[str, EmbeddingProviderConfig] = {
 
 
 # -----------------------------------------------------------------------------
-# 工厂
+# Factory
 # -----------------------------------------------------------------------------
 _BUILDERS: dict[str, Callable[[EmbeddingProviderConfig, Settings, str], Embeddings]] = {}
 
@@ -97,24 +97,24 @@ def _build_openai(cfg: EmbeddingProviderConfig, settings: Settings, model: str) 
 
 @_register_builder("dashscope")
 def _build_dashscope(cfg: EmbeddingProviderConfig, settings: Settings, model: str) -> Embeddings:
-    # 注意：langchain-community 的 DashScopeEmbeddings 走的是 DashScope 原生协议
+    # Note: langchain-community's DashScopeEmbeddings uses the native DashScope protocol
     from langchain_community.embeddings import DashScopeEmbeddings
 
     return DashScopeEmbeddings(model=model, dashscope_api_key=settings.dashscope_api_key)
 
 
 def get_embedder(*, provider: str | None = None, model: str | None = None) -> Embeddings:
-    """按当前配置或显式参数返回 Embeddings 实例。
+    """Return an Embeddings instance from the current config or explicit arguments.
 
-    优先级：显式入参 > 环境变量 > provider 默认值
+    Priority: explicit args > environment variables > provider default
     """
     settings = get_settings()
     provider_name = (provider or settings.embedding_provider or "huggingface").lower()
 
     if provider_name not in EMBEDDING_REGISTRY:
         raise ValueError(
-            f"未知 embedding provider '{provider_name}'。"
-            f"可选: {', '.join(EMBEDDING_REGISTRY.keys())}"
+            f"Unknown embedding provider '{provider_name}'. "
+            f"Options: {', '.join(EMBEDDING_REGISTRY.keys())}"
         )
     cfg = EMBEDDING_REGISTRY[provider_name]
 
@@ -122,14 +122,14 @@ def get_embedder(*, provider: str | None = None, model: str | None = None) -> Em
         api_key = getattr(settings, cfg.api_key_field, None)
         if not api_key:
             raise RuntimeError(
-                f"环境变量 {cfg.api_key_field.upper()} 未配置，"
-                f"无法初始化 embedding provider '{provider_name}'"
+                f"Environment variable {cfg.api_key_field.upper()} is not set; "
+                f"cannot initialize embedding provider '{provider_name}'"
             )
 
     final_model = model or settings.embedding_model or cfg.default_model
     builder = _BUILDERS.get(cfg.adapter)
     if builder is None:
-        raise ValueError(f"未实现的 embedding adapter '{cfg.adapter}'")
+        raise ValueError(f"Unimplemented embedding adapter '{cfg.adapter}'")
 
     logger.info(
         "Init embedding provider=%s model=%s dim=%s",
@@ -141,13 +141,13 @@ def get_embedder(*, provider: str | None = None, model: str | None = None) -> Em
 
 
 def list_embedding_providers() -> list[dict[str, Any]]:
-    """列出所有 embedding provider 及当前配置状态。"""
+    """List all embedding providers and their current config status."""
     settings = get_settings()
     active = (settings.embedding_provider or "huggingface").lower()
     out: list[dict[str, Any]] = []
     for cfg in EMBEDDING_REGISTRY.values():
         if cfg.api_key_field is None:
-            configured = True  # 本地 provider 无需 key
+            configured = True  # local provider needs no key
         else:
             configured = bool(getattr(settings, cfg.api_key_field, None))
         out.append(
