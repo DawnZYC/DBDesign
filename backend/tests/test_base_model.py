@@ -1,10 +1,10 @@
-"""Tests for the PowerRecord dataclass / BaseConverter contract."""
+"""Tests for the ConvertRecord dataclass / BaseConverter contract."""
 
 from __future__ import annotations
 
 import pytest
 
-from app.converters.base_model import MISSING, BaseConverter, PowerRecord
+from app.converters.base_model import MISSING, BaseConverter, ConvertRecord
 
 
 class TestMissingSentinel:
@@ -13,9 +13,9 @@ class TestMissingSentinel:
         assert MISSING == "-"
 
 
-class TestPowerRecord:
+class TestConvertRecord:
     def test_defaults(self):
-        rec = PowerRecord()
+        rec = ConvertRecord()
         # Defaults must produce a row with the MISSING placeholder in most cells.
         assert rec.wp6_title == "Power"
         assert rec.data_owner == MISSING
@@ -29,7 +29,7 @@ class TestPowerRecord:
         assert rec.variable_opex_unit == "PJ (2018)"
 
     def test_full_assignment_roundtrip(self):
-        rec = PowerRecord(
+        rec = ConvertRecord(
             wp6_title="Primary",
             data_owner="ESI",
             data_provider="WP1",
@@ -56,9 +56,9 @@ class TestPowerRecord:
 class _FakeConverter(BaseConverter):
     """Minimal subclass for testing the abstract base class hooks."""
 
-    def extract_power_records(self) -> list[PowerRecord]:
+    def extract_records(self) -> list[ConvertRecord]:
         # Returns a deterministic single-row payload so we can assert through it.
-        return [PowerRecord(process_code="FAKE", description="fake")]
+        return [ConvertRecord(process_code="FAKE", description="fake")]
 
 
 class TestBaseConverter:
@@ -69,7 +69,7 @@ class TestBaseConverter:
 
     def test_extract_returns_records(self):
         conv = _FakeConverter("dummy.xlsx")
-        records = conv.extract_power_records()
+        records = conv.extract_records()
         assert len(records) == 1
         assert records[0].process_code == "FAKE"
 

@@ -1,7 +1,7 @@
 [project]
-name = "ecotea-wp1-backend"
+name = "strata-backend"
 version = "0.1.0"
-description = "EcoTEA WP1 Excel-to-PostgreSQL import API."
+description = "Strata — multi-agent analytics + EcoTEA WP1 Excel-to-PostgreSQL import API."
 requires-python = ">=3.11"
 
 # ---------------------------------------------------------------------------
@@ -18,8 +18,8 @@ extend-exclude = [
     # Ad-hoc developer scripts — kept in repo for convenience, not part of the
     # shipped backend. Their style intentionally diverges (env-mutation before
     # imports, etc.) so they are excluded from the lint baseline.
-    "seed_commodities.py",
-    "verify_*.py",
+    "scripts/seed_commodities.py",
+    "scripts/verify_*.py",
 ]
 
 [tool.ruff.lint]

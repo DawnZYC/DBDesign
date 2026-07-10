@@ -1,17 +1,17 @@
-"""SQL Agent 节点 — 把执行计划转换为结构化 QueryParams，调用 run_sql 工具执行。
+"""SQL Agent node — turn the execution plan into structured QueryParams and run the run_sql tool.
 
-职责：
-  1. 读取 AgentState.plan（Planner 的步骤列表）
-  2. 用 llm.with_structured_output(QueryParams) 强约束 LLM 输出
-     - 禁止裸字符串 SQL，只允许填写 Pydantic 字段
-     - 字段白名单由 QueryParams 本身的 Literal / validator 保证
-  3. 调用 run_sql 工具执行，把结果写入 AgentState.sql_result
-  4. 失败时写入 error，交由 graph.py 的条件边决定是否重试
+Responsibilities:
+  1. Read AgentState.plan (the Planner's step list).
+  2. Use llm.with_structured_output(QueryParams) to strongly constrain the LLM output
+     - no raw SQL strings; only Pydantic fields may be filled
+     - the field whitelist is enforced by QueryParams' own Literal / validators
+  3. Run the run_sql tool and write the result into AgentState.sql_result.
+  4. On failure, write error and let graph.py's conditional edge decide on retry.
 
-安全性保证（继承自 M2 run_sql 工具）：
-  * 输入只能是 QueryParams 字段，LLM 无法注入任意 SQL
-  * 所有过滤值走 SQLAlchemy bindparam，无字符串拼接
-  * 结果行数硬上限 10000
+Safety guarantees (inherited from the M2 run_sql tool):
+  * Input is limited to QueryParams fields; the LLM cannot inject arbitrary SQL.
+  * All filter values go through SQLAlchemy bindparam, no string concatenation.
+  * Result rows are hard-capped at 10000.
 """
 
 from __future__ import annotations
@@ -30,53 +30,54 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Prompt
 # -----------------------------------------------------------------------------
-_SYSTEM = """你是 SG-TIMES 数据分析平台的 SQL Agent。
-你的任务：根据执行计划，生成一个 QueryParams 对象（结构化输出），用于安全地查询数据库。
+_SYSTEM = """You are the SQL Agent of the EcoTEA data analysis platform.
+Your task: given the execution plan, produce one QueryParams object
+(structured output) for a safe database query.
 
-可用指标（metric 字段的合法值）：
+Valid metrics (the `metric` field):
   capex, fixed_opex, variable_opex, emission_factor, tax_cost, subsidy_cost,
   efficiency_value, technology_efficiency, heat_rate, capacity_to_activity_factor,
   capacity, commodity_demand_value
 
-聚合方式（aggregation）：raw（默认，带 raw_row_id）, sum, avg, min, max, count
+Aggregations: raw (default, rows include raw_row_id), sum, avg, min, max, count
 
-分组维度（group_by 列表中的合法值）：sector, geography, technology, year, commodity
+group_by dimensions: sector, geography, technology, year, commodity
 
-过滤字段：
-  - sector_codes: 部门代码列表，如 ["POWER", "INDUSTRY"]
-  - geography_codes: 地理代码列表，如 ["SG"]
-  - technology_codes: 精确技术代码列表
-  - technology_code_like: 技术代码模糊匹配（ILIKE %X%），如 "PWRSOL"
-  - year_min / year_max: 年份范围（整数）
-  - limit: 最大返回行数（默认 1000，上限 10000）
+Filters:
+  - sector_codes: list of sector codes, e.g. ["POWER", "INDUSTRY"]
+  - geography_codes: list of geography codes, e.g. ["SG"]
+  - technology_codes: exact technology codes
+  - technology_code_like: fuzzy match (ILIKE %X%), e.g. "SOLAR"
+  - year_min / year_max: integer year range
+  - limit: max rows (default 1000, hard cap 10000)
 
-规则：
-1. aggregation='raw' 时结果含 raw_row_id，用于图表反查源单元格（优先选 raw）
-2. 若计划要求聚合统计，aggregation 选 sum/avg/count 等，并填 group_by
-3. 不要选超出白名单的 metric 名称
-4. 代码/名称不确定时，用 technology_code_like 做模糊匹配
+Rules:
+1. aggregation='raw' keeps raw_row_id for chart cell-tracing (prefer raw)
+2. for aggregated statistics pick sum/avg/count etc. and set group_by
+3. never invent a metric outside the whitelist
+4. when codes/names are uncertain, use technology_code_like
 """
 
 
 def _plan_to_prompt(plan: list[str], question: str) -> str:
-    """把计划和原始问题组合成给 SQL Agent 的 prompt。"""
+    """Combine the plan and the original question into the SQL Agent prompt."""
     plan_text = "\n".join(f"  {i + 1}. {step}" for i, step in enumerate(plan))
     return (
-        f"用户原始问题：{question}\n\n"
-        f"执行计划：\n{plan_text}\n\n"
-        "请根据以上计划，填写 QueryParams 来完成第一步数据查询。"
-        "若计划有多个查询步骤，只生成最关键的那一次查询。"
+        f"User question: {question}\n\n"
+        f"Execution plan:\n{plan_text}\n\n"
+        "Fill in QueryParams to perform the key data query of this plan. "
+        "If the plan implies several queries, produce only the most essential one."
     )
 
 
 # -----------------------------------------------------------------------------
-# 节点函数
+# Node function
 # -----------------------------------------------------------------------------
 def sql_agent_node(state: AgentState) -> dict:
-    """LangGraph 节点：SQL Agent。
+    """LangGraph node: SQL Agent.
 
-    入参：AgentState（取 messages + plan）
-    出参：{ sql_params, sql_result, error }（partial state update）
+    In:  AgentState (reads messages + plan)
+    Out: { sql_params, sql_result, error } (partial state update)
     """
     logger.info("sql_agent_node: start")
 
@@ -85,16 +86,20 @@ def sql_agent_node(state: AgentState) -> dict:
         return {
             "sql_params": None,
             "sql_result": None,
-            "error": "plan 为空，无法生成 SQL 参数",
+            "error": "Plan is empty; cannot derive SQL parameters",
         }
 
-    # 取原始用户问题（用于构造提示）
+    # Take the original user question (to build the prompt) plus the last few turns:
+    # the user may have replied with only "capex", while sector / year filters are in the context.
     from langchain_core.messages import HumanMessage as HMsg
+
+    from app.agents.context import with_context
 
     user_msgs = [m for m in state["messages"] if isinstance(m, HMsg)]
     question = str(user_msgs[-1].content) if user_msgs else "(unknown)"
+    question = with_context(question, state["messages"])
 
-    # ---- Step 1: LLM 结构化输出 → QueryParams ----
+    # ---- Step 1: LLM structured output -> QueryParams ----
     llm = get_chat_model()
     structured_llm = llm.with_structured_output(QueryParams)
 
@@ -115,10 +120,10 @@ def sql_agent_node(state: AgentState) -> dict:
         return {
             "sql_params": None,
             "sql_result": None,
-            "error": f"SQL Agent 结构化输出失败: {exc!s}",
+            "error": f"SQL Agent structured output failed: {exc!s}",
         }
 
-    # ---- Step 2: 调用 run_sql 工具执行 ----
+    # ---- Step 2: run the run_sql tool ----
     try:
         result_dict: dict[str, Any] = run_sql.invoke(params.model_dump())
         logger.info(
@@ -136,5 +141,5 @@ def sql_agent_node(state: AgentState) -> dict:
         return {
             "sql_params": params.model_dump(),
             "sql_result": None,
-            "error": f"SQL 执行失败: {exc!s}",
+            "error": f"SQL execution failed: {exc!s}",
         }

@@ -216,7 +216,7 @@ def parse_efficiency(value: Any) -> EfficiencyResult:
 
 
 # -------------------------------------------------------------------------
-# Multi-commodity / multi-share splitting ('PWRBMS+PWACOA' / '20%+80%').
+# Multi-commodity / multi-share splitting ('BIOMASS01+COAL01' / '20%+80%').
 # -------------------------------------------------------------------------
 _RE_PLUS_SPLIT = re.compile(r"\s*\+\s*")
 
@@ -224,12 +224,12 @@ _RE_PLUS_SPLIT = re.compile(r"\s*\+\s*")
 def parse_commodity_combo(commodity_cell: Any, share_cell: Any) -> list[CommodityShare]:
     """Split a multi-commodity row.
 
-    >>> parse_commodity_combo('PWRBMS+PWACOA', '20%+80%')
-    [CommodityShare(code='PWRBMS', share_value=0.2, share_text='20%'),
-     CommodityShare(code='PWACOA', share_value=0.8, share_text='80%')]
+    >>> parse_commodity_combo('BIOMASS01+COAL01', '20%+80%')
+    [CommodityShare(code='BIOMASS01', share_value=0.2, share_text='20%'),
+     CommodityShare(code='COAL01', share_value=0.8, share_text='80%')]
 
-    >>> parse_commodity_combo('PWRNGA', 1)
-    [CommodityShare(code='PWRNGA', share_value=1.0, share_text='1')]
+    >>> parse_commodity_combo('NGAS01', 1)
+    [CommodityShare(code='NGAS01', share_value=1.0, share_text='1')]
 
     >>> parse_commodity_combo('-', None)
     []

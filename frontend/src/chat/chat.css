@@ -1,16 +1,18 @@
 /* ============================================================
-   Chat / AI 助手 专用样式（M4）
-   遵循全局 CSS Custom Properties（见 styles.css :root）
+   Chat / AI assistant styles (M4)
+   Uses the global CSS custom properties (see styles.css :root)
    ============================================================ */
 
 /* ----------------------------------------------------------
-   整体布局
+   Overall layout
    ---------------------------------------------------------- */
 .chat-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 160px); /* 减去 header + footer 估高 */
-  min-height: 480px;
+  /* Fills the remaining height of .app-main via the .view-pane flex chain
+     (no hard-coded viewport math, so no phantom outer scrollbar). */
+  flex: 1;
+  min-height: 0;
   background: var(--bg);
 }
 
@@ -49,7 +51,7 @@
 }
 
 /* ----------------------------------------------------------
-   消息列表
+   Message list
    ---------------------------------------------------------- */
 .message-list {
   flex: 1;
@@ -58,12 +60,12 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  /* 平滑滚动 */
+  /* smooth scrolling */
   scroll-behavior: smooth;
 }
 
 .message-list:empty::after {
-  content: '向 AI 提问，例如：「Power 部门 2030 年的 capex 趋势」';
+  content: 'Ask the assistant, e.g. "Power sector capex trend, 2018-2050"';
   display: block;
   text-align: center;
   color: var(--text-muted);
@@ -73,7 +75,7 @@
 }
 
 /* ----------------------------------------------------------
-   消息行（包含气泡 + 间距）
+   Message row (bubble + spacing)
    ---------------------------------------------------------- */
 .message-row {
   display: flex;
@@ -90,7 +92,7 @@
   align-items: flex-start;
 }
 
-/* AI 头像占位 */
+/* assistant avatar */
 .avatar {
   width: 28px;
   height: 28px;
@@ -115,7 +117,7 @@
 }
 
 /* ----------------------------------------------------------
-   气泡
+   Bubbles
    ---------------------------------------------------------- */
 .bubble {
   max-width: 78%;
@@ -144,13 +146,13 @@
   padding: 14px 16px;
 }
 
-/* streaming 时气泡有微弱动效 */
+/* subtle pulse while streaming */
 .assistant-bubble.streaming {
   border-color: #93c5fd;
 }
 
 /* ----------------------------------------------------------
-   当前节点徽章
+   Active node badge
    ---------------------------------------------------------- */
 .node-badge {
   display: inline-flex;
@@ -186,7 +188,7 @@
 }
 
 /* ----------------------------------------------------------
-   Planner 步骤列表
+   Planner step list
    ---------------------------------------------------------- */
 .plan-list {
   display: flex;
@@ -222,7 +224,7 @@
 }
 
 /* ----------------------------------------------------------
-   工具调用 Trace（可折叠面板）
+   Tool-call trace (collapsible)
    ---------------------------------------------------------- */
 .tool-trace {
   border: 1px solid var(--border);
@@ -311,7 +313,7 @@
 }
 
 /* ----------------------------------------------------------
-   Markdown 文本区域
+   Markdown body
    ---------------------------------------------------------- */
 .markdown-text {
   font-size: 13.5px;
@@ -378,7 +380,7 @@
   font-weight: 600;
 }
 
-/* 流式光标 */
+/* streaming caret */
 .streaming-cursor::after {
   content: '▍';
   display: inline-block;
@@ -399,7 +401,7 @@
 }
 
 /* ----------------------------------------------------------
-   图表气泡
+   Chart bubble
    ---------------------------------------------------------- */
 .chart-bubble {
   border: 1px solid var(--border);
@@ -438,7 +440,7 @@
   cursor: crosshair;
 }
 
-/* 截断警告 */
+/* truncation warning */
 .chart-truncation-warn {
   font-size: 11.5px;
   color: var(--warn);
@@ -448,7 +450,7 @@
 }
 
 /* ----------------------------------------------------------
-   错误提示
+   Error notice
    ---------------------------------------------------------- */
 .bubble-error {
   font-size: 12.5px;
@@ -460,7 +462,7 @@
 }
 
 /* ----------------------------------------------------------
-   输入区域
+   Input area
    ---------------------------------------------------------- */
 .chat-input-area {
   padding: 12px 0 0;
@@ -521,8 +523,105 @@
   cursor: not-allowed;
 }
 
+/* Reply-language selector in the header */
+.chat-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.chat-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chat-lang-label {
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+}
+.chat-lang-select {
+  font-size: 12.5px;
+  padding: 5px 8px;
+  border: 1px solid var(--border, #d9dde3);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--text, #111827);
+  cursor: pointer;
+}
+
+/* Stop-generating button (replaces Send while streaming) */
+.chat-stop-btn {
+  background: #6b7280;
+}
+
+.chat-stop-btn:hover:not(:disabled) {
+  background: #4b5563;
+}
+
+/* LLM-not-configured warning banner */
+.chat-llm-warning {
+  margin: 8px 12px 0;
+  padding: 10px 14px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  color: #9a3412;
+  font-size: 13px;
+}
+.chat-llm-warning code {
+  background: #ffedd5;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* Empty-state welcome + example prompts */
+.chat-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+  padding: 32px 24px;
+  color: var(--text-muted, #6b7280);
+}
+.chat-empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text, #111827);
+}
+.chat-empty-sub {
+  font-size: 13.5px;
+}
+.chat-empty-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+  max-width: 560px;
+}
+.chat-example-chip {
+  padding: 8px 14px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d9dde3);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text, #111827);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.chat-example-chip:hover:not(:disabled) {
+  border-color: var(--primary, #2563eb);
+  background: #f5f8ff;
+}
+.chat-example-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ----------------------------------------------------------
-   源单元格反查 Modal（CellTraceModal）
+   Source-cell trace modal (CellTraceModal)
    ---------------------------------------------------------- */
 .cell-trace-raw {
   font-family: ui-monospace, Menlo, Consolas, monospace;
@@ -537,6 +636,35 @@
   overflow-y: auto;
   color: var(--text);
   line-height: 1.6;
+}
+
+/* Source-cell trace as a readable table (column · field · value) */
+.cell-trace-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  max-height: 320px;
+  display: block;
+  overflow-y: auto;
+}
+.cell-trace-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border, #eceff3);
+  vertical-align: top;
+}
+.cell-trace-col {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-weight: 600;
+  width: 44px;
+  color: var(--primary, #2563eb);
+}
+.cell-trace-label {
+  color: var(--text-muted, #6b7280);
+  white-space: nowrap;
+}
+.cell-trace-val {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  word-break: break-word;
 }
 
 .cell-trace-meta {
@@ -572,4 +700,161 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 10px 0 6px;
+}
+
+/* ---------------------------------------------------------------------------
+ * KnowledgePanel — RAG knowledge-base overlay
+ * ------------------------------------------------------------------------- */
+.kp-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.kp-panel {
+  background: #fff;
+  border-radius: 12px;
+  width: min(640px, 92vw);
+  max-height: 84vh;
+  overflow-y: auto;
+  padding: 20px 24px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+}
+
+.kp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.kp-close {
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: #64748b;
+}
+
+.kp-section {
+  margin-bottom: 18px;
+}
+
+.kp-section-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.kp-hint {
+  font-size: 12px;
+  color: #64748b;
+  margin: 4px 0 8px;
+}
+
+.kp-doc-list,
+.kp-hit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kp-doc-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.kp-doc-meta {
+  margin-left: 8px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.kp-doc-titles {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.kp-delete {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.kp-search-row {
+  display: flex;
+  gap: 8px;
+}
+
+.kp-search-row input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.kp-search-row button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: #1e3a8a;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.kp-search-row button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.kp-hit-item {
+  padding: 8px 10px;
+  border-left: 3px solid #c7d2fe;
+  background: #f8fafc;
+  border-radius: 0 6px 6px 0;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.kp-hit-score {
+  font-weight: 600;
+  margin-right: 8px;
+  color: #1e3a8a;
+}
+
+.kp-hit-source {
+  color: #64748b;
+}
+
+.kp-hit-text {
+  margin-top: 4px;
+  color: #334155;
+  white-space: pre-wrap;
+}
+
+.kp-notice {
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  font-size: 13px;
 }

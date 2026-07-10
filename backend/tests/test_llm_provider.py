@@ -1,11 +1,11 @@
-"""M0 — LLM Provider 抽象层单测。
+"""M0 — LLM provider abstraction layer unit tests.
 
-注意：这些测试不会真打 LLM API，只验证：
-  - PROVIDER_REGISTRY 完整性（注册了预期的 provider）
-  - get_chat_model 工厂的入参 / 异常分支
-  - list_available_providers 返回结构
+Note: these tests never hit the real LLM API; they only verify:
+  - PROVIDER_REGISTRY completeness (the expected providers are registered)
+  - get_chat_model factory inputs / exception branches
+  - list_available_providers return structure
 
-如要做 live 集成测试（真打 API），加 marker：@pytest.mark.live
+For a live integration test (real API), add the marker: @pytest.mark.live
 """
 
 from __future__ import annotations
@@ -14,10 +14,10 @@ import os
 import sys
 from pathlib import Path
 
-# 让 app 包可以被 import（独立运行 pytest 时也行）
+# Make the app package importable (works when running pytest standalone)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# 强制无外部依赖：屏蔽真实 API key（防止 CI 误打）
+# Force no external dependency: blank out the real API key (prevent accidental CI calls)
 os.environ.setdefault("OPENAI_API_KEY", "")
 
 import pytest  # noqa: E402
@@ -31,7 +31,7 @@ from app.llm import (  # noqa: E402
 )
 
 # -----------------------------------------------------------------------------
-# Registry 完整性
+# Registry completeness
 # -----------------------------------------------------------------------------
 EXPECTED_PROVIDERS = {"openai", "deepseek", "qwen", "moonshot", "zhipu", "anthropic"}
 
@@ -51,12 +51,12 @@ def test_registry_entries_have_full_config():
 
 
 def test_openai_uses_default_base_url():
-    """OpenAI 不应设 base_url（让 SDK 走默认值）。"""
+    """OpenAI should not set base_url (let the SDK use its default)."""
     assert PROVIDER_REGISTRY["openai"].base_url is None
 
 
 def test_compatible_providers_have_explicit_base_url():
-    """OpenAI 兼容的国产 provider 必须显式 base_url。"""
+    """OpenAI-compatible providers must set an explicit base_url."""
     for name in {"deepseek", "qwen", "moonshot", "zhipu"}:
         cfg = PROVIDER_REGISTRY[name]
         assert cfg.adapter == "openai_compat"
@@ -64,19 +64,19 @@ def test_compatible_providers_have_explicit_base_url():
 
 
 # -----------------------------------------------------------------------------
-# 工厂异常分支
+# Factory exception branches
 # -----------------------------------------------------------------------------
 def test_unknown_provider_raises(monkeypatch):
-    """未知 provider 名要立即报错。"""
+    """An unknown provider name should raise immediately."""
     monkeypatch.setenv("LLM_PROVIDER", "nonexistent")
     get_settings.cache_clear()
-    with pytest.raises(ValueError, match="未知 provider"):
+    with pytest.raises(ValueError, match="Unknown provider"):
         get_chat_model()
     get_settings.cache_clear()
 
 
 def test_missing_api_key_raises(monkeypatch):
-    """API key 未配置时 get_chat_model 应抛 RuntimeError。"""
+    """When the API key is not configured, get_chat_model should raise RuntimeError."""
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "")
     get_settings.cache_clear()
@@ -120,7 +120,7 @@ def test_active_provider_marked_correctly(monkeypatch):
 
 
 # -----------------------------------------------------------------------------
-# get_chat_model 成功路径（用假 key，但能成功构造 ChatOpenAI 对象 — 不真调 API）
+# get_chat_model success path (fake key, but constructs a ChatOpenAI object — no real API call)
 # -----------------------------------------------------------------------------
 def test_construct_openai_chat_model(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "openai")
@@ -129,9 +129,9 @@ def test_construct_openai_chat_model(monkeypatch):
     get_settings.cache_clear()
 
     llm = get_chat_model()
-    # 类名是 ChatOpenAI 即可（不调 API）
+    # The class name being ChatOpenAI is enough (no API call)
     assert "ChatOpenAI" in type(llm).__name__
-    assert llm.model_name == "gpt-4o-mini"  # provider 默认
+    assert llm.model_name == "gpt-4o-mini"  # provider default
 
     get_settings.cache_clear()
 
@@ -143,7 +143,7 @@ def test_construct_deepseek_uses_custom_base_url(monkeypatch):
 
     llm = get_chat_model()
     assert "ChatOpenAI" in type(llm).__name__
-    # base_url 应被透传
+    # base_url should be passed through
     assert "deepseek.com" in str(llm.openai_api_base)
 
     get_settings.cache_clear()

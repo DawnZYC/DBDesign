@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowseView } from './components/BrowseView';
 import { ConvertView } from './components/ConvertView';
+import { EmissionFactorView } from './components/EmissionFactorView';
 import { ImportView } from './components/ImportView';
 import { ChatPage } from './pages/ChatPage';
 import { checkHealth } from './api';
@@ -8,7 +9,7 @@ import type { ConvertResult } from './types';
 
 type HealthState = { status: 'checking' } | { status: 'ok' } | { status: 'error' };
 
-type Tab = 'chat' | 'convert' | 'import' | 'browse';
+type Tab = 'chat' | 'convert' | 'import' | 'browse' | 'emission';
 
 const HEALTH_LABEL: Record<HealthState['status'], string> = {
   checking: 'Connecting',
@@ -41,6 +42,12 @@ const STEPS: Array<{ id: Tab; index: string; title: string; description: string 
     title: 'Browse',
     description: 'Search and inspect technology records.',
   },
+  {
+    id: 'emission',
+    index: '05',
+    title: 'Emission Factors',
+    description: 'Manually enter or edit emission factors per technology-year.',
+  },
 ];
 
 function App() {
@@ -59,16 +66,24 @@ function App() {
     setActiveTab('import');
   };
 
+  // Views are kept mounted and merely hidden (see below). ECharts instances
+  // that finished rendering while their pane was hidden have zero size, and
+  // echarts-for-react only auto-resizes on window resize — so fire one when
+  // the visible tab changes.
+  useEffect(() => {
+    window.dispatchEvent(new Event('resize'));
+  }, [activeTab]);
+
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Workflow steps">
         <div className="sidebar-brand">
           <div className="brand-mark" aria-hidden="true">
-            EW
+            St
           </div>
           <div className="brand-text">
-            <div className="brand-title">SG-TIMES</div>
-            <div className="brand-subtitle">Technology &amp; Cost Database</div>
+            <div className="brand-title">Strata</div>
+            <div className="brand-subtitle">Energy Model Analytics</div>
           </div>
         </div>
 
@@ -114,15 +129,28 @@ function App() {
           </div>
         </header>
 
-        {activeTab === 'chat' && <ChatPage />}
-        {activeTab === 'convert' && <ConvertView onHandoffToImport={handleHandoffToImport} />}
-        {activeTab === 'import' && (
+        {/* All views stay mounted; inactive ones are hidden with CSS. This keeps
+            per-view state alive across tab switches — the chat conversation (and
+            any in-flight SSE stream), import wizard progress, and browse filters
+            survive navigation instead of being destroyed on unmount. */}
+        <div className="view-pane" hidden={activeTab !== 'chat'}>
+          <ChatPage />
+        </div>
+        <div className="view-pane" hidden={activeTab !== 'convert'}>
+          <ConvertView onHandoffToImport={handleHandoffToImport} />
+        </div>
+        <div className="view-pane" hidden={activeTab !== 'import'}>
           <ImportView
             handoff={pendingConversion}
             onHandoffConsumed={() => setPendingConversion(null)}
           />
-        )}
-        {activeTab === 'browse' && <BrowseView />}
+        </div>
+        <div className="view-pane" hidden={activeTab !== 'browse'}>
+          <BrowseView />
+        </div>
+        <div className="view-pane" hidden={activeTab !== 'emission'}>
+          <EmissionFactorView />
+        </div>
       </main>
     </div>
   );

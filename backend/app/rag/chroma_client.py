@@ -1,9 +1,9 @@
-"""ChromaDB 持久化向量库封装。
+"""ChromaDB persistent vector store wrapper.
 
-策略：
-  - PersistentClient：本地嵌入式，目录由 settings.chroma_persist_dir 控制
-  - 单例 vectorstore，按当前 embedding provider 自动注入
-  - 切换 embedding provider 时，旧 collection 维度会不匹配 — 提供 reset_collection() 一键清空
+Strategy:
+  - PersistentClient: local embedded, directory controlled by settings.chroma_persist_dir
+  - Singleton vectorstore, auto-injected with the current embedding provider
+  - Switching embedding provider makes the old collection's dimension mismatch — reset_collection() clears it in one call
 """
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
 def get_vectorstore() -> Chroma:
-    """获取（或新建）持久化 vectorstore 单例。
+    """Get (or create) the persistent vectorstore singleton.
 
-    第一次调用会触发 embedding 模型加载（HuggingFace 本地模型 ~80MB，会下载）。
+    The first call triggers loading the embedding model (the HuggingFace local model ~80MB, downloaded on first use).
     """
     settings = get_settings()
     persist_dir = Path(settings.chroma_persist_dir).expanduser().resolve()
@@ -47,15 +47,15 @@ def get_vectorstore() -> Chroma:
 
 
 def reset_collection() -> None:
-    """删除并重建 collection（切换 embedding provider 后用）。"""
+    """Delete and recreate the collection (use after switching embedding provider)."""
     settings = get_settings()
     persist_dir = Path(settings.chroma_persist_dir).expanduser().resolve()
 
-    # 清掉单例缓存
+    # Clear the singleton cache
     get_vectorstore.cache_clear()
 
     if persist_dir.exists():
-        # 通过 chromadb 客户端 API 删 collection 更安全
+        # Deleting the collection via the chromadb client API is safer
         try:
             import chromadb
 
@@ -72,7 +72,7 @@ def reset_collection() -> None:
 
 
 def get_collection_size() -> int:
-    """返回当前 collection 中的文档数量。"""
+    """Return the number of documents in the current collection."""
     vs = get_vectorstore()
     try:
         return vs._collection.count()

@@ -1,4 +1,4 @@
-"""Converter for VT_SG_PWR_GREF -> EcoTEA Power sheet.
+"""Converter for the VT_SG_PWR source workbook -> EcoTEA Power sheet.
 
 Mapping rules are encoded as explicit functions; to update a rule, find and
 edit the corresponding ``_get_*`` method.
@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from app.converters.base_model import MISSING, BaseConverter, PowerRecord
+from app.converters.base_model import MISSING, BaseConverter, ConvertRecord
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -19,8 +19,8 @@ TRACEABILITY = {
     "wp6_title": "Power",
     "data_owner": "ESI",
     "data_provider": "WP1",
-    "data_source": "GREF",
-    "data_source_desc": "SG GREF v8.14; VT_SG_PWR_GREF",
+    "data_source": "SOURCE",
+    "data_source_desc": "Model export; VT_SG_PWR",
     "data_user": "WP1",
     "usage_purpose": "Scenario analysis",
     "geography": "SG",
@@ -163,11 +163,11 @@ UC_RHSRT_FIXED = {
 
 
 class VTSGPWRConverter(BaseConverter):
-    """Converter for VT_SG_PWR_GREF source files."""
+    """Converter for VT_SG_PWR source files."""
 
     TARGET_SHEET = "Power"
 
-    def extract_power_records(self) -> list[PowerRecord]:
+    def extract_records(self) -> list[ConvertRecord]:
         self._load_sheets()
         self._parse_data_by()
         self._parse_pwr()
@@ -179,7 +179,7 @@ class VTSGPWRConverter(BaseConverter):
         extras = [c for c in self._process_order if c not in known]
         process_order = ordered + extras
 
-        records: list[PowerRecord] = []
+        records: list[ConvertRecord] = []
         for code in process_order:
             records.extend(self._build_rows(code))
         return records
@@ -387,7 +387,7 @@ class VTSGPWRConverter(BaseConverter):
                 prev_val = v
         return rows
 
-    def _build_rows(self, code: str) -> list[PowerRecord]:
+    def _build_rows(self, code: str) -> list[ConvertRecord]:
         db = self._data_by[code]
         cap_rows = self._get_capacity_rows(code)
 
@@ -428,7 +428,7 @@ class VTSGPWRConverter(BaseConverter):
 
         uc_rhsrt_by_year = UC_RHSRT_FIXED.get(code, {})
 
-        rows: list[PowerRecord] = []
+        rows: list[ConvertRecord] = []
         for year, cap_mw in cap_rows:
             if code in SOLAR_PROCESSES:
                 sol = self._sol_data.get(code, {})
@@ -449,7 +449,7 @@ class VTSGPWRConverter(BaseConverter):
 
             uc_val = self._pick_cost(uc_rhsrt_by_year, year) if uc_rhsrt_by_year else MISSING
 
-            r = PowerRecord(
+            r = ConvertRecord(
                 **TRACEABILITY,
                 process_code=code,
                 description=str(db["description"]).strip(),

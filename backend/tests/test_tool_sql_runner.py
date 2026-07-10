@@ -1,4 +1,4 @@
-"""③ run_sql 单测（依赖测试 DB）。"""
+"""(3) run_sql unit tests (depends on the test DB)."""
 
 from __future__ import annotations
 
@@ -29,10 +29,10 @@ def _call(**kwargs) -> dict:
 
 
 # -----------------------------------------------------------------------------
-# Metric 注册表
+# Metric registry
 # -----------------------------------------------------------------------------
 def test_metric_registry_complete():
-    """注册表应覆盖所有重要指标。"""
+    """The registry should cover all important metrics."""
     expected = {
         "capex",
         "fixed_opex",
@@ -51,13 +51,13 @@ def test_metric_registry_complete():
 
 
 # -----------------------------------------------------------------------------
-# raw 模式
+# raw mode
 # -----------------------------------------------------------------------------
 def test_capex_raw_returns_rows_with_raw_row_id():
     out = _call(metric="capex", aggregation="raw", sector_codes=["POWER"])
     assert out["row_count"] >= 1
     for row in out["rows"]:
-        # 每行必须带 raw_row_id 给 M4 反查（即使是 None 也应该有这个键）
+        # Each row must carry raw_row_id for M4 trace-back (the key should exist even if None)
         assert "raw_row_id" in row
         assert "value" in row
         assert "data_year" in row
@@ -71,9 +71,9 @@ def test_filter_year_range():
 
 
 def test_filter_by_technology_code():
-    out = _call(metric="capex", technology_codes=["PWRNGACCF01"])
+    out = _call(metric="capex", technology_codes=["NGCC01"])
     codes = {r["technology_code"] for r in out["rows"]}
-    assert codes == {"PWRNGACCF01"}
+    assert codes == {"NGCC01"}
 
 
 def test_filter_by_technology_code_like():
@@ -90,7 +90,7 @@ def test_unit_field_returned_for_capex():
 
 
 # -----------------------------------------------------------------------------
-# 聚合
+# Aggregation
 # -----------------------------------------------------------------------------
 def test_aggregation_sum_by_sector():
     out = _call(
@@ -99,12 +99,12 @@ def test_aggregation_sum_by_sector():
         group_by=["sector"],
     )
     assert out["aggregation"] == "sum"
-    # 至少有 1 个 sector group
+    # At least 1 sector group
     assert out["row_count"] >= 1
     for row in out["rows"]:
         assert "sector_code" in row
         assert "value" in row
-        # 聚合行不应再带 raw_row_id
+        # Aggregated rows should no longer carry raw_row_id
         assert "raw_row_id" not in row
 
 
@@ -126,10 +126,10 @@ def test_count_aggregation():
 
 
 # -----------------------------------------------------------------------------
-# 安全
+# Safety
 # -----------------------------------------------------------------------------
 def test_unknown_metric_rejected():
-    """metric 不在白名单 → Pydantic 验证拒绝。"""
+    """metric not in the whitelist -> rejected by Pydantic validation."""
     with pytest.raises(ValidationError):
         _call(metric="DROP TABLE users; --")
 
@@ -140,7 +140,7 @@ def test_limit_enforced():
 
 
 def test_limit_max_clamp():
-    """超过 MAX_LIMIT 不应 crash，会被 Pydantic 拒绝。"""
+    """Exceeding MAX_LIMIT should not crash; it is rejected by Pydantic."""
     with pytest.raises(ValidationError):
         _call(metric="capex", limit=99999999)
 

@@ -26,12 +26,12 @@ MODEL_METADATA: dict[str, dict[str, str]] = {
     "VT_SG_PWR": {
         "label": "VT_SG_PWR — Power",
         "sector": "Power",
-        "description": "Singapore power generation processes (VT_SG_PWR_GREF).",
+        "description": "Power generation processes.",
     },
     "VT_SG_PRI": {
         "label": "VT_SG_PRI — Primary",
         "sector": "Primary",
-        "description": "Singapore primary import and mining processes (VT_SG_PRI_GREF).",
+        "description": "Primary import and mining processes.",
     },
 }
 
@@ -106,7 +106,7 @@ def convert(
     try:
         converter_cls = registry[model_name]
         converter = converter_cls(vt_file_path)
-        records = converter.extract_power_records()
+        records = converter.extract_records()
 
         if not records:
             errors.append(

@@ -39,6 +39,15 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
       });
   }, []);
 
+  // Close on Escape (but not mid-submit, to avoid losing an in-flight request).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose, submitting]);
+
   const totalRows = useMemo(
     () => groups?.reduce((sum, g) => sum + g.rows.length, 0) ?? 0,
     [groups],
@@ -71,7 +80,14 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
+    <div
+      className="modal-backdrop"
+      onClick={() => {
+        if (!submitting) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <header className="modal-header">
           <div>

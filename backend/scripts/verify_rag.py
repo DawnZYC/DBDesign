@@ -1,12 +1,12 @@
-"""验证 RAG 端到端：跑一组金标问题，输出 recall@1 / recall@3 / 平均 score。
+"""Verify RAG end-to-end: run a set of golden questions and report recall@1 / recall@3 / average score.
 
-使用前提：
-  - PG 已经有数据（至少跑过一次 seed_commodities + import + seed_rag）
-  - .env 里 EMBEDDING_PROVIDER 已配置
+Prerequisites:
+  - PG already has data (at least one run of seed_commodities + import + seed_rag)
+  - EMBEDDING_PROVIDER is configured in .env
 
-用法：
-  python verify_rag.py                    # 用当前 embedding 跑全部金标
-  python verify_rag.py --provider qwen   # 临时切到 qwen embedding（需先 reset）
+Usage:
+  python verify_rag.py                    # run all golden questions with the current embedding
+  python verify_rag.py --provider qwen   # temporarily switch to the qwen embedding (reset first)
 """
 from __future__ import annotations
 
@@ -15,36 +15,36 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# 金标：自然语言问题 → 期望命中的文档 metadata.code（top-K 中含即算命中）
+# Golden set: natural-language question -> expected document metadata.code (a hit if it appears in top-K)
 GOLDEN_QUESTIONS: list[dict] = [
-    # 商品检索
+    # Commodity retrieval
     {"q": "natural gas for power generation", "expected_code": "PWRNGA"},
-    {"q": "天然气发电用",                      "expected_code": "PWRNGA"},
+    {"q": "natural gas power plant fuel",      "expected_code": "PWRNGA"},
     {"q": "biomass fuel",                     "expected_code": "PWRBMS"},
     {"q": "carbon capture and storage",        "expected_code": "PWRCO2C"},
     {"q": "incineration electricity",          "expected_code": "WTEEEC"},
     {"q": "solar power commodity",             "expected_code": "PWRSOL"},
-    {"q": "煤炭发电",                          "expected_code": "PWRCOA"},
+    {"q": "coal power generation",             "expected_code": "PWRCOA"},
     {"q": "hydrogen energy",                   "expected_code": "PWRHYD"},
     {"q": "uranium for nuclear",               "expected_code": "PWRURA"},
     {"q": "retrofitted plant emission",        "expected_code": "PWRRTFCO2"},
 
-    # 行业检索
+    # Sector retrieval
     {"q": "data center sector",                "expected_code": "INFOCOMM"},
     {"q": "agriculture sector",                "expected_code": "AGRI"},
     {"q": "household residential",             "expected_code": "HOUSEHOLD"},
 
-    # 知识手册段落（按段标题命中即可，没有特定 code）
+    # Knowledge-manual sections (a hit on the section title is enough; no specific code)
     {"q": "PJ to ktoe conversion",             "expected_text_keyword": "PJ"},
-    {"q": "kt-CO2 单位",                       "expected_text_keyword": "kt-CO"},
+    {"q": "kt-CO2 emission unit",              "expected_text_keyword": "kt-CO"},
 ]
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--provider", help="临时覆盖 embedding provider")
+    parser.add_argument("--provider", help="Temporarily override the embedding provider")
     parser.add_argument("--k", type=int, default=3)
     args = parser.parse_args()
 
@@ -73,7 +73,7 @@ def main() -> None:
             print(f"  [{i:>2}] {q!r:<45} → ∅ (no hits)")
             continue
 
-        # 判定命中
+        # Determine the hit
         hit_codes = [h.metadata.get("code") for h in hits]
         hit_texts = [h.text for h in hits]
         first_score = hits[0].score

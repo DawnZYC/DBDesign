@@ -65,6 +65,13 @@ STATUS_PENDING = "pending"  # Initial state.
 
 ISSUE_SECTOR_CONFLICT = "sector_conflict"
 
+# Reserved key stashed inside raw_excel_row.raw_cells (JSONB) on a *pending* row when M5
+# column remapping was applied. raw_cells itself stays the ORIGINAL cells (so the chart
+# cell-trace shows the user's real file layout); this key lets the later conflict review /
+# resolve reconstruct the canonical-position cells. Keys starting with "__" are meta, not
+# real columns, and are stripped before display (see app/routers/raw_rows.py).
+REMAP_META_KEY = "__column_remap__"
+
 # Decision values.
 DECISION_TRUST_SHEET = "TRUST_SHEET"
 DECISION_TRUST_A = "TRUST_A"
@@ -294,6 +301,23 @@ def _apply_column_remap(cells: dict[str, Any], remap: dict[str, str]) -> dict[st
     return {std_col: cells.get(src_col) for src_col, std_col in remap.items()}
 
 
+def _canonical_cells_from_raw(raw_cells: Any) -> dict[str, Any]:
+    """Return canonical-position cells from a stored raw_cells dict (M5-aware).
+
+    raw_cells holds the ORIGINAL columns plus, on a remapped pending row, a REMAP_META_KEY
+    entry. If that meta is present, relocate the original cells to canonical positions so the
+    conflict review / resolve path reads the same columns the importer would have. Without the
+    meta (standard layout), the original cells already are canonical.
+    """
+    if not isinstance(raw_cells, dict):
+        return {}
+    remap = raw_cells.get(REMAP_META_KEY)
+    base = {k: v for k, v in raw_cells.items() if not k.startswith("__")}
+    if isinstance(remap, dict) and remap:
+        return _apply_column_remap(base, remap)
+    return base
+
+
 # -----------------------------------------------------------------------------
 # Single-sheet import
 # -----------------------------------------------------------------------------
@@ -386,6 +410,10 @@ def _import_sheet(
         if a_sector_code is not None and a_sector_code != sector.sector_code:
             # Conflict: do not write business tables yet; mark pending and record an issue.
             raw_row.normalized_status = STATUS_PENDING_SECTOR
+            # Stash the remap so the later resolve can reconstruct canonical-position cells.
+            # raw_cells stays original (for trace-back); the meta key is stripped before display.
+            if column_remap:
+                raw_row.raw_cells = {**raw_row.raw_cells, REMAP_META_KEY: column_remap}
             db.add(
                 models.DataQualityIssue(
                     raw_row_id=raw_row.raw_row_id,
@@ -972,14 +1000,9 @@ def _jsonify(value: Any) -> Any:
 
 
 def _geography_full_name(code: str) -> str | None:
-    """Expand common geography codes. Return None for unknown values."""
-    return {
-        "SG": "Singapore",
-        "MY": "Malaysia",
-        "ID": "Indonesia",
-        "TH": "Thailand",
-        "CN": "China",
-    }.get(code)
+    """Expand a geography code to a full name. Returns None (codes are used as-is) unless a
+    site-specific mapping is configured; kept generic so no deployment context is hard-coded."""
+    return None
 
 
 def list_pending_conflicts(db: Session) -> ConflictListResponse:
@@ -998,10 +1021,12 @@ def list_pending_conflicts(db: Session) -> ConflictListResponse:
     if not rows:
         return ConflictListResponse(total_pending=0, groups=[])
 
-    # Extract each raw_row column A value and group by (sheet, a_value).
+    # Extract each raw_row's canonical column A value and group by (sheet, a_value).
+    # _canonical_cells_from_raw re-applies the stashed M5 remap so a column-shifted file
+    # groups by the real sector column, not the original (wrong) column A.
     grouped: dict[tuple[str, str | None], list[models.RawExcelRow]] = {}
     for row in rows:
-        a_value = row.raw_cells.get("A") if isinstance(row.raw_cells, dict) else None
+        a_value = _canonical_cells_from_raw(row.raw_cells).get("A")
         key = (row.source_sheet_name, str(a_value) if a_value is not None else None)
         grouped.setdefault(key, []).append(row)
 
@@ -1047,18 +1072,21 @@ def resolve_pending_conflicts(
                 f"raw_row_id={item.raw_row_id}: unknown decision '{item.decision}'"
             )
             continue
+        # Use a per-row SAVEPOINT so a single failure rolls back only that row,
+        # not the already-successful rows in this batch (a plain db.rollback()
+        # would discard the whole session's pending changes).
+        savepoint = db.begin_nested()
         try:
             _resolve_single_conflict(db, raw_row_id=item.raw_row_id, decision=item.decision)
+            savepoint.commit()
             resolved += 1
         except Exception as exc:  # noqa: BLE001
+            savepoint.rollback()
             failed += 1
             failure_reasons.append(f"raw_row_id={item.raw_row_id}: {exc!s}")
-            db.rollback()
 
-    if resolved > 0 and failed == 0:
-        db.commit()
-    elif resolved > 0 and failed > 0:
-        # Commit partial success; rolled-back failures have no side effects.
+    if resolved > 0:
+        # Persist all rows whose savepoints committed; failed rows were already rolled back.
         db.commit()
 
     return ConflictResolveResponse(
@@ -1082,7 +1110,9 @@ def _resolve_single_conflict(db: Session, *, raw_row_id: int, decision: str) -> 
         return
 
     sheet_name = raw_row.source_sheet_name
-    cells: dict[str, Any] = dict(raw_row.raw_cells) if isinstance(raw_row.raw_cells, dict) else {}
+    # Reconstruct canonical-position cells: if M5 remapped this file at import time, the stashed
+    # remap is replayed so resolve writes the right columns (not the original, shifted ones).
+    cells: dict[str, Any] = _canonical_cells_from_raw(raw_row.raw_cells)
 
     if decision == DECISION_TRUST_SHEET:
         sector_code = SHEET_TO_SECTOR_CODE.get(sheet_name)

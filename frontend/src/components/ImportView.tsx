@@ -36,11 +36,21 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
   const [note, setNote] = useState('');
   // M5: user-confirmed column alignment ({sheet: {source column: canonical column}}).
   const [columnOverrides, setColumnOverrides] = useState<ColumnOverrides>({});
+  // M5: true when a field is mapped from >1 column (ambiguous) — blocks import until resolved.
+  const [hasMappingConflicts, setHasMappingConflicts] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
   const consumedTokens = useRef<Set<string>>(new Set());
 
+  // Clear per-file column-alignment state before starting a new preview (so a previous
+  // file's overrides never leak into the next import).
+  const resetColumnState = () => {
+    setColumnOverrides({});
+    setHasMappingConflicts(false);
+  };
+
   const beginPreviewFromToken = async (token: string, fileName: string, defaultNote?: string) => {
+    resetColumnState();
     setStage({ kind: 'previewing', fileName });
     try {
       const preview = await previewFromConversion(token);
@@ -78,6 +88,7 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
   }, [handoff]);
 
   const handleFile = async (file: File) => {
+    resetColumnState();
     setStage({ kind: 'previewing', fileName: file.name });
     try {
       const preview = await previewExcel(file);
@@ -136,6 +147,7 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
               importedBy: importedBy.trim() || undefined,
               note: note.trim() || undefined,
               sheets,
+              columnOverrides: overrides,
             });
       setStage({ kind: 'success', result });
     } catch (err) {
@@ -150,6 +162,7 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
   const handleReset = () => {
     setStage({ kind: 'idle' });
     setReviewMessage(null);
+    resetColumnState();
   };
 
   const handleReviewResolved = (response: ConflictResolveResponse) => {
@@ -273,6 +286,7 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
               .map((s) => s.column_mapping!)}
             standardFields={stage.preview.standard_fields ?? []}
             onChange={setColumnOverrides}
+            onConflictsChange={setHasMappingConflicts}
           />
           <div className="action-row">
             <button type="button" className="btn-secondary" onClick={handleReset}>
@@ -282,7 +296,12 @@ export function ImportView({ handoff, onHandoffConsumed }: ImportViewProps) {
               type="button"
               className="btn-primary"
               onClick={handleImport}
-              disabled={stage.selected.size === 0}
+              disabled={stage.selected.size === 0 || hasMappingConflicts}
+              title={
+                hasMappingConflicts
+                  ? 'Resolve the duplicate column mappings before importing'
+                  : undefined
+              }
             >
               Import {stage.selected.size} selected sheet{stage.selected.size === 1 ? '' : 's'}
             </button>

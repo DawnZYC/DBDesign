@@ -3,7 +3,7 @@ import { listGeographies, listSectors, listTechnologies } from '../api';
 import type { Geography, Sector, TechnologyListResponse } from '../types';
 
 interface TechnologyListProps {
-  onSelect: (technologyId: number) => void;
+  onSelect: (technologyId: number | null) => void;
   selectedId: number | null;
 }
 
@@ -14,7 +14,8 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
   const [geographies, setGeographies] = useState<Geography[]>([]);
   const [sectorId, setSectorId] = useState<number | ''>('');
   const [geographyId, setGeographyId] = useState<number | ''>('');
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState(''); // immediate field value
+  const [search, setSearch] = useState(''); // debounced value used by the query
   const [page, setPage] = useState(1);
   const [data, setData] = useState<TechnologyListResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -30,7 +31,16 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
       .catch((err) => setError((err as Error).message));
   }, []);
 
-  // Refresh the list when any filter changes.
+  // Debounce the search box so we don't fire a request on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  // Refresh the list when any filter / page changes.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -45,6 +55,11 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
         if (cancelled) return;
         setData(res);
         setError(null);
+        // Clear the detail panel if the selected technology isn't in the current result
+        // (covers filter / search / pagination uniformly — no stale detail on the right).
+        if (selectedId != null && !res.items.some((it) => it.technology_id === selectedId)) {
+          onSelect(null);
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -56,6 +71,7 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sectorId, geographyId, search, page]);
 
   const totalPages = useMemo(() => {
@@ -68,6 +84,9 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
     (v: T) => {
       setter(v);
       setPage(1);
+      // Clear the detail panel: the previously selected technology may not be in
+      // the new filtered result, so it shouldn't keep showing on the right.
+      onSelect(null);
     };
 
   const totalLabel = data
@@ -85,8 +104,8 @@ export function TechnologyList({ onSelect, selectedId }: TechnologyListProps) {
         <input
           type="text"
           placeholder="Search by code or description"
-          value={search}
-          onChange={(e) => handleFilterChange(setSearch)(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           className="filter-input"
           aria-label="Search technologies"
         />

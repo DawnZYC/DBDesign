@@ -1,12 +1,12 @@
-"""M3 — Agent 编排单测。
+"""M3 — Agent orchestration unit tests.
 
-测试策略：
-  - 用 FakeListChatModel / patch 替换真实 LLM 调用，所有测试离线可运行
-  - 测 planner_node：入参 / 输出结构 / 解析逻辑
-  - 测 sql_agent_node：错误路径（structured output 失败 → error 字段）
-  - 测 route_after_sql：条件边路由逻辑
-  - 测 visualizer_node：无数据 / 有数据两条路径
-  - 测 graph 编译：确认 graph 可正常 build_graph()（不调 LLM）
+Testing strategy:
+  - Replace the real LLM calls with FakeListChatModel / patch, so all tests run offline
+  - Test planner_node: inputs / output structure / parsing logic
+  - Test sql_agent_node: error path (structured output fails -> error field)
+  - Test route_after_sql: conditional-edge routing logic
+  - Test visualizer_node: no-data / with-data paths
+  - Test graph compilation: confirm build_graph() works (without calling the LLM)
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# 让 app 包可 import
+# Make the app package importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("OPENAI_API_KEY", "sk-test-fake")
 os.environ.setdefault("LLM_PROVIDER", "openai")
@@ -29,11 +29,11 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 
 def _make_state(**overrides) -> dict:
-    """构造最小合法的 AgentState dict（用于单元测试）。"""
+    """Build a minimal valid AgentState dict (for unit tests)."""
     from langchain_core.messages import HumanMessage
 
     base = {
-        "messages": [HumanMessage(content="Power 部门 2030 年 capex")],
+        "messages": [HumanMessage(content="Power sector capex in 2030")],
         "plan": [],
         "sql_params": None,
         "sql_result": None,
@@ -47,7 +47,7 @@ def _make_state(**overrides) -> dict:
 
 
 def _fake_llm(responses: list[str]):
-    """返回一个能 invoke() 的假 LLM（FakeListChatModel）。"""
+    """Return a fake LLM that supports invoke() (FakeListChatModel)."""
     from langchain_core.language_models.fake_chat_models import FakeListChatModel
 
     return FakeListChatModel(responses=responses)
@@ -59,11 +59,11 @@ def _fake_llm(responses: list[str]):
 
 
 class TestPlannerNode:
-    """测 planner_node 的入参 / 输出结构 / 重试提示注入。"""
+    """Test planner_node's inputs / output structure / retry-note injection."""
 
     def test_normal_output_structure(self):
-        """正常调用应返回含 plan 和 error=None 的 dict。"""
-        fake_response = "- 查询 Power 部门 capex\n- 按年份聚合\n- 生成折线图"
+        """A normal call should return a dict with plan and error=None."""
+        fake_response = "- Query Power sector capex\n- Aggregate by year\n- Produce a line chart"
         with patch("app.agents.planner.get_chat_model", return_value=_fake_llm([fake_response])):
             from app.agents.planner import planner_node
 
@@ -76,7 +76,7 @@ class TestPlannerNode:
         assert result["error"] is None
 
     def test_no_user_message_returns_error(self):
-        """没有 HumanMessage 时应返回 error 字段。"""
+        """Without a HumanMessage, an error field should be returned."""
         from langchain_core.messages import AIMessage
 
         state = _make_state(messages=[AIMessage(content="hello")])
@@ -89,7 +89,7 @@ class TestPlannerNode:
         assert "missing" in result["error"]
 
     def test_retry_appends_error_note(self):
-        """重试时，prompt 应包含上次错误信息。"""
+        """On a retry, the prompt should include the previous error message."""
         captured_messages = []
 
         def fake_factory():
@@ -99,34 +99,34 @@ class TestPlannerNode:
                 captured_messages.extend(msgs)
                 from langchain_core.messages import AIMessage
 
-                return AIMessage(content="- 重新查询")
+                return AIMessage(content="- Re-query")
 
             llm.invoke = fake_invoke
             return llm
 
-        state = _make_state(retry_count=1, error="SQL 执行失败: column not found")
+        state = _make_state(retry_count=1, error="SQL execution failed: column not found")
         with patch("app.agents.planner.get_chat_model", side_effect=fake_factory):
             from app.agents.planner import planner_node
 
             planner_node(state)
 
-        # 验证有某条 message 包含重试提示
+        # Verify some message contains the retry hint
         all_content = " ".join(str(m.content) for m in captured_messages)
-        assert "重试" in all_content or "SQL 执行失败" in all_content
+        assert "Retry hint" in all_content or "SQL execution failed" in all_content
 
     def test_parse_numbered_list_fallback(self):
-        """兜底：LLM 输出数字列表格式也能解析。"""
-        fake_response = "1. 查询数据\n2. 聚合汇总\n3. 生成图表"
+        """Fallback: a numbered-list LLM output is also parsed."""
+        fake_response = "1. Query data\n2. Aggregate\n3. Produce chart"
         with patch("app.agents.planner.get_chat_model", return_value=_fake_llm([fake_response])):
             from app.agents.planner import planner_node
 
             result = planner_node(_make_state())
 
         assert len(result["plan"]) == 3
-        assert "查询数据" in result["plan"][0]
+        assert "Query data" in result["plan"][0]
 
     def test_llm_failure_returns_error(self):
-        """LLM 调用抛异常时，应捕获并返回 error 字段，不向上传播。"""
+        """When the LLM call raises, it should be caught and returned as an error field, not propagated."""
 
         def exploding_factory():
             llm = MagicMock()
@@ -144,12 +144,12 @@ class TestPlannerNode:
 
 
 # =============================================================================
-# _parse_plan（内部函数）
+# _parse_plan (internal function)
 # =============================================================================
 
 
 class TestParsePlan:
-    """独立测 _parse_plan 解析逻辑。"""
+    """Test the _parse_plan parsing logic in isolation."""
 
     def test_bullet_dash(self):
         from app.agents.planner import _parse_plan
@@ -172,10 +172,11 @@ class TestParsePlan:
     def test_empty_string_fallback(self):
         from app.agents.planner import _parse_plan
 
-        raw = "无法解析的内容"
+        raw = "unparseable content"
         result = _parse_plan(raw)
-        # 解析不到 bullet 时返回空列表；「全文当一步」的兜底上移到了
-        # planner_node（仅 data_query 意图时触发，避免把 INTENT 行当步骤）
+        # When no bullets are parsed, return an empty list; the "whole text as one step"
+        # fallback moved up to planner_node (only triggered on data_query intent, to avoid
+        # treating the INTENT line as a step)
         assert result == []
 
     def test_ignores_blank_lines(self):
@@ -186,15 +187,15 @@ class TestParsePlan:
 
 
 # =============================================================================
-# route_after_sql（条件边）
+# route_after_sql (conditional edge)
 # =============================================================================
 
 
 class TestRouteAfterSql:
-    """测条件边路由函数的三条分支。"""
+    """Test the three branches of the conditional-edge routing function."""
 
     def setup_method(self):
-        # 保证 settings 的 agent_max_retries 有值
+        # Ensure settings.agent_max_retries has a value
         os.environ["AGENT_MAX_RETRIES"] = "2"
 
     def test_success_routes_to_interpreter(self):
@@ -216,12 +217,12 @@ class TestRouteAfterSql:
         get_settings.cache_clear()
         from app.agents.graph import NODE_INTERPRETER, route_after_sql
 
-        # retry_count 等于 max_retries（默认 2），不再重试
+        # retry_count equals max_retries (default 2), no more retries
         state = _make_state(error="SQL failed", retry_count=2)
         assert route_after_sql(state) == NODE_INTERPRETER
 
     def test_no_error_ignores_retry_count(self):
-        """即使 retry_count > 0，只要没 error 就应走 interpreter。"""
+        """Even with retry_count > 0, as long as there is no error it should go to interpreter."""
         from app.agents.graph import NODE_INTERPRETER, route_after_sql
 
         state = _make_state(sql_result={"rows": []}, error=None, retry_count=1)
@@ -234,7 +235,7 @@ class TestRouteAfterSql:
 
 
 class TestVisualizerNode:
-    """测 visualizer_node 的有数据 / 无数据路径。"""
+    """Test visualizer_node's with-data / no-data paths."""
 
     def test_no_sql_result_returns_none_spec(self):
         from app.agents.visualizer import visualizer_node
@@ -260,7 +261,7 @@ class TestVisualizerNode:
         assert result["error"] is None
 
     def test_with_rows_produces_chart_spec(self):
-        """有数据行时，应生成含 dataset / series / _meta 的 spec。"""
+        """With data rows, it should produce a spec containing dataset / series / _meta."""
         from app.agents.visualizer import visualizer_node
 
         sql_result = {
@@ -288,7 +289,7 @@ class TestVisualizerNode:
         assert spec["_meta"]["metric"] == "capex"
 
     def test_dataset_includes_raw_row_id(self):
-        """ECharts dataset 的 dimensions 必须包含 raw_row_id（反查用）。"""
+        """The ECharts dataset dimensions must include raw_row_id (for trace-back)."""
         from app.agents.visualizer import visualizer_node
 
         sql_result = {
@@ -310,12 +311,90 @@ class TestVisualizerNode:
 
 
 # =============================================================================
-# graph.build_graph（编译正确性）
+# Tool Agent (function-calling over the auxiliary tools)
+# =============================================================================
+
+
+class TestToolAgent:
+    """The tool_query path: Planner classifies it, the graph routes to the Tool Agent,
+    and the Tool Agent actually executes the tool the (fake) LLM chose."""
+
+    def test_parse_intent_tool_query(self):
+        from app.agents.planner import INTENT_TOOL_QUERY, _parse_intent
+
+        assert _parse_intent("INTENT: tool_query") == INTENT_TOOL_QUERY
+        assert _parse_intent("intent: tool_query\n") == INTENT_TOOL_QUERY
+
+    def test_route_after_planner_tool(self):
+        from app.agents.graph import NODE_TOOL_AGENT, route_after_planner
+
+        assert route_after_planner(_make_state(intent="tool_query")) == NODE_TOOL_AGENT
+
+    def test_tool_agent_runs_chosen_tool(self):
+        """The fake LLM requests convert_unit; the node must really run it and capture the result."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        from app.agents.tool_agent import tool_agent_node
+
+        calls = {"n": 0}
+
+        class _Bound:
+            def invoke(self, _messages):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    return AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "convert_unit",
+                                "args": {"value": 1, "from_unit": "PJ", "to_unit": "ktoe"},
+                                "id": "call_1",
+                                "type": "tool_call",
+                            }
+                        ],
+                    )
+                return AIMessage(content="1 PJ is about 23.885 ktoe.")
+
+        class _LLM:
+            def bind_tools(self, _tools):
+                return _Bound()
+
+        with patch("app.agents.tool_agent.get_chat_model", return_value=_LLM()):
+            state = _make_state(messages=[HumanMessage(content="convert 1 PJ to ktoe")])
+            out = tool_agent_node(state)
+
+        assert out["error"] is None
+        assert "convert_unit" in out["tool_context"]
+        assert "ktoe" in out["tool_context"]
+        assert calls["n"] >= 2  # called the tool, then composed (stopped requesting tools)
+
+    def test_tool_agent_handles_no_tool_call(self):
+        """If the LLM answers without calling a tool, tool_context still carries its draft."""
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        from app.agents.tool_agent import tool_agent_node
+
+        class _Bound:
+            def invoke(self, _messages):
+                return AIMessage(content="Hello, I can look up codes and convert units.")
+
+        class _LLM:
+            def bind_tools(self, _tools):
+                return _Bound()
+
+        with patch("app.agents.tool_agent.get_chat_model", return_value=_LLM()):
+            out = tool_agent_node(_make_state(messages=[HumanMessage(content="hi")]))
+        assert out["error"] is None
+        assert "No tool was called" in out["tool_context"]
+
+
+# =============================================================================
+# graph.build_graph (compilation correctness)
 # =============================================================================
 
 
 class TestBuildGraph:
-    """仅测图可以成功编译，不执行任何 LLM 调用。"""
+    """Only test that the graph compiles successfully, without any LLM calls."""
 
     def test_graph_compiles_without_error(self):
         from app.agents.graph import build_graph
@@ -328,6 +407,7 @@ class TestBuildGraph:
             NODE_INTERPRETER,
             NODE_PLANNER,
             NODE_SQL,
+            NODE_TOOL_AGENT,
             NODE_VISUALIZER,
             build_graph,
         )
@@ -336,6 +416,7 @@ class TestBuildGraph:
         node_names = set(g.nodes)
         assert NODE_PLANNER in node_names
         assert NODE_SQL in node_names
+        assert NODE_TOOL_AGENT in node_names
         assert NODE_INTERPRETER in node_names
         assert NODE_VISUALIZER in node_names
 
@@ -348,12 +429,12 @@ class TestBuildGraph:
 
 
 # =============================================================================
-# 意图分流（修复「闲聊也跑 SQL + 画图」）
+# Intent routing (fixes "small talk also runs SQL + charts")
 # =============================================================================
 
 
 class TestIntentRouting:
-    """Planner 意图解析 + 两条条件边的路由逻辑。"""
+    """Planner intent parsing + the routing logic of the two conditional edges."""
 
     def test_parse_intent_chat(self):
         from app.agents.planner import INTENT_DIRECT_ANSWER, _parse_intent
@@ -364,12 +445,12 @@ class TestIntentRouting:
     def test_parse_intent_data_query(self):
         from app.agents.planner import INTENT_DATA_QUERY, _parse_intent
 
-        assert _parse_intent("INTENT: data_query\n- 查询 capex") == INTENT_DATA_QUERY
-        # 缺失 INTENT 行 → 保守默认 data_query（保持旧行为）
-        assert _parse_intent("- 查询 capex\n- 画图") == INTENT_DATA_QUERY
+        assert _parse_intent("INTENT: data_query\n- query capex") == INTENT_DATA_QUERY
+        # Missing INTENT line -> conservative default data_query (preserves old behavior)
+        assert _parse_intent("- query capex\n- draw chart") == INTENT_DATA_QUERY
 
     def test_planner_chat_intent(self):
-        """LLM 判定闲聊 → intent=direct_answer 且无步骤。"""
+        """The LLM classifies small talk -> intent=direct_answer with no steps."""
         from app.agents.planner import INTENT_DIRECT_ANSWER, planner_node
 
         with patch("app.agents.planner.get_chat_model") as factory:
@@ -383,34 +464,34 @@ class TestIntentRouting:
         from app.agents.planner import INTENT_DATA_QUERY, planner_node
 
         with patch("app.agents.planner.get_chat_model") as factory:
-            factory.return_value = _fake_llm(["INTENT: data_query\n- 查询 capex\n- 画折线图"])
+            factory.return_value = _fake_llm(["INTENT: data_query\n- query capex\n- draw a line chart"])
             result = planner_node(_make_state())
         assert result["intent"] == INTENT_DATA_QUERY
-        assert result["plan"] == ["查询 capex", "画折线图"]
+        assert result["plan"] == ["query capex", "draw a line chart"]
 
     def test_route_after_planner(self):
         from app.agents.graph import NODE_INTERPRETER, NODE_SQL, route_after_planner
 
         assert route_after_planner(_make_state(intent="direct_answer")) == NODE_INTERPRETER
         assert route_after_planner(_make_state(intent="data_query")) == NODE_SQL
-        assert route_after_planner(_make_state()) == NODE_SQL  # intent 缺失 → 旧行为
+        assert route_after_planner(_make_state()) == NODE_SQL  # missing intent -> old behavior
 
     def test_route_after_interpreter_skips_chart(self):
         from langgraph.graph import END
 
         from app.agents.graph import NODE_VISUALIZER, route_after_interpreter
 
-        # 闲聊 → 不画图
+        # small talk -> no chart
         assert route_after_interpreter(_make_state(intent="direct_answer")) == END
-        # 单行聚合结果 → 不画图
+        # single-row aggregate result -> no chart
         one_row = {"rows": [{"value": 42}]}
         assert route_after_interpreter(_make_state(sql_result=one_row)) == END
-        # 多行数据 → 画图
+        # multi-row data -> chart
         many = {"rows": [{"y": 2020, "v": 1}, {"y": 2030, "v": 2}]}
         assert route_after_interpreter(_make_state(sql_result=many)) == NODE_VISUALIZER
 
     def test_chat_message_end_to_end_skips_sql_and_chart(self):
-        """全图执行：闲聊消息 → planner→interpreter→END，不碰 SQL、不产图。"""
+        """Full-graph run: a small-talk message -> planner->interpreter->END, never touching SQL or charts."""
         import asyncio
 
         from langchain_core.messages import HumanMessage
@@ -422,10 +503,101 @@ class TestIntentRouting:
             patch("app.agents.interpreter.get_chat_model") as interp_factory,
         ):
             planner_factory.return_value = _fake_llm(["INTENT: chat"])
-            interp_factory.return_value = _fake_llm(["你好！我是 SG-TIMES 数据助手。"])
+            interp_factory.return_value = _fake_llm(["Hello! I'm the ESM data assistant."])
             g = build_graph()
-            final = asyncio.run(g.ainvoke(_make_state(messages=[HumanMessage(content="你好")])))
+            final = asyncio.run(g.ainvoke(_make_state(messages=[HumanMessage(content="hi")])))
 
-        assert final.get("sql_params") is None, "闲聊不应触发 SQL Agent"
-        assert final.get("chart_spec") is None, "闲聊不应产出图表"
-        assert "SG-TIMES" in (final.get("interpretation") or "")
+        assert final.get("sql_params") is None, "small talk should not trigger the SQL Agent"
+        assert final.get("chart_spec") is None, "small talk should not produce a chart"
+        assert "ESM" in (final.get("interpretation") or "")
+
+
+# =============================================================================
+# Multi-turn context (fixes "said power last turn, replied capex this turn but it was forgotten")
+# =============================================================================
+
+
+class TestConversationContext:
+    def _relay_messages(self):
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        return [
+            HumanMessage(content="help me look at power data"),
+            AIMessage(content="Which metric would you like? e.g. capex, O&M cost, etc."),
+            HumanMessage(content="capex"),
+        ]
+
+    def test_render_context_excludes_current_message(self):
+        from app.agents.context import render_context
+
+        ctx = render_context(self._relay_messages())
+        assert "power" in ctx
+        assert "metric" in ctx
+        # The current message (capex) should not appear in the context block
+        assert "User: capex" not in ctx
+
+    def test_with_context_wraps_question(self):
+        from app.agents.context import with_context
+
+        prompt = with_context("capex", self._relay_messages())
+        assert "[Conversation context]" in prompt
+        assert "power" in prompt
+        assert prompt.rstrip().endswith("capex")
+
+    def test_with_context_no_history_returns_question(self):
+        from langchain_core.messages import HumanMessage
+
+        from app.agents.context import with_context
+
+        assert with_context("hello", [HumanMessage(content="hello")]) == "hello"
+
+    def test_planner_prompt_carries_history(self):
+        """The "capex" follow-up message: the Planner prompt must include power from the previous turn."""
+        from app.agents.planner import planner_node
+
+        captured: list = []
+
+        def fake_factory():
+            llm = MagicMock()
+
+            def fake_invoke(msgs):
+                captured.extend(msgs)
+                from langchain_core.messages import AIMessage
+
+                return AIMessage(content="INTENT: data_query\n- Query Power sector capex")
+
+            llm.invoke = fake_invoke
+            return llm
+
+        state = _make_state(messages=self._relay_messages())
+        with patch("app.agents.planner.get_chat_model", side_effect=fake_factory):
+            result = planner_node(state)
+
+        human_prompt = str(captured[-1].content)
+        assert "power" in human_prompt, "the Planner prompt should include power from the previous turn"
+        assert result["intent"] == "data_query"
+
+    def test_sql_agent_prompt_carries_history(self):
+        """The SQL Agent's structured-output prompt must also carry the context."""
+        from app.agents.sql_agent import sql_agent_node
+
+        captured: list = []
+
+        def fake_factory():
+            llm = MagicMock()
+            structured = MagicMock()
+
+            def fake_invoke(msgs):
+                captured.extend(msgs)
+                raise RuntimeError("stop here")  # only verify the prompt, don't actually run the query
+
+            structured.invoke = fake_invoke
+            llm.with_structured_output.return_value = structured
+            return llm
+
+        state = _make_state(messages=self._relay_messages(), plan=["query capex"])
+        with patch("app.agents.sql_agent.get_chat_model", side_effect=fake_factory):
+            sql_agent_node(state)
+
+        human_prompt = str(captured[-1].content)
+        assert "power" in human_prompt, "the SQL Agent prompt should include power from the previous turn"

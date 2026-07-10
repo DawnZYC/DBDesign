@@ -1,6 +1,6 @@
-"""M1 — RAG 抽象层单测。
+"""M1 — RAG abstraction layer unit tests.
 
-只测注册表 + 路由结构 + markdown 切段，不真打 embedding（避免下载模型）。
+Only tests the registry + routing structure + markdown splitting; no real embedding (avoids downloading a model).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from app.rag.embeddings import (
 from app.rag.ingest import _split_markdown_by_h2  # type: ignore[attr-defined]
 
 # -----------------------------------------------------------------------------
-# Embedding 注册表
+# Embedding registry
 # -----------------------------------------------------------------------------
 EXPECTED_PROVIDERS = {"huggingface", "openai", "qwen"}
 
@@ -49,7 +49,7 @@ def test_openai_qwen_require_api_keys():
 
 
 def test_list_providers_marks_local_as_configured(monkeypatch):
-    """本地 huggingface 没 api_key_field，应永远 configured=True。"""
+    """Local huggingface has no api_key_field, so it should always be configured=True."""
     monkeypatch.setenv("EMBEDDING_PROVIDER", "huggingface")
     monkeypatch.setenv("OPENAI_API_KEY", "")
     get_settings.cache_clear()
@@ -76,30 +76,30 @@ def test_active_provider_switches(monkeypatch):
 
 
 # -----------------------------------------------------------------------------
-# Markdown 切段
+# Markdown splitting
 # -----------------------------------------------------------------------------
 def test_split_markdown_by_h2_basic():
-    md = """# 顶层标题
+    md = """# Top-level title
 
-前言段，应该被丢弃或挂到第一个 H2 之后。
+Preamble paragraph, should be dropped or attached after the first H2.
 
-## 第一节
+## Section one
 
-第一节内容。
+Content of section one.
 
-## 第二节
+## Section two
 
-第二节内容。
+Content of section two.
 """
     sections = _split_markdown_by_h2(md)
     assert len(sections) == 2
-    assert sections[0][0] == "第一节"
-    assert "第一节内容" in sections[0][1]
-    assert sections[1][0] == "第二节"
+    assert sections[0][0] == "Section one"
+    assert "Content of section one" in sections[0][1]
+    assert sections[1][0] == "Section two"
 
 
 def test_split_markdown_no_h2():
-    md = "纯文本，没有 H2 标题。"
+    md = "Plain text, no H2 headings."
     sections = _split_markdown_by_h2(md)
     assert len(sections) == 1
     assert sections[0][0] == ""
@@ -107,14 +107,14 @@ def test_split_markdown_no_h2():
 
 
 def test_split_real_domain_knowledge():
-    """跑一遍真实的 domain_knowledge.md，确保切段无报错。"""
-    p = Path(__file__).resolve().parent.parent / "domain_knowledge.md"
+    """Run against the real domain_knowledge.md to ensure splitting raises no errors."""
+    p = Path(__file__).resolve().parent.parent / "data" / "domain_knowledge.md"
     if not p.exists():
-        return  # CI 上文件可能不在
+        return  # the file may be absent in CI
     sections = _split_markdown_by_h2(p.read_text(encoding="utf-8"))
-    # 至少切出 5 段
+    # At least 5 sections
     assert len(sections) >= 5
     titles = [t for t, _ in sections]
-    # 含核心主题
-    assert any("单位" in t for t in titles)
-    assert any("Sector" in t or "行业" in t for t in titles)
+    # Contains the core topics
+    assert any("Unit" in t for t in titles)
+    assert any("Sector" in t for t in titles)

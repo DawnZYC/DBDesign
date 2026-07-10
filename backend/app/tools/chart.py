@@ -1,6 +1,6 @@
-"""⑥ recommend_chart — 根据数据形状和意图推荐 ECharts spec。
+"""(6) recommend_chart — recommend an ECharts spec from data shape and intent.
 
-纯规则引擎，无 LLM。Visualizer Agent 调用本工具拿一个骨架，再填充 dataset。
+Pure rule engine, no LLM. The Visualizer Agent calls this tool to get a skeleton, then fills in the dataset.
 """
 
 from __future__ import annotations
@@ -16,22 +16,22 @@ ChartType = Literal["line", "bar", "stacked_bar", "grouped_bar", "pie", "sankey"
 
 
 class DataShape(BaseModel):
-    """描述查询结果的形状，由 SQL Agent 在拿到 rows 后推断出来传进来。"""
+    """Describes the shape of the query result, inferred by the SQL Agent after it gets the rows."""
 
     n_rows: int
     has_time_axis: bool = Field(
-        default=False, description="是否有按年/时间的轴（dimension 'data_year' 等）"
+        default=False, description="Whether there is a year/time axis (dimension 'data_year' etc.)"
     )
-    n_categories: int = Field(default=0, description="非时间分类数（譬如 sector / commodity 数量）")
-    n_metrics: int = Field(default=1, description="数值列数量")
-    is_aggregated: bool = Field(default=False, description="是否为聚合结果（无 raw_row_id）")
+    n_categories: int = Field(default=0, description="Number of non-time categories (e.g. count of sectors / commodities)")
+    n_metrics: int = Field(default=1, description="Number of value columns")
+    is_aggregated: bool = Field(default=False, description="Whether it is an aggregated result (no raw_row_id)")
     metric_unit: str | None = None
 
 
 class RecommendChartInput(BaseModel):
     data_shape: DataShape
     intent: str | None = Field(
-        default=None, description="自然语言意图，如「对比」「趋势」「占比」「流向」"
+        default=None, description="Natural-language intent, e.g. 'compare', 'trend', 'share', 'flow'"
     )
 
 
@@ -39,41 +39,42 @@ class ChartRecommendation(BaseModel):
     chart_type: ChartType
     rationale: str
     echarts_skeleton: dict[str, Any] = Field(
-        ..., description="ECharts option 骨架（不含 dataset，前端填）"
+        ..., description="ECharts option skeleton (no dataset; the frontend fills it)"
     )
-    suggested_dimensions: list[str] = Field(..., description="建议哪些列作为 x 轴 / 分组维度")
+    suggested_dimensions: list[str] = Field(..., description="Which columns to use as x-axis / grouping dimensions")
 
 
 # -----------------------------------------------------------------------------
-# 规则引擎
+# Rule engine
 # -----------------------------------------------------------------------------
 def _decide_chart_type(shape: DataShape, intent_text: str) -> ChartType:
-    """规则优先级：意图关键词 > 数据形状。"""
+    """Rule priority: intent keywords > data shape.
+
+    NOTE: only the line/bar family is returned. The Visualizer assembles dataset+encode for
+    those; pie and sankey need a different data layout it doesn't build yet, so recommending
+    them would render a broken chart. Until pie/sankey assembly exists, a "share" question maps
+    to a bar chart rather than a misrendered pie. (pie/sankey kept in ChartType for the future.)
+    """
     intent_text = (intent_text or "").lower()
 
-    if any(kw in intent_text for kw in ("flow", "流向", "桑基", "sankey")):
-        return "sankey"
-    if any(kw in intent_text for kw in ("占比", "share", "饼", "pie")):
-        return "pie"
-
-    # 时间序列优先
+    # Prefer time series
     if shape.has_time_axis:
-        if shape.n_categories > 1 and any(kw in intent_text for kw in ("堆叠", "stack", "组成")):
+        if shape.n_categories > 1 and any(kw in intent_text for kw in ("stack", "composition")):
             return "stacked_bar"
         return "line"
 
-    # 非时间：按分类对比
+    # Non-time: compare by category
     if shape.n_categories >= 1 and shape.n_metrics == 1:
         return "bar"
     if shape.n_categories >= 1 and shape.n_metrics > 1:
         return "grouped_bar"
 
-    # 兜底
+    # Fallback
     return "bar"
 
 
 def _skeleton_for(chart_type: ChartType, unit: str | None) -> dict[str, Any]:
-    """构造 ECharts option 骨架（不含数据，前端绑 dataset）。"""
+    """Build the ECharts option skeleton (no data; the frontend binds the dataset)."""
     unit_label = f" ({unit})" if unit else ""
     base: dict[str, Any] = {
         "tooltip": {"trigger": "axis"},
@@ -84,18 +85,18 @@ def _skeleton_for(chart_type: ChartType, unit: str | None) -> dict[str, Any]:
         return {
             **base,
             "xAxis": {"type": "category"},
-            "yAxis": {"type": "value", "name": unit_label.strip() or "值"},
-            "series": [],  # 由调用方填
+            "yAxis": {"type": "value", "name": unit_label.strip() or "Value"},
+            "series": [],  # filled by the caller
         }
     if chart_type in ("bar", "grouped_bar", "stacked_bar"):
         opt = {
             **base,
             "xAxis": {"type": "category"},
-            "yAxis": {"type": "value", "name": unit_label.strip() or "值"},
+            "yAxis": {"type": "value", "name": unit_label.strip() or "Value"},
             "series": [],
         }
         if chart_type == "stacked_bar":
-            opt["_stack_hint"] = "true"  # 调用方据此决定 series.stack
+            opt["_stack_hint"] = "true"  # the caller uses this to decide series.stack
         return opt
     if chart_type == "pie":
         return {
@@ -112,12 +113,12 @@ def _skeleton_for(chart_type: ChartType, unit: str | None) -> dict[str, Any]:
 
 
 def _suggest_dimensions(shape: DataShape, chart_type: ChartType) -> list[str]:
-    """挑选 x / group 列。具体列名由调用方根据 SQL 结果填实，这里只给逻辑。"""
+    """Pick x / group columns. The actual column names are filled in by the caller from the SQL result; this only gives the logic."""
     dims = []
     if shape.has_time_axis:
         dims.append("data_year")
     if shape.n_categories >= 1:
-        dims.append("category")  # 占位：sector / commodity 等
+        dims.append("category")  # placeholder: sector / commodity etc.
     return dims or ["category"]
 
 
@@ -133,8 +134,8 @@ def recommend_chart(
     (without dataset; the frontend binds rows), and which columns should be
     used as x/group dimensions.
     """
-    # LangChain 在 invoke → args_schema.model_validate → model_dump 后再传参，
-    # 嵌套 Pydantic 模型会被还原为 dict；在这里防御性地做类型转换。
+    # After LangChain's invoke -> args_schema.model_validate -> model_dump, a nested
+    # Pydantic model comes back as a dict; defensively coerce the type here.
     if isinstance(data_shape, dict):
         data_shape = DataShape(**data_shape)
 
@@ -144,11 +145,11 @@ def recommend_chart(
 
     rationale_parts = [f"chart_type={chart_type}"]
     if data_shape.has_time_axis:
-        rationale_parts.append("has_time_axis=True → 时间序列")
+        rationale_parts.append("has_time_axis=True -> time series")
     if data_shape.n_categories > 1:
-        rationale_parts.append(f"分类={data_shape.n_categories}")
+        rationale_parts.append(f"categories={data_shape.n_categories}")
     if data_shape.n_metrics > 1:
-        rationale_parts.append(f"指标={data_shape.n_metrics}")
+        rationale_parts.append(f"metrics={data_shape.n_metrics}")
     if intent:
         rationale_parts.append(f"intent='{intent}'")
 

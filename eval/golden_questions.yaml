@@ -1,4 +1,4 @@
-# Golden questions for the SG-TIMES multi-agent platform (M3/M6).
+# Golden questions for the EcoTEA multi-agent platform (M3/M6).
 #
 # Each item:
 #   id:                  stable identifier
@@ -11,158 +11,183 @@
 #
 # Run with:  python eval/runner.py --base-url http://localhost:8000
 # Data assumptions: the EcoTEA Endo WP1 template has been imported and
-# seed_commodities.py / seed_rag.py have been run.
+# scripts/seed_commodities.py / scripts/seed_rag.py have been run.
 
 - id: q01_capex_power_total
-  question: "Power 部门所有年份的总 capex 是多少？"
+  question: What is the total capex of the Power sector across all years?
   category: sql
-  expected_keywords: ["capex"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - capex
+  expected_tools:
+  - run_sql
   expected_chart_type: none
-
 - id: q02_capex_by_year
-  question: "Power 部门 2018 到 2050 年的 capex 趋势"
+  question: Show the capex trend of the Power sector from 2018 to 2050
   category: chart
-  expected_keywords: ["capex"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - capex
+  expected_tools:
+  - run_sql
   expected_chart_type: line
-
 - id: q03_ef_trend
-  question: "Power 部门排放因子随年份的变化趋势"
+  question: How does the emission factor of the Power sector change over the years?
   category: chart
-  expected_keywords: ["排放"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - emission
+  expected_tools:
+  - run_sql
   expected_chart_type: line
-
 - id: q04_sector_compare_capex
-  question: "对比各部门的总 capex"
+  question: Compare the total capex across all sectors
   category: chart
-  expected_keywords: ["capex"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - capex
+  expected_tools:
+  - run_sql
   expected_chart_type: bar
-
 - id: q05_terminology_pwrnga
-  question: "PWRNGA 是什么？"
+  question: What is PWRNGA?
   category: terminology
-  expected_keywords: ["PWRNGA"]
-  expected_tools: ["lookup_terminology"]
+  expected_keywords:
+  - PWRNGA
+  expected_tools:
+  - lookup_terminology
   expected_chart_type: none
-
 - id: q06_terminology_usage
-  question: "哪些技术使用 PWRNGA 这个 commodity？"
+  question: Which technologies use the commodity PWRNGA?
   category: multi
-  expected_keywords: ["PWRNGA"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - PWRNGA
+  expected_tools:
+  - run_sql
   expected_chart_type: none
-
 - id: q07_unit_pj_to_ktoe
-  question: "1 PJ 等于多少 ktoe？"
+  question: How many ktoe is 1 PJ?
   category: unit_convert
-  expected_keywords: ["ktoe", "23.8"]
-  expected_tools: ["convert_unit"]
+  expected_keywords:
+  - ktoe
+  - '23.8'
+  expected_tools:
+  - convert_unit
   expected_chart_type: none
-
 - id: q08_unit_gwh_to_pj
-  question: "把 1000 GWh 换算成 PJ"
+  question: Convert 1000 GWh to PJ
   category: unit_convert
-  expected_keywords: ["PJ", "3.6"]
-  expected_tools: ["convert_unit"]
+  expected_keywords:
+  - PJ
+  - '3.6'
+  expected_tools:
+  - convert_unit
   expected_chart_type: none
-
 - id: q09_emission_factor_lookup
-  question: "PWRNGACCF01 在 2020 年的排放因子是多少？"
+  question: What is the emission factor of PWRNGACCF01 in 2020?
   category: emission
-  expected_keywords: ["PWRNGACCF01"]
-  expected_tools: ["lookup_emission_factor"]
+  expected_keywords:
+  - PWRNGACCF01
+  expected_tools:
+  - lookup_emission_factor
   expected_chart_type: none
-
 - id: q10_forecast_capex
-  question: "根据历史数据预测 Power 部门 2060 年的 capex"
+  question: Forecast the Power sector capex in 2060 based on historical data
   category: forecast
-  expected_keywords: ["2060"]
-  expected_tools: ["run_sql", "forecast_trend"]
+  expected_keywords:
+  - '2060'
+  expected_tools:
+  - run_sql
+  - forecast_trend
   expected_chart_type: none
-
 - id: q11_fixed_opex_2030
-  question: "2030 年各部门 fixed opex 总和"
+  question: What is the total fixed opex per sector in 2030?
   category: sql
-  expected_keywords: ["2030"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - '2030'
+  expected_tools:
+  - run_sql
   expected_chart_type: none
-
 - id: q12_variable_opex_top
-  question: "Power 部门 variable opex 最高的 5 个技术"
+  question: Top 5 technologies by variable opex in the Power sector
   category: sql
-  expected_keywords: ["opex"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - opex
+  expected_tools:
+  - run_sql
   expected_chart_type: none
-
 - id: q13_tech_lifetime
-  question: "PWRNGACCF01 的技术寿命是多少年？"
+  question: What is the technology lifetime of PWRNGACCF01?
   category: sql
-  expected_keywords: ["PWRNGACCF01"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - PWRNGACCF01
+  expected_tools:
+  - run_sql
   expected_chart_type: none
-
 - id: q14_capacity_constraints
-  question: "Power 部门有哪些容量约束？"
+  question: What capacity constraints exist in the Power sector?
   category: sql
-  expected_keywords: ["容量"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - capacity
+  expected_tools:
+  - run_sql
   expected_chart_type: none
-
 - id: q15_carbon_capture_terms
-  question: "数据库里和 carbon capture 相关的技术或商品有哪些？"
+  question: Which technologies or commodities relate to carbon capture?
   category: terminology
-  expected_keywords: ["PWR"]
-  expected_tools: ["lookup_terminology"]
+  expected_keywords:
+  - PWR
+  expected_tools:
+  - lookup_terminology
   expected_chart_type: none
-
 - id: q16_geography_scope
-  question: "数据覆盖哪些地理区域？"
+  question: Which geographies does the data cover?
   category: sql
-  expected_keywords: ["SG"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - SG
+  expected_tools:
+  - run_sql
   expected_chart_type: none
-
 - id: q17_capex_unit_meaning
-  question: "capex 的单位是什么？怎么理解？"
+  question: What is the unit of capex and how should I read it?
   category: terminology
-  expected_keywords: ["capex"]
+  expected_keywords:
+  - capex
   expected_tools: []
   expected_chart_type: none
-
 - id: q18_year_coverage
-  question: "Power sheet 的数据覆盖了哪些年份？"
+  question: Which years does the Power sheet cover?
   category: sql
-  expected_keywords: ["2018"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - '2018'
+  expected_tools:
+  - run_sql
   expected_chart_type: none
-
 - id: q19_multi_metric_compare
-  question: "对比 PWRNGACCF01 各年份的 capex 和 fixed opex"
+  question: Compare capex and fixed opex of PWRNGACCF01 across years
   category: chart
-  expected_keywords: ["PWRNGACCF01"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - PWRNGACCF01
+  expected_tools:
+  - run_sql
   expected_chart_type: line
-
 - id: q20_ef_unit_convert_combo
-  question: "Power 部门 2020 年平均排放因子是多少？如果换算成 t-CO2 呢？"
+  question: What is the average emission factor of the Power sector in 2020, and what
+    is it in t-CO2?
   category: multi
-  expected_keywords: ["2020"]
-  expected_tools: ["run_sql"]
+  expected_keywords:
+  - '2020'
+  expected_tools:
+  - run_sql
   expected_chart_type: none
-
 - id: q21_scenario_note
-  question: "数据是按什么情景导入的？有没有备注信息？"
+  question: Under which scenario was the data imported? Any batch notes?
   category: sql
   expected_keywords: []
-  expected_tools: ["run_sql"]
+  expected_tools:
+  - run_sql
   expected_chart_type: none
-
 - id: q22_natural_gas_power_rag
-  question: "natural gas power 对应哪些技术编码？"
+  question: Which technology codes correspond to natural gas power?
   category: terminology
-  expected_keywords: ["PWRNGA"]
-  expected_tools: ["lookup_terminology"]
+  expected_keywords:
+  - PWRNGA
+  expected_tools:
+  - lookup_terminology
   expected_chart_type: none

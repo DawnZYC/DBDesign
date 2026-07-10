@@ -95,7 +95,7 @@ class TestGetEf:
 
 
 # ---------------------------------------------------------------------------
-# End-to-end extract_power_records with hand-built sheets
+# End-to-end extract_records with hand-built sheets
 # ---------------------------------------------------------------------------
 def _build_coef_sheet() -> pd.DataFrame:
     """Coef sheet: column 1 = abbreviation, column 2 = EF value."""
@@ -226,7 +226,7 @@ def _build_mining_sheet() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-class TestExtractPowerRecords:
+class TestExtractConvertRecords:
     def setup_method(self):
         self.conv = VTSGPRIConverter("dummy.xlsx")
         # Force the lazy loader to use our hand-built sheets.
@@ -239,26 +239,26 @@ class TestExtractPowerRecords:
         self.conv._load_sheets = lambda: None  # type: ignore[method-assign]
 
     def test_extracts_expected_record_count(self):
-        records = self.conv.extract_power_records()
+        records = self.conv.extract_records()
         # Two processes (IMP + MIN), each expanded to 27 years (2018-2070 step 2).
         assert len(records) == 27 * 2
 
     def test_record_has_traceability_fields(self):
-        records = self.conv.extract_power_records()
+        records = self.conv.extract_records()
         first = records[0]
         assert first.wp6_title == "Primary"
         assert first.data_owner == "ESI"
         assert first.geography == "SG"
 
     def test_import_process_emits_ef_from_coef(self):
-        records = self.conv.extract_power_records()
+        records = self.conv.extract_records()
         imp_rows = [r for r in records if r.process_code == "IMPNGA00"]
         assert len(imp_rows) == 27
         # EF was provided in the Coef sheet so should override the fallback.
         assert imp_rows[0].ef == 55.5
 
     def test_mining_act_bnd_drives_capacity(self):
-        records = self.conv.extract_power_records()
+        records = self.conv.extract_records()
         min_rows = [r for r in records if r.process_code == "MINRGA00"]
         # MINRGA00 is in ACT_BND_PROCS so capacity_type should be "FX".
         assert min_rows[0].capacity_type == "FX"

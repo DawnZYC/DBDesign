@@ -337,3 +337,30 @@ class TechnologyDetail(BaseModel):
     technology_lifetime_years: int | None
     grade: str | None
     years: list[TechnologyYearOut] = Field(default_factory=list)
+
+
+# -----------------------------------------------------------------------------
+# Emission-factor manual entry (PUT /api/technologies/{id}/emission-factors)
+# -----------------------------------------------------------------------------
+class EmissionFactorUpsert(BaseModel):
+    """Manually set (or clear) the emission factor for one technology-year."""
+
+    data_year: int = Field(..., ge=1900, le=2200)
+    emission_factor: Decimal | None = Field(
+        default=None, description="The emission-factor value; send null to clear it."
+    )
+    emission_factor_unit: str | None = Field(
+        default=None, max_length=64, description="e.g. kt-CO2/PJ"
+    )
+
+
+class EmissionFactorOut(BaseModel):
+    technology_id: int
+    technology_code: str
+    technology_year_id: int
+    data_year: int
+    emission_factor: Decimal | None = None
+    emission_factor_unit: str | None = None
+    created: bool = Field(
+        description="True if a new technology-year and/or parameter row was created."
+    )

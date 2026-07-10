@@ -3,25 +3,33 @@ import { useCallback, useRef, useState, type ChangeEvent, type DragEvent } from 
 interface FileUploadProps {
   onFileSelected: (file: File) => void;
   disabled?: boolean;
+  /** Accepted file suffixes (lowercase, with dot). Defaults to the importer's .xlsx/.xlsm. */
+  acceptSuffixes?: string[];
 }
 
-const ACCEPT = '.xlsx,.xlsm';
+const DEFAULT_SUFFIXES = ['.xlsx', '.xlsm'];
 
-export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps) {
+export function FileUpload({
+  onFileSelected,
+  disabled = false,
+  acceptSuffixes = DEFAULT_SUFFIXES,
+}: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const accept = acceptSuffixes.join(',');
+  const suffixHint = acceptSuffixes.join(' / ');
 
   const handleSelect = useCallback(
     (file: File | undefined) => {
       if (!file) return;
       const lower = file.name.toLowerCase();
-      if (!lower.endsWith('.xlsx') && !lower.endsWith('.xlsm')) {
-        alert('Only .xlsx / .xlsm files are supported');
+      if (!acceptSuffixes.some((s) => lower.endsWith(s))) {
+        alert(`Only ${suffixHint} files are supported`);
         return;
       }
       onFileSelected(file);
     },
-    [onFileSelected],
+    [onFileSelected, acceptSuffixes, suffixHint],
   );
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -53,7 +61,7 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
       <input
         ref={inputRef}
         type="file"
-        accept={ACCEPT}
+        accept={accept}
         onChange={handleChange}
         disabled={disabled}
         hidden
@@ -74,7 +82,7 @@ export function FileUpload({ onFileSelected, disabled = false }: FileUploadProps
       <div className="drop-text">
         <strong>Click to choose a file</strong> or drag it here
       </div>
-      <div className="drop-hint">Excel workbook (.xlsx or .xlsm), up to 50&nbsp;MB</div>
+      <div className="drop-hint">Excel workbook ({suffixHint}), up to 50&nbsp;MB</div>
     </div>
   );
 }

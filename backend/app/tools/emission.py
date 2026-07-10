@@ -1,6 +1,6 @@
-"""④ lookup_emission_factor — 查询某技术在某年的排放因子。
+"""(4) lookup_emission_factor — look up a technology's emission factor for a given year.
 
-精确年份没有时回退到最近一年（带 emission_factor 的）。
+When the exact year is missing, fall back to the nearest year (that has an emission_factor).
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ from app.tools._base import with_observability
 
 
 class EmissionFactorInput(BaseModel):
-    technology_code: str = Field(..., description="技术代码（如 PWRNGACCF01）")
-    year: int = Field(..., description="目标年份")
+    technology_code: str = Field(..., description="Technology code (e.g. NGCC01)")
+    year: int = Field(..., description="Target year")
     geography_code: str = Field(default="SG")
 
 
@@ -27,7 +27,7 @@ class EmissionFactorHit(BaseModel):
     is_exact_year: bool
     emission_factor: float | None
     emission_factor_unit: str | None
-    raw_row_id: int | None = Field(default=None, description="原始 Excel 行 ID（M4 反查用）")
+    raw_row_id: int | None = Field(default=None, description="Source Excel row ID (for M4 trace-back)")
 
 
 class EmissionFactorResponse(BaseModel):
@@ -46,7 +46,7 @@ def lookup_emission_factor(technology_code: str, year: int, geography_code: str 
     """
     db = SessionLocal()
     try:
-        # 拿到 technology_id
+        # Get the technology_id
         tech = db.scalar(
             select(models.TechnologyProcess)
             .join(
@@ -61,10 +61,10 @@ def lookup_emission_factor(technology_code: str, year: int, geography_code: str 
         if tech is None:
             return EmissionFactorResponse(
                 found=False,
-                message=f"技术 '{technology_code}' 在 geography={geography_code} 不存在。",
+                message=f"Technology '{technology_code}' does not exist for geography={geography_code}.",
             ).model_dump()
 
-        # 收集该技术下所有年份及其 emission_factor
+        # Collect all years and their emission_factor for this technology
         rows = db.execute(
             select(
                 models.TechnologyYear.data_year,
@@ -86,10 +86,10 @@ def lookup_emission_factor(technology_code: str, year: int, geography_code: str 
         if not candidates:
             return EmissionFactorResponse(
                 found=False,
-                message=f"技术 '{technology_code}' 没有任何 emission_factor 记录。",
+                message=f"Technology '{technology_code}' has no emission_factor records.",
             ).model_dump()
 
-        # 找精确年
+        # Find the exact year
         exact = next((r for r in candidates if r.data_year == year), None)
         if exact:
             return EmissionFactorResponse(
@@ -105,7 +105,7 @@ def lookup_emission_factor(technology_code: str, year: int, geography_code: str 
                 ),
             ).model_dump()
 
-        # 没精确，找最近（绝对值差最小，相同时取较早）
+        # No exact match: find the nearest (smallest absolute diff, ties prefer earlier)
         best = min(candidates, key=lambda r: (abs(int(r.data_year) - year), int(r.data_year)))
         return EmissionFactorResponse(
             found=True,
@@ -118,7 +118,7 @@ def lookup_emission_factor(technology_code: str, year: int, geography_code: str 
                 emission_factor_unit=best.emission_factor_unit,
                 raw_row_id=best.raw_row_id,
             ),
-            message=f"年份 {year} 无记录；回退到最近的 {best.data_year}。",
+            message=f"No record for year {year}; fell back to the nearest year {best.data_year}.",
         ).model_dump()
     finally:
         db.close()

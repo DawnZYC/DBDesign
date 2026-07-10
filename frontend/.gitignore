@@ -3,6 +3,9 @@ dist/
 dist-ssr/
 *.local
 
+# Vite / esbuild temp files (config bundling)
+*.timestamp-*.mjs
+
 # editor
 .vscode/*
 !.vscode/extensions.json

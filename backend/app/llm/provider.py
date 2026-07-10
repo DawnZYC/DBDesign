@@ -1,16 +1,16 @@
-"""LLM Provider 抽象层 — 注册表模式 + 工厂。
+"""LLM provider abstraction layer — registry pattern + factory.
 
-支持的 provider:
-  - openai     (默认): https://api.openai.com/v1
-  - deepseek          : https://api.deepseek.com/v1            (OpenAI 兼容)
-  - qwen / dashscope  : https://dashscope.aliyuncs.com/...      (OpenAI 兼容)
-  - moonshot / kimi   : https://api.moonshot.cn/v1              (OpenAI 兼容)
-  - zhipu / glm       : https://open.bigmodel.cn/api/paas/v4/   (OpenAI 兼容)
-  - anthropic         : 独立 SDK（langchain-anthropic）
+Supported providers:
+  - openai     (default): https://api.openai.com/v1
+  - deepseek           : https://api.deepseek.com/v1            (OpenAI-compatible)
+  - qwen / dashscope   : https://dashscope.aliyuncs.com/...      (OpenAI-compatible)
+  - moonshot / kimi    : https://api.moonshot.cn/v1              (OpenAI-compatible)
+  - zhipu / glm        : https://open.bigmodel.cn/api/paas/v4/   (OpenAI-compatible)
+  - anthropic          : standalone SDK (langchain-anthropic)
 
-加新 provider 只需：
-  1. 在 PROVIDER_REGISTRY 增加一项
-  2. 在 app/config.py 增加对应的 *_API_KEY 字段
+Adding a new provider only requires:
+  1. Add an entry to PROVIDER_REGISTRY
+  2. Add the corresponding *_API_KEY field in app/config.py
 """
 
 from __future__ import annotations
@@ -29,21 +29,21 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
-# Provider 配置卡片
+# Provider config card
 # -----------------------------------------------------------------------------
 class ProviderConfig(BaseModel):
-    """单个 provider 的配置卡片（不可变）。"""
+    """Config card for a single provider (immutable)."""
 
     name: str
     display_name: str
     adapter: Literal["openai_compat", "anthropic"]
-    api_key_field: str  # Settings 上对应的字段名
-    base_url: str | None = None  # OpenAI-compatible 时填，None 用默认（即官方 OpenAI）
+    api_key_field: str  # the corresponding field name on Settings
+    base_url: str | None = None  # set for OpenAI-compatible; None uses the default (official OpenAI)
     default_model: str
     docs_url: str | None = None
 
 
-# 加新 provider 在这里追加一条即可。
+# To add a new provider, append one entry here.
 PROVIDER_REGISTRY: dict[str, ProviderConfig] = {
     "openai": ProviderConfig(
         name="openai",
@@ -65,7 +65,7 @@ PROVIDER_REGISTRY: dict[str, ProviderConfig] = {
     ),
     "qwen": ProviderConfig(
         name="qwen",
-        display_name="通义千问 (DashScope)",
+        display_name="Tongyi Qianwen (DashScope)",
         adapter="openai_compat",
         api_key_field="dashscope_api_key",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -74,7 +74,7 @@ PROVIDER_REGISTRY: dict[str, ProviderConfig] = {
     ),
     "moonshot": ProviderConfig(
         name="moonshot",
-        display_name="月之暗面 Kimi",
+        display_name="Moonshot Kimi",
         adapter="openai_compat",
         api_key_field="moonshot_api_key",
         base_url="https://api.moonshot.cn/v1",
@@ -83,7 +83,7 @@ PROVIDER_REGISTRY: dict[str, ProviderConfig] = {
     ),
     "zhipu": ProviderConfig(
         name="zhipu",
-        display_name="智谱 GLM",
+        display_name="Zhipu GLM",
         adapter="openai_compat",
         api_key_field="zhipu_api_key",
         base_url="https://open.bigmodel.cn/api/paas/v4/",
@@ -103,7 +103,7 @@ PROVIDER_REGISTRY: dict[str, ProviderConfig] = {
 
 
 # -----------------------------------------------------------------------------
-# 工厂函数
+# Factory function
 # -----------------------------------------------------------------------------
 def get_chat_model(
     *,
@@ -112,26 +112,26 @@ def get_chat_model(
     temperature: float | None = None,
     max_tokens: int | None = None,
 ) -> BaseChatModel:
-    """按当前配置或显式参数返回 ChatModel 实例。
+    """Return a ChatModel instance from the current config or explicit arguments.
 
-    优先级（高 → 低）：
-        显式入参 > 环境变量 (.env) > provider 默认值
+    Priority (high -> low):
+        explicit args > environment variables (.env) > provider default
     """
     settings = get_settings()
     provider_name = (provider or settings.llm_provider or "openai").lower()
 
     if provider_name not in PROVIDER_REGISTRY:
         raise ValueError(
-            f"未知 provider '{provider_name}'。可选: {', '.join(PROVIDER_REGISTRY.keys())}"
+            f"Unknown provider '{provider_name}'. Options: {', '.join(PROVIDER_REGISTRY.keys())}"
         )
     cfg = PROVIDER_REGISTRY[provider_name]
 
     api_key = getattr(settings, cfg.api_key_field, None)
     if not api_key:
         raise RuntimeError(
-            f"环境变量 {cfg.api_key_field.upper()} 未配置；"
-            f"无法初始化 provider '{provider_name}'。"
-            f" 请在 .env 中填入对应 API key。"
+            f"Environment variable {cfg.api_key_field.upper()} is not set; "
+            f"cannot initialize provider '{provider_name}'. "
+            f"Please add the corresponding API key to .env."
         )
 
     final_model = model or settings.llm_model or cfg.default_model
@@ -163,7 +163,7 @@ def get_chat_model(
             timeout=settings.llm_timeout_seconds,
             max_tokens=final_max_tokens,
         )
-    raise ValueError(f"未实现的 adapter '{cfg.adapter}'")
+    raise ValueError(f"Unimplemented adapter '{cfg.adapter}'")
 
 
 def _build_openai_compat(
@@ -175,8 +175,8 @@ def _build_openai_compat(
     timeout: int,
     max_tokens: int | None,
 ) -> BaseChatModel:
-    """OpenAI 协议 / 兼容 (DeepSeek / Qwen / Moonshot / 智谱)。"""
-    from langchain_openai import ChatOpenAI  # 延迟 import 避免硬依赖
+    """OpenAI protocol / compatible (DeepSeek / Qwen / Moonshot / Zhipu)."""
+    from langchain_openai import ChatOpenAI  # lazy import to avoid a hard dependency
 
     kwargs: dict[str, Any] = {
         "model": model,
@@ -199,7 +199,7 @@ def _build_anthropic(
     timeout: int,
     max_tokens: int | None,
 ) -> BaseChatModel:
-    """Anthropic Claude（独立 SDK）。"""
+    """Anthropic Claude (standalone SDK)."""
     from langchain_anthropic import ChatAnthropic
 
     kwargs: dict[str, Any] = {
@@ -214,10 +214,10 @@ def _build_anthropic(
 
 
 # -----------------------------------------------------------------------------
-# 元信息查询
+# Metadata queries
 # -----------------------------------------------------------------------------
 def list_available_providers() -> list[dict[str, Any]]:
-    """枚举所有 provider，标记当前是否已配置 API key、是否为活跃 provider。"""
+    """Enumerate all providers, marking whether an API key is configured and whether each is active."""
     settings = get_settings()
     active = (settings.llm_provider or "openai").lower()
     out: list[dict[str, Any]] = []
@@ -239,10 +239,10 @@ def list_available_providers() -> list[dict[str, Any]]:
 
 
 def test_connectivity(provider: str | None = None) -> dict[str, Any]:
-    """对当前 / 指定 provider 做最小请求，用于健康检查。
+    """Make a minimal request to the current / given provider, for health checks.
 
-    返回 {ok, latency_ms?, error?, provider, model}
-    不抛异常，所有错误折成 ok=False。
+    Returns {ok, latency_ms?, error?, provider, model}.
+    Never raises; all errors collapse into ok=False.
     """
     settings = get_settings()
     provider_name = (provider or settings.llm_provider or "openai").lower()
@@ -260,7 +260,7 @@ def test_connectivity(provider: str | None = None) -> dict[str, Any]:
 
         llm = get_chat_model(provider=provider_name)
         start = time.perf_counter()
-        # 用极小请求 + 极小输出避免成本
+        # Tiny request + tiny output to avoid cost
         result = llm.invoke([HumanMessage(content="ping")])
         info["latency_ms"] = int((time.perf_counter() - start) * 1000)
         info["ok"] = True

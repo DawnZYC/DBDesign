@@ -10,7 +10,7 @@ Purpose:
   - Check sector behavior when sheet name conflicts with column A.
 
 Run:
-  cd backend && python3 verify_import.py [/path/to/EcoTEA Endo WP1.xlsx]
+  cd backend && python3 scripts/verify_import.py [/path/to/EcoTEA Endo WP1.xlsx]
 """
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 # Make the app package importable.
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import models  # noqa: E402
 from app.services import excel_importer  # noqa: E402
@@ -392,11 +392,14 @@ def main(xlsx_path: Path, *, selected_sheets: list[str] | None = None) -> None:
 
 
 if __name__ == "__main__":
-    xlsx = Path(
-        sys.argv[1]
-        if len(sys.argv) > 1
-        else "/sessions/relaxed-beautiful-hamilton/mnt/uploads/EcoTEA Endo WP1.xlsx"
+    # Default to the bundled template under the repo's uploads/ when no path is given.
+    _default_xlsx = (
+        Path(__file__).resolve().parent.parent.parent
+        / "uploads"
+        / "template"
+        / "EcoTEA Endo WP1.xlsx"
     )
+    xlsx = Path(sys.argv[1]) if len(sys.argv) > 1 else _default_xlsx
     # Second argument: optional comma-separated sheet allowlist for testing selected-sheet imports.
     selected: list[str] | None = None
     if len(sys.argv) > 2:

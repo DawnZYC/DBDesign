@@ -1,4 +1,4 @@
-"""健康检查（含数据库 + LLM 抽象层）。"""
+"""Health check (database + LLM abstraction layer)."""
 
 from __future__ import annotations
 
@@ -22,21 +22,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["meta"])
 
 
-@router.get("/api/health", response_model=HealthResponse, summary="健康检查")
+@router.get("/api/health", response_model=HealthResponse, summary="Health check")
 def health(
     db: Session = Depends(get_db),
     check_llm: bool = Query(
         default=False,
-        description="是否真打一次 LLM 连通性测试（会消耗少量 token）",
+        description="Whether to actually run an LLM connectivity test (consumes a few tokens)",
     ),
 ) -> HealthResponse:
-    """默认只检查 DB；传 ?check_llm=true 才真打一次 LLM API 测试连通性。"""
+    """By default only checks the DB; pass ?check_llm=true to actually hit the LLM API."""
 
     # ---- DB ----
     try:
         db.execute(text("SELECT 1"))
         db_status = "ok"
-    except SQLAlchemyError as exc:  # 不抛 5xx，前端能直观看到状态
+    except SQLAlchemyError as exc:  # don't raise 5xx, so the frontend can see the status directly
         db_status = f"error: {exc!s}"
 
     # ---- LLM ----
@@ -50,25 +50,25 @@ def health(
         llm_info = LLMHealth(
             provider=provider_name,
             configured=False,
-            error=f"未知 provider '{provider_name}'",
+            error=f"Unknown provider '{provider_name}'",
         )
     elif not configured:
-        # 不打实际 API，只报 not_configured
+        # Don't hit the real API; just report not_configured
         llm_info = LLMHealth(
             provider=provider_name,
             model=settings.llm_model or cfg.default_model,
             configured=False,
         )
     elif not check_llm:
-        # 已配置但不主动连通测试（默认）
+        # Configured but no active connectivity test (default)
         llm_info = LLMHealth(
             provider=provider_name,
             model=settings.llm_model or cfg.default_model,
             configured=True,
-            ok=True,  # 至少已配置，乐观默认
+            ok=True,  # at least configured; optimistic default
         )
     else:
-        # 显式要求连通测试
+        # Connectivity test explicitly requested
         result = test_connectivity()
         llm_info = LLMHealth(
             provider=result.get("provider", provider_name),
@@ -84,10 +84,10 @@ def health(
 
 @router.get(
     "/api/llm/providers",
-    summary="列出全部 LLM provider 及当前配置状态",
+    summary="List all LLM providers and their current config status",
 )
 def list_providers() -> dict:
-    """前端 settings 页可用：知道哪些 provider 已就绪、当前活跃哪个。"""
+    """For the frontend settings page: know which providers are ready and which is active."""
     settings = get_settings()
     return {
         "active": (settings.llm_provider or "openai").lower(),

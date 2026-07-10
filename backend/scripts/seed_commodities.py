@@ -2,8 +2,8 @@
 
 Safe to run repeatedly. Rows are upserted by commodity_code; existing metadata is overwritten.
 
-Usage:
-    python seed_commodities.py /path/to/VT_SG_PWR_GREF.xlsx
+Usage (run from the backend/ directory):
+    python scripts/seed_commodities.py /path/to/VT_SG_PWR_GREF.xlsx
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 # Make the app package importable.
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from openpyxl import load_workbook
 from sqlalchemy import select
@@ -149,5 +149,5 @@ def main(xlsx_path: Path) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        sys.exit("Usage: python seed_commodities.py /path/to/VT_SG_PWR_GREF.xlsx")
+        sys.exit("Usage: python scripts/seed_commodities.py /path/to/VT_SG_PWR_GREF.xlsx")
     main(Path(sys.argv[1]))

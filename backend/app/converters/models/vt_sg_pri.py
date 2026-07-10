@@ -1,4 +1,4 @@
-"""Converter for VT_SG_PRI_GREF -> EcoTEA Primary sheet.
+"""Converter for the VT_SG_PRI source workbook -> EcoTEA Primary sheet.
 
 Supports 39 processes:
   - 33 Import processes
@@ -13,7 +13,7 @@ import contextlib
 
 import numpy as np
 
-from app.converters.base_model import MISSING, BaseConverter, PowerRecord
+from app.converters.base_model import MISSING, BaseConverter, ConvertRecord
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -23,8 +23,8 @@ TRACEABILITY = {
     "wp6_title": "Primary",
     "data_owner": "ESI",
     "data_provider": "WP1",
-    "data_source": "GREF",
-    "data_source_desc": "SG GREF v8.14; VT_SG_PRI_GREF",
+    "data_source": "SOURCE",
+    "data_source_desc": "Model export; VT_SG_PRI",
     "data_user": "WP1",
     "usage_purpose": "Scenario analysis",
     "geography": "SG",
@@ -88,18 +88,18 @@ YEARS = list(range(2018, 2072, 2))
 
 
 class VTSGPRIConverter(BaseConverter):
-    """Converter for VT_SG_PRI_GREF source files."""
+    """Converter for VT_SG_PRI source files."""
 
     TARGET_SHEET = "Primary"
 
-    def extract_power_records(self) -> list[PowerRecord]:
+    def extract_records(self) -> list[ConvertRecord]:
         self._load_sheets()
         self._parse_coef()
         self._processes: list[dict] = []
         self._parse_import()
         self._parse_mining()
 
-        records: list[PowerRecord] = []
+        records: list[ConvertRecord] = []
         for proc in self._processes:
             records.extend(self._build_rows(proc))
         return records
@@ -249,7 +249,7 @@ class VTSGPRIConverter(BaseConverter):
 
     # -- Row builder -------------------------------------------------------
 
-    def _build_rows(self, proc: dict) -> list[PowerRecord]:
+    def _build_rows(self, proc: dict) -> list[ConvertRecord]:
         code = proc["code"]
         comm_out = proc["comm_out"]
         ef = self._get_ef(comm_out)
@@ -257,7 +257,7 @@ class VTSGPRIConverter(BaseConverter):
         has_act_bnd = bool(proc["act_bnd"]) and code in ACT_BND_PROCS
         cap_type: object = "FX" if has_act_bnd else MISSING
 
-        rows: list[PowerRecord] = []
+        rows: list[ConvertRecord] = []
         for year in YEARS:
             varom = self._pick_value(proc["costs"], year)
 
@@ -270,7 +270,7 @@ class VTSGPRIConverter(BaseConverter):
                 constraint = MISSING
 
             rows.append(
-                PowerRecord(
+                ConvertRecord(
                     **TRACEABILITY,
                     process_code=code,
                     description=proc["description"],

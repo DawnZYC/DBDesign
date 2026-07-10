@@ -1,24 +1,24 @@
-"""LangGraph 编排 — 4-Agent 状态图。
+"""LangGraph orchestration — the 4-agent state graph.
 
-图结构：
-  START → planner → sql_gen → [条件边] → interpreter → visualizer → END
-                                    ↓ (失败且未超重试上限)
-                                  planner（重试）
+Graph structure:
+  START -> planner -> sql_gen -> [conditional edge] -> interpreter -> visualizer -> END
+                                      v (on failure, retries not exhausted)
+                                    planner (retry)
 
-条件边逻辑（route_after_sql）：
-  - sql_result 存在且无 error → interpreter
-  - error 存在且 retry_count < max_retries → planner（重试，retry_count+1）
-  - error 存在且已达上限 → interpreter（带错误信息，让 Interpreter 告知用户）
+Conditional edge logic (route_after_sql):
+  - sql_result present and no error -> interpreter
+  - error present and retry_count < max_retries -> planner (retry, retry_count + 1)
+  - error present and limit reached -> interpreter (carries the error so it can tell the user)
 
-使用方式：
+Usage:
   from app.agents.graph import build_graph
 
   graph = build_graph()
 
-  # 同步调用（用于简单测试）
+  # Synchronous call (for simple tests)
   result = graph.invoke({"messages": [HumanMessage(content="...")], ...})
 
-  # 异步 + 事件流（SSE 端点用）
+  # Async + event stream (used by the SSE endpoint)
   async for event in graph.astream_events(initial_state, version="v2"):
       ...
 """
@@ -37,90 +37,99 @@ from app.agents.interpreter import interpreter_node
 from app.agents.planner import planner_node
 from app.agents.sql_agent import sql_agent_node
 from app.agents.state import AgentState
+from app.agents.tool_agent import tool_agent_node
 from app.agents.visualizer import visualizer_node
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# 节点名称常量（避免魔法字符串散落各处）
+# Node name constants (avoid magic strings scattered around)
 NODE_PLANNER = "planner"
 NODE_SQL = "sql_gen"
+NODE_TOOL_AGENT = "tool_agent"
 NODE_INTERPRETER = "interpreter"
 NODE_VISUALIZER = "visualizer"
 
 
 # -----------------------------------------------------------------------------
-# 条件边：SQL 节点完成后的路由
+# Conditional edge: routing after the SQL node completes
 # -----------------------------------------------------------------------------
 def route_after_planner(state: AgentState) -> str:
-    """Planner 之后的意图分流。
+    """Intent routing after the Planner.
 
-    * data_query（默认）→ SQL Agent，走完整数据链路
-    * direct_answer     → 直接到 Interpreter 对话式回答（不查库、不画图）
+    * data_query (default) -> SQL Agent, the full data pipeline
+    * tool_query           -> Tool Agent (function-calling), then Interpreter
+    * direct_answer        -> straight to the Interpreter for a conversational answer
+                              (no tools, no DB query, no chart)
     """
-    if state.get("intent") == "direct_answer":
-        logger.debug("route_after_planner → interpreter (direct answer)")
+    intent = state.get("intent")
+    if intent == "direct_answer":
+        logger.debug("route_after_planner -> interpreter (direct answer)")
         return NODE_INTERPRETER
+    if intent == "tool_query":
+        logger.debug("route_after_planner -> tool_agent (tool query)")
+        return NODE_TOOL_AGENT
     return NODE_SQL
 
 
 def route_after_interpreter(state: AgentState) -> str:
-    """Interpreter 之后决定是否进 Visualizer。
+    """Decide whether to enter the Visualizer after the Interpreter.
 
-    跳过画图的情况：
-    * 直接回答模式（闲聊 / 概念问题）
-    * 没有 SQL 结果，或结果行数 < 2（单个聚合数字画图没有意义）
+    Skip charting when:
+    * direct-answer / tool-query mode (no tabular data to plot)
+    * no SQL result, or fewer than 2 rows (charting a single aggregate number is pointless)
     """
-    if state.get("intent") == "direct_answer":
-        logger.debug("route_after_interpreter → END (direct answer)")
+    if state.get("intent") in ("direct_answer", "tool_query"):
+        logger.debug("route_after_interpreter -> END (%s)", state.get("intent"))
         return END
     sql_result = state.get("sql_result") or {}
     rows = sql_result.get("rows") or []
     if len(rows) < 2:
-        logger.debug("route_after_interpreter → END (%d rows, chart skipped)", len(rows))
+        logger.debug("route_after_interpreter -> END (%d rows, chart skipped)", len(rows))
         return END
     return NODE_VISUALIZER
 
 
 def route_after_sql(state: AgentState) -> str:
-    """决定 sql_gen 节点执行完后流向哪个节点。
+    """Decide where to go after the sql_gen node finishes.
 
-    返回值必须是 graph.add_conditional_edges 的 path_map 中的 key。
+    The return value must be a key in the path_map of graph.add_conditional_edges.
     """
     settings = get_settings()
     has_error = bool(state.get("error"))
     retry_count = state.get("retry_count", 0)
 
     if not has_error:
-        # 成功：走正常路径
-        logger.debug("route_after_sql → interpreter (ok)")
+        # Success: take the normal path
+        logger.debug("route_after_sql -> interpreter (ok)")
         return NODE_INTERPRETER
 
     if retry_count < settings.agent_max_retries:
-        # 有错误但还有重试机会：回 Planner
+        # Error but retries remain: go back to the Planner
         logger.info(
-            "route_after_sql → planner (retry %d/%d, error=%s)",
+            "route_after_sql -> planner (retry %d/%d, error=%s)",
             retry_count + 1,
             settings.agent_max_retries,
             state.get("error", "")[:80],
         )
         return NODE_PLANNER
 
-    # 已达重试上限：强制走 interpreter（让它告知用户失败）
+    # Retry limit reached: force interpreter (so it can tell the user it failed)
     logger.warning(
-        "route_after_sql → interpreter (max retries exhausted, error=%s)",
+        "route_after_sql -> interpreter (max retries exhausted, error=%s)",
         state.get("error", "")[:80],
     )
     return NODE_INTERPRETER
 
 
 # -----------------------------------------------------------------------------
-# 重试计数包装
+# Retry-count wrapper
 # -----------------------------------------------------------------------------
 def _sql_gen_with_retry_increment(state: AgentState) -> dict:
-    """在 sql_agent_node 外层套一个重试计数：失败时 retry_count + 1。
+    """Wrap sql_agent_node with a retry counter: increment retry_count on failure.
 
-    LangGraph 不支持在条件边里修改 state，所以在节点出口处处理。
+    LangGraph cannot mutate state inside a conditional edge, so we handle it at the
+    node exit.
     """
     result = sql_agent_node(state)
     if result.get("error"):
@@ -129,37 +138,42 @@ def _sql_gen_with_retry_increment(state: AgentState) -> dict:
 
 
 # -----------------------------------------------------------------------------
-# 图构造
+# Graph construction
 # -----------------------------------------------------------------------------
 def build_graph() -> CompiledGraph:
-    """构造并编译 LangGraph 状态图。
+    """Build and compile the LangGraph state graph.
 
-    每次调用都新建（不缓存），调用方负责复用已编译的图。
-    实际上 build_graph() 本身很快（不涉及 I/O），router 层用模块级单例即可。
+    Builds fresh on every call (no caching); the caller is responsible for reusing the
+    compiled graph. build_graph() itself is cheap (no I/O), so the router layer uses a
+    module-level singleton.
     """
     graph = StateGraph(AgentState)
 
-    # ---- 注册节点 ----
+    # ---- Register nodes ----
     graph.add_node(NODE_PLANNER, planner_node)
     graph.add_node(NODE_SQL, _sql_gen_with_retry_increment)
+    graph.add_node(NODE_TOOL_AGENT, tool_agent_node)
     graph.add_node(NODE_INTERPRETER, interpreter_node)
     graph.add_node(NODE_VISUALIZER, visualizer_node)
 
-    # ---- 固定边 ----
+    # ---- Fixed edges ----
     graph.add_edge(START, NODE_PLANNER)
+    graph.add_edge(NODE_TOOL_AGENT, NODE_INTERPRETER)  # tool results -> Interpreter composes the answer
     graph.add_edge(NODE_VISUALIZER, END)
 
-    # ---- 条件边：planner 之后按意图分流（闲聊不进 SQL）----
+    # ---- Conditional edge: route by intent after the planner ----
+    #   data_query -> SQL pipeline; tool_query -> Tool Agent; chat -> Interpreter
     graph.add_conditional_edges(
         NODE_PLANNER,
         route_after_planner,
         {
             NODE_SQL: NODE_SQL,
+            NODE_TOOL_AGENT: NODE_TOOL_AGENT,
             NODE_INTERPRETER: NODE_INTERPRETER,
         },
     )
 
-    # ---- 条件边：interpreter 之后决定是否画图 ----
+    # ---- Conditional edge: decide whether to chart after the interpreter ----
     graph.add_conditional_edges(
         NODE_INTERPRETER,
         route_after_interpreter,
@@ -169,7 +183,7 @@ def build_graph() -> CompiledGraph:
         },
     )
 
-    # ---- 条件边：sql_gen 完成后路由 ----
+    # ---- Conditional edge: routing after sql_gen ----
     graph.add_conditional_edges(
         NODE_SQL,
         route_after_sql,
@@ -185,14 +199,14 @@ def build_graph() -> CompiledGraph:
 
 
 # -----------------------------------------------------------------------------
-# 模块级单例（路由层复用，避免重复编译）
+# Module-level singleton (reused by the router layer to avoid recompiling)
 # -----------------------------------------------------------------------------
-# 延迟初始化：首次 import 时不执行（避免测试环境无 DB 时报错）
+# Lazy init: not executed on first import (avoids errors when the test env has no DB)
 _graph_instance = None
 
 
 def get_graph():
-    """获取（或延迟初始化）模块级图单例。"""
+    """Get (or lazily initialize) the module-level graph singleton."""
     global _graph_instance
     if _graph_instance is None:
         _graph_instance = build_graph()

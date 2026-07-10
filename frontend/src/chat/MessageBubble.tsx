@@ -1,14 +1,9 @@
 /**
- * MessageBubble — 单条消息气泡。
+ * MessageBubble — a single chat message.
  *
- * 用户消息：简单文本，右对齐蓝色气泡。
- * AI 消息：从上到下依次显示：
- *   1. 当前节点徽章（streaming 中）
- *   2. Planner 步骤列表（有 plan 时）
- *   3. 工具调用 Trace（可折叠）
- *   4. Markdown 正文（流式打字机）
- *   5. ECharts 图表气泡
- *   6. 错误提示（如有）
+ * User: plain right-aligned bubble. Assistant, top to bottom:
+ * active-node badge (while streaming), planner steps, tool-call trace,
+ * streamed Markdown body, ECharts bubble, and error notice (if any).
  */
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,10 +13,11 @@ import { ChartBubble } from './ChartBubble';
 import { ToolCallTrace } from './ToolCallTrace';
 
 const NODE_DISPLAY: Record<string, string> = {
-  planner: '规划中',
-  sql_gen: '生成查询',
-  interpreter: '解读数据',
-  visualizer: '生成图表',
+  planner: 'Planning',
+  sql_gen: 'Building query',
+  tool_agent: 'Using tools',
+  interpreter: 'Interpreting',
+  visualizer: 'Charting',
 };
 
 interface Props {
@@ -30,17 +26,17 @@ interface Props {
 }
 
 export function MessageBubble({ message, onPointClick }: Props) {
-  /* ---- 用户气泡 ---- */
+  /* ---- User bubble ---- */
   if (message.role === 'user') {
     return (
       <div className="message-row user">
-        <div className="avatar avatar-user">我</div>
+        <div className="avatar avatar-user">Me</div>
         <div className="bubble user-bubble">{message.content}</div>
       </div>
     );
   }
 
-  /* ---- AI 气泡 ---- */
+  /* ---- Assistant bubble ---- */
   const isStreaming = message.status === 'streaming';
 
   return (
@@ -48,7 +44,7 @@ export function MessageBubble({ message, onPointClick }: Props) {
       <div className="avatar avatar-ai">AI</div>
 
       <div className={`bubble assistant-bubble ${isStreaming ? 'streaming' : ''}`}>
-        {/* 1. 当前节点徽章（streaming 时显示） */}
+        {/* 1. Active node badge (while streaming) */}
         {isStreaming && message.currentNode && (
           <div className="node-badge">
             <span className="node-badge-dot" />
@@ -56,10 +52,10 @@ export function MessageBubble({ message, onPointClick }: Props) {
           </div>
         )}
 
-        {/* 2. Planner 步骤列表 */}
+        {/* 2. Planner steps */}
         {message.plan && message.plan.length > 0 && (
           <div className="plan-list">
-            <div className="plan-list-title">执行计划</div>
+            <div className="plan-list-title">Plan</div>
             {message.plan.map((step, i) => (
               <div key={i} className="plan-step">
                 <span className="plan-step-num">{i + 1}.</span>
@@ -69,23 +65,23 @@ export function MessageBubble({ message, onPointClick }: Props) {
           </div>
         )}
 
-        {/* 3. 工具调用 Trace */}
+        {/* 3. Tool-call trace */}
         <ToolCallTrace
           toolCalls={message.toolCalls ?? []}
           toolResults={message.toolResults ?? []}
         />
 
-        {/* 4. Markdown 正文（流式） */}
+        {/* 4. Streamed Markdown body */}
         {message.content && (
           <div className={`markdown-text ${isStreaming ? 'streaming-cursor' : ''}`}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
         )}
 
-        {/* 5. ECharts 图表气泡 */}
+        {/* 5. ECharts bubble */}
         {message.chartSpec && <ChartBubble spec={message.chartSpec} onPointClick={onPointClick} />}
 
-        {/* 6. 错误提示 */}
+        {/* 6. Error notice */}
         {message.errorMessage && <div className="bubble-error">⚠ {message.errorMessage}</div>}
       </div>
     </div>

@@ -34,7 +34,7 @@ import App from '../App';
 describe('App', () => {
   it('renders the brand and the four workflow steps in the sidebar', () => {
     render(<App />);
-    expect(screen.getByText(/SG-TIMES/i)).toBeInTheDocument();
+    expect(screen.getByText('EcoTEA')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /01 AI Assistant/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /02 Convert/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /03 Import/i })).toBeInTheDocument();

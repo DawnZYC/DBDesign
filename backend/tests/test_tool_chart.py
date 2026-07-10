@@ -1,4 +1,4 @@
-"""⑥ recommend_chart 单测（纯规则，无 DB）。"""
+"""(6) recommend_chart unit tests (pure rules, no DB)."""
 
 from __future__ import annotations
 
@@ -56,20 +56,22 @@ def test_categorical_multi_metric_yields_grouped_bar():
     assert out["chart_type"] == "grouped_bar"
 
 
-def test_intent_share_yields_pie():
+def test_share_intent_falls_back_to_bar():
+    # pie/sankey are not assembled by the Visualizer yet, so a "share" question maps to a
+    # categorical bar chart rather than a misrendered pie.
     out = _call(
         {"n_rows": 5, "has_time_axis": False, "n_categories": 5, "n_metrics": 1},
-        intent="占比分析",
+        intent="share analysis",
     )
-    assert out["chart_type"] == "pie"
+    assert out["chart_type"] == "bar"
 
 
-def test_intent_flow_yields_sankey():
+def test_flow_intent_falls_back_to_bar():
     out = _call(
         {"n_rows": 20, "has_time_axis": False, "n_categories": 10, "n_metrics": 1},
         intent="energy flow diagram",
     )
-    assert out["chart_type"] == "sankey"
+    assert out["chart_type"] == "bar"
 
 
 def test_stacked_bar_when_intent_says_so():
@@ -80,7 +82,7 @@ def test_stacked_bar_when_intent_says_so():
             "n_categories": 4,
             "n_metrics": 1,
         },
-        intent="按部门堆叠",
+        intent="stack by sector",
     )
     assert out["chart_type"] == "stacked_bar"
 
@@ -96,8 +98,8 @@ def test_skeleton_has_required_fields():
         }
     )
     skel = out["echarts_skeleton"]
-    # 折线图骨架应该有 xAxis/yAxis
+    # The line-chart skeleton should have xAxis/yAxis
     assert "xAxis" in skel
     assert "yAxis" in skel
-    # 单位应入轴名
+    # The unit should appear in the axis name
     assert "PJ" in skel["yAxis"]["name"]
