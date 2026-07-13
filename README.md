@@ -447,6 +447,12 @@ Requires Python 3.11+ (the code uses `datetime.UTC`).
 - `.github/workflows/ci.yml` — backend `ruff check` + `ruff format --check` + `pytest` (coverage,
   against a PostgreSQL 17 service); frontend eslint + `tsc` + vitest + build.
 - `.github/workflows/build-images.yml` — build & push backend / frontend images to GHCR (+ Trivy scan).
+- `.github/workflows/deploy.yml` — **CD, environment-ready**: staging deploys automatically after a
+  successful main image build; production deploys on `v*` tags behind an approval gate. With no server
+  configured, the full stack is validated **ephemerally on the runner** (health check + smoke tests +
+  teardown) via the same `deploy/deploy.sh` (immutable tags, auto-rollback). Point it at a real host by
+  setting three secrets (`DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_SSH_KEY`) — zero code changes.
+  See `CI_CD_SETUP.md` §7.
 - Backend image is multi-stage; CPU-only torch by default.
 
 ---

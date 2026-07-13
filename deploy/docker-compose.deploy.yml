@@ -1,0 +1,68 @@
+# Deployment stack — pulls prebuilt GHCR images, never builds.
+#
+# Used by:
+#   * .github/workflows/deploy.yml  — ephemeral runner validation (no server)
+#   * a real server                 — same file, same command, zero changes
+#
+# Isolation between environments comes from the compose project name:
+#   docker compose -p strata-staging -f deploy/docker-compose.deploy.yml up -d
+#   docker compose -p strata-prod    -f deploy/docker-compose.deploy.yml up -d
+# (volumes/networks are prefixed with the project name automatically)
+#
+# Required env (see deploy.sh, which sets sane defaults):
+#   BACKEND_IMAGE / FRONTEND_IMAGE  — full image refs incl. tag (immutable sha- or vX.Y.Z)
+#   BACKEND_PORT / FRONTEND_PORT    — host ports (staging and prod differ)
+#   POSTGRES_PASSWORD               — DB password (default only for ephemeral runs)
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ecotea
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # Schema DDL runs on first start, in filename order. Path is relative to
+      # this file; both the CI runner and the server keep a repo checkout.
+      - ../sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ecotea"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/dawnzyc/dbdesign-backend:latest}
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/ecotea
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      LOG_LEVEL: INFO
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_MODEL: ${LLM_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      MOONSHOT_API_KEY: ${MOONSHOT_API_KEY:-}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-huggingface}
+      CHROMA_PERSIST_DIR: /app/chroma_data
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - chroma_data:/app/chroma_data
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/dawnzyc/dbdesign-frontend:latest}
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:
+  chroma_data:

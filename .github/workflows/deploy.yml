@@ -1,0 +1,224 @@
+name: Deploy
+
+# Continuous Deployment — "environment-ready" design.
+#
+#   main push  ─▶ CI ─▶ Build & Publish Images ─▶ deploy-staging   (automatic)
+#   tag v*     ─▶ CI ─▶ Build & Publish Images ─▶ deploy-production (approval gate)
+#
+# Each deploy job runs in one of two modes, decided by whether the
+# DEPLOY_HOST secret is configured:
+#
+#   * server mode    — SSH to the host and run deploy/deploy.sh there
+#                      (pull immutable images, health check, auto-rollback).
+#   * ephemeral mode — no server yet: bring the FULL stack up on the runner
+#                      with the exact same compose file + script, health-check
+#                      and smoke-test it, then tear it down. This validates
+#                      the entire deploy path end-to-end without any
+#                      infrastructure cost.
+#
+# Switching from ephemeral to a real server = configure three secrets
+# (DEPLOY_HOST / DEPLOY_USER / DEPLOY_SSH_KEY). No code changes.
+
+on:
+  # Deploy only after images are built and pushed successfully.
+  workflow_run:
+    workflows: ["Build & Publish Images"]
+    types: [completed]
+  # Manual deploys / re-runs of any tag to either environment.
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (sha-<short> or vX.Y.Z)"
+        required: true
+      target:
+        description: "Target environment"
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  group: deploy-${{ github.event.workflow_run.head_branch || inputs.target }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  REGISTRY_NS: ghcr.io/dawnzyc/dbdesign
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Resolve which image tag this run should deploy.
+  #   workflow_run (main) -> sha-<short7>           (immutable, matches build-images)
+  #   workflow_run (tag)  -> the tag name (v1.0.0)
+  #   workflow_dispatch   -> the user-provided input
+  # ---------------------------------------------------------------------------
+  resolve:
+    name: Resolve image tag
+    runs-on: ubuntu-latest
+    # For workflow_run: only proceed when the build succeeded.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    outputs:
+      tag: ${{ steps.pick.outputs.tag }}
+      is_release: ${{ steps.pick.outputs.is_release }}
+      deploy_staging: ${{ steps.pick.outputs.deploy_staging }}
+      deploy_prod: ${{ steps.pick.outputs.deploy_prod }}
+    steps:
+      - name: Pick tag and route
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_TAG: ${{ inputs.image_tag }}
+          INPUT_TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT" == "workflow_dispatch" ]]; then
+            tag="$INPUT_TAG"
+            [[ "$INPUT_TARGET" == "production" ]] && { staging=false; prod=true; } || { staging=true; prod=false; }
+            [[ "$tag" == v* ]] && release=true || release=false
+          elif [[ "$HEAD_BRANCH" == v* ]]; then
+            # build-images run for a release tag
+            tag="$HEAD_BRANCH"; release=true; staging=false; prod=true
+          else
+            # build-images run for a main push -> immutable sha tag
+            tag="sha-${HEAD_SHA:0:7}"; release=false; staging=true; prod=false
+          fi
+          {
+            echo "tag=$tag"
+            echo "is_release=$release"
+            echo "deploy_staging=$staging"
+            echo "deploy_prod=$prod"
+          } >> "$GITHUB_OUTPUT"
+          echo "Deploying tag '$tag' (staging=$staging, prod=$prod)" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # Staging: automatic on every successful main image build.
+  # ---------------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy staging
+    runs-on: ubuntu-latest
+    needs: resolve
+    if: needs.resolve.outputs.deploy_staging == 'true'
+    environment: staging
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ----- server mode ------------------------------------------------------
+      - name: Deploy over SSH (server mode)
+        if: env.DEPLOY_HOST != ''
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          install -m 600 /dev/null key && printf '%s\n' "$DEPLOY_SSH_KEY" > key
+          ssh -i key -o StrictHostKeyChecking=accept-new "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd /opt/strata/repo && git fetch --all --tags && git checkout ${{ github.event.workflow_run.head_sha || github.sha }} \
+             && IMAGE_TAG=$IMAGE_TAG ./deploy/deploy.sh staging"
+
+      # ----- ephemeral mode (no server configured) ----------------------------
+      - name: Deploy full stack on runner (ephemeral mode)
+        if: env.DEPLOY_HOST == ''
+        env:
+          IMAGE_TAG: ${{ needs.resolve.outputs.tag }}
+        run: IMAGE_TAG="$IMAGE_TAG" ./deploy/deploy.sh staging
+
+      - name: Smoke tests
+        if: env.DEPLOY_HOST == ''
+        run: |
+          set -euo pipefail
+          echo "== /api/health ==";        curl -fsS localhost:8000/api/health | tee /dev/stderr | grep -q '"ok"'
+          echo "== /api/llm/providers =="; curl -fsS localhost:8000/api/llm/providers >/dev/null
+          echo "== /api/sectors ==";       curl -fsS localhost:8000/api/sectors >/dev/null
+          echo "== frontend SPA ==";       curl -fsS localhost:5173/ | grep -qi '<div id="root">'
+          echo "== nginx /api proxy ==";   curl -fsS localhost:5173/api/health >/dev/null
+          echo "All smoke tests passed."
+
+      - name: Show stack logs on failure
+        if: failure() && env.DEPLOY_HOST == ''
+        run: docker compose -p strata-staging -f deploy/docker-compose.deploy.yml logs --tail 100
+
+      - name: Tear down ephemeral stack
+        if: always() && env.DEPLOY_HOST == ''
+        run: docker compose -p strata-staging -f deploy/docker-compose.deploy.yml down -v || true
+
+  # ---------------------------------------------------------------------------
+  # Production: release tags only, behind the "production" GitHub Environment
+  # (configure Required reviewers there to get a manual approval gate).
+  # ---------------------------------------------------------------------------
+  deploy-production:
+    name: Deploy production
+    runs-on: ubuntu-latest
+    needs: resolve
+    if: needs.resolve.outputs.deploy_prod == 'true'
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy over SSH (server mode)
+        if: env.DEPLOY_HOST != ''
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          install -m 600 /dev/null key && printf '%s\n' "$DEPLOY_SSH_KEY" > key
+          ssh -i key -o StrictHostKeyChecking=accept-new "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd /opt/strata/repo && git fetch --all --tags && git checkout ${{ needs.resolve.outputs.tag }} \
+             && IMAGE_TAG=${{ needs.resolve.outputs.tag }} ./deploy/deploy.sh prod"
+
+      - name: Deploy full stack on runner (ephemeral mode)
+        if: env.DEPLOY_HOST == ''
+        env:
+          IMAGE_TAG: ${{ needs.resolve.outputs.tag }}
+        run: IMAGE_TAG="$IMAGE_TAG" ./deploy/deploy.sh prod
+
+      - name: Smoke tests
+        if: env.DEPLOY_HOST == ''
+        run: |
+          set -euo pipefail
+          curl -fsS localhost:8001/api/health | grep -q '"ok"'
+          curl -fsS localhost:8080/ | grep -qi '<div id="root">'
+          echo "Production validation passed."
+
+      - name: Show stack logs on failure
+        if: failure() && env.DEPLOY_HOST == ''
+        run: docker compose -p strata-prod -f deploy/docker-compose.deploy.yml logs --tail 100
+
+      - name: Tear down ephemeral stack
+        if: always() && env.DEPLOY_HOST == ''
+        run: docker compose -p strata-prod -f deploy/docker-compose.deploy.yml down -v || true
+
+      - name: Summary
+        run: |
+          {
+            echo "### Production deploy"
+            echo ""
+            echo "- **Tag:** \`${{ needs.resolve.outputs.tag }}\`"
+            echo "- **Mode:** ${{ env.DEPLOY_HOST != '' && 'server (SSH)' || 'ephemeral validation (no server configured)' }}"
+          } >> "$GITHUB_STEP_SUMMARY"

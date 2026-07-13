@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowseView } from './components/BrowseView';
 import { ConvertView } from './components/ConvertView';
-import { EmissionFactorView } from './components/EmissionFactorView';
 import { ImportView } from './components/ImportView';
 import { ChatPage } from './pages/ChatPage';
 import { checkHealth } from './api';
@@ -9,7 +8,7 @@ import type { ConvertResult } from './types';
 
 type HealthState = { status: 'checking' } | { status: 'ok' } | { status: 'error' };
 
-type Tab = 'chat' | 'convert' | 'import' | 'browse' | 'emission';
+type Tab = 'chat' | 'convert' | 'import' | 'browse';
 
 const HEALTH_LABEL: Record<HealthState['status'], string> = {
   checking: 'Connecting',
@@ -41,12 +40,6 @@ const STEPS: Array<{ id: Tab; index: string; title: string; description: string 
     index: '04',
     title: 'Browse',
     description: 'Search and inspect technology records.',
-  },
-  {
-    id: 'emission',
-    index: '05',
-    title: 'Emission Factors',
-    description: 'Manually enter or edit emission factors per technology-year.',
   },
 ];
 
@@ -147,9 +140,6 @@ function App() {
         </div>
         <div className="view-pane" hidden={activeTab !== 'browse'}>
           <BrowseView />
-        </div>
-        <div className="view-pane" hidden={activeTab !== 'emission'}>
-          <EmissionFactorView />
         </div>
       </main>
     </div>
