@@ -17,10 +17,11 @@ No API key needed (the LLM path uses a stub).
 from __future__ import annotations
 
 import io
+import tempfile
 from pathlib import Path
 
 import pytest
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from sqlalchemy import text
 
 from app.agents import schema_mapper as sm
@@ -29,6 +30,51 @@ from tests._db_fixture import setup_test_db
 TEMPLATE = (
     Path(__file__).resolve().parent.parent.parent / "uploads" / "template" / "EcoTEA Endo WP1.xlsx"
 )
+
+
+def _build_synthetic_template(path: Path) -> None:
+    """Build a minimal canonical-layout workbook from STANDARD_FIELDS.
+
+    The real template is confidential and gitignored, so CI (and fresh clones) don't
+    have it. The template-dependent tests only need (a) canonical row-2 headers and
+    (b) a few importable data rows — both derivable from the standard field table,
+    keeping these tests running everywhere without shipping confidential data.
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Power"
+    for spec in sm.STANDARD_FIELDS:
+        ws[f"{spec.column}2"] = spec.label
+
+    data_rows = [
+        # (sector, tech code, description, geo, year, ef, ef unit, capex, capex unit)
+        ("Power", "PWR-COAL-01", "Coal-fired plant", "SG", 2030, 0.8, "kt/PJ", 1500.0, "$/MW"),
+        ("Power", "PWR-COAL-01", "Coal-fired plant", "SG", 2035, 0.75, "kt/PJ", 1400.0, "$/MW"),
+        ("Power", "PWR-SOLAR-01", "Utility solar PV", "SG", 2030, 0.0, "kt/PJ", 900.0, "$/MW"),
+    ]
+    for r, (sector, code, desc, geo, year, ef, ef_unit, capex, capex_unit) in enumerate(
+        data_rows, start=10
+    ):
+        ws[f"A{r}"] = sector
+        ws[f"H{r}"] = code
+        ws[f"I{r}"] = desc
+        ws[f"J{r}"] = geo
+        ws[f"K{r}"] = year
+        ws[f"O{r}"] = ef
+        ws[f"P{r}"] = ef_unit
+        ws[f"R{r}"] = capex
+        ws[f"S{r}"] = capex_unit
+        ws[f"T{r}"] = 45.0  # fixed opex
+        ws[f"Z{r}"] = 0.38  # efficiency
+        ws[f"AH{r}"] = 500  # capacity
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(path)
+
+
+if not TEMPLATE.exists():
+    TEMPLATE = Path(tempfile.gettempdir()) / "ecotea_synthetic_template.xlsx"
+    _build_synthetic_template(TEMPLATE)
+
 HAS_TEMPLATE = TEMPLATE.exists()
 
 

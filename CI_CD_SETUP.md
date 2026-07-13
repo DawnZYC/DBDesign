@@ -169,12 +169,56 @@ docker run --rm -p 8000:8000 \
   ghcr.io/<owner>/dbdesign-backend:latest
 ```
 
-## 7. What's intentionally **not** included
+## 7. Continuous Deployment — environment-ready
 
-- **Continuous Deployment.** The project is mid-development; auto-deploy
-  is deferred until a real staging/prod environment exists. When ready,
-  add `.github/workflows/deploy.yml` that triggers on `push: main` (→ staging)
-  and `tag v*` (→ prod), and either SSH-pulls the GHCR image or invokes
-  Cloud Run / ECS.
-- **End-to-end tests.** Defer until business logic stabilises.
+CD is implemented in `.github/workflows/deploy.yml` with an
+**environment-ready** design: the full deploy path (immutable image tags,
+health checks, smoke tests, auto-rollback, prod approval gate) runs and is
+validated on every release, while the physical target stays pluggable.
+
+```
+main push ─▶ CI ─▶ Build & Publish ─▶ deploy-staging   (automatic)
+tag v*    ─▶ CI ─▶ Build & Publish ─▶ deploy-production (approval gate*)
+```
+
+Each deploy job picks one of two modes, decided by whether the
+`DEPLOY_HOST` secret exists:
+
+| Mode | When | What happens |
+|---|---|---|
+| **Ephemeral** (default) | No server configured | The full stack (postgres + backend + frontend images from GHCR) is brought up **on the runner** via `deploy/deploy.sh`, health-checked and smoke-tested, then torn down. The entire deploy path is exercised at zero infrastructure cost. |
+| **Server** | `DEPLOY_HOST` set | SSH to the host, `git checkout` the exact commit/tag, run the **same** `deploy/deploy.sh`. On health-check failure the script auto-rolls back to the last good tag. |
+
+Shared pieces (identical in both modes):
+
+- `deploy/docker-compose.deploy.yml` — pull-only stack; env isolation via
+  compose project names (`strata-staging` / `strata-prod`) and distinct ports.
+- `deploy/deploy.sh` — pull → up → poll `/api/health` + frontend → record
+  last-good tag, or roll back to it and exit non-zero.
+- Deploys always use **immutable tags** (`sha-<short>` from main builds,
+  `vX.Y.Z` from releases) — never `latest` — so every deploy is reproducible
+  and rollback is a one-liner.
+- `workflow_dispatch` allows manually deploying any tag to either environment
+  (also serves as the approval mechanism on plans without protected
+  Environments*).
+
+### Switching to a real server (zero code changes)
+
+1. Provision a host with docker + compose; `git clone` the repo to
+   `/opt/strata/repo`; `docker login ghcr.io` with a `read:packages` PAT.
+2. Add repo secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`
+   (a dedicated deploy user restricted to the compose directory).
+3. (Optional) In **Settings → Environments → production**, add *Required
+   reviewers* for a manual approval gate. *Free on public repos; on private
+   repos this needs GitHub Team — use `workflow_dispatch` as the gate instead.
+
+Nothing else changes: same compose file, same script, same workflow.
+
+## 8. What's intentionally **not** included
+
+- **A permanent hosting target.** The project has no production owner yet;
+  see §7 — the pipeline is validated end-to-end in ephemeral mode and a real
+  server is a 3-secret configuration change, not a code change.
+- **End-to-end tests.** Defer until business logic stabilises. (The CD smoke
+  tests cover health, key API routes, and the nginx `/api` proxy.)
 - **Self-hosted SonarQube / Jenkins / Nexus.** Hosted services keep ops to zero.
