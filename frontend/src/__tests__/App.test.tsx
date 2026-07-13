@@ -33,14 +33,15 @@ vi.mock('../api', () => ({
 import App from '../App';
 
 describe('App', () => {
-  it('renders the brand and the five workflow steps in the sidebar', () => {
+  it('renders the brand and the four workflow steps in the sidebar', () => {
     render(<App />);
     expect(screen.getByText('Strata')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /01 AI Assistant/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /02 Convert/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /03 Import/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /04 Browse/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /05 Emission Factors/i })).toBeInTheDocument();
+    // The Emission Factors view is intentionally hidden from the sidebar.
+    expect(screen.queryByRole('button', { name: /Emission Factors/i })).not.toBeInTheDocument();
   });
 
   it('reports an online status once the health check resolves', async () => {
