@@ -9,11 +9,14 @@ will all turn green.
 ```
 ┌─────────────────┐       ┌───────────────────────────────────────────────┐
 │  Pull Request   │──────▶│  ci.yml  (.github/workflows/ci.yml)           │
-│  push to main   │       │   ├─ backend (ruff + pytest + PG 17)          │
-│  manual run     │       │   ├─ frontend (eslint + tsc + vitest + build) │
-└─────────────────┘       │   ├─ db-schema (apply sql/*.sql in order)     │
+│  push to main   │       │   ├─ backend (ruff + unit & integration pytest│
+│  manual run     │       │   │            runs w/ JUnit artifacts, PG 17)│
+└─────────────────┘       │   ├─ frontend (eslint + tsc + vitest + build) │
+                          │   ├─ db-schema (apply sql/*.sql in order)     │
                           │   ├─ sonarcloud (quality gate)                │
-                          │   └─ dependency-audit (pip-audit + npm audit) │
+                          │   ├─ sast-bandit (Bandit, BLOCKING)           │
+                          │   └─ dependency-audit (pip-audit + npm audit, │
+                          │      BLOCKING w/ triaged ignore list)         │
                           └────────────────┬──────────────────────────────┘
                                            │ on push to main
                                            ▼
@@ -33,7 +36,14 @@ will all turn green.
 | Path | Role |
 |---|---|
 | `.github/workflows/ci.yml` | PR + push CI: lint, test, SonarCloud, dep audit |
-| `.github/workflows/build-images.yml` | main / tag: docker build + push GHCR + Trivy |
+| `.github/workflows/build-images.yml` | main / tag: docker build + push GHCR + Trivy (blocking on fixable HIGH/CRITICAL) |
+| `.github/workflows/load-test.yml` | Locust load (20u/2min) + stress (100u/90s) phases, HTML/CSV report artifacts, p95 threshold gate |
+| `.github/workflows/dast.yml` | OWASP ZAP baseline (SPA via nginx) + OpenAPI-driven API scan against the running stack; weekly rescan |
+| `.zap/rules.tsv` | ZAP rule triage list (justified ignores) |
+| `loadtest/locustfile.py` | Locust user scenarios (read-only endpoints) |
+| `security/pip-audit-ignores.txt` | Triaged accepted-risk advisories (blocking otherwise) |
+| `security/VULNERABILITY_ASSESSMENT.md` | Find → fix → rescan evidence chain (SAST/SCA/Trivy/DAST) |
+| `security/COMPLIANCE.md` | Compliance-as-code mapping (SOC 2 controls, PDPA/GDPR) |
 | `.github/pull_request_template.md` | PR description template |
 | `.pre-commit-config.yaml` | Local pre-commit hooks (ruff, prettier, hygiene) |
 | `sonar-project.properties` | SonarCloud project config |

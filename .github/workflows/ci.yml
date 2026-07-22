@@ -77,16 +77,50 @@ jobs:
             psql -h localhost -U postgres -d ecotea -v ON_ERROR_STOP=1 -f "$f"
           done
 
-      - name: Run tests
-        # Unit tests run on in-memory SQLite (conftest default). Do NOT point
-        # DATABASE_URL at the PG service here: the SQLite-oriented fixtures
-        # (tests/_db_fixture.py) rebuild simplified tables on the shared engine
-        # and would clobber the real schema. PG 17 schema validity is covered
-        # by the dedicated "DB schema check" job.
+      # Tests run on in-memory SQLite (conftest default). Do NOT point
+      # DATABASE_URL at the PG service here: the SQLite-oriented fixtures
+      # (tests/_db_fixture.py) rebuild simplified tables on the shared engine
+      # and would clobber the real schema. PG 17 schema validity is covered
+      # by the dedicated "DB schema check" job.
+      #
+      # The suite is split into two runs so each level produces its own
+      # JUnit result artifact:
+      #   * unit        — everything except API-level tests
+      #   * integration — FastAPI routers exercised over HTTP (TestClient)
+      #                   plus the Excel importer end-to-end flow
+      - name: Unit tests
         env:
           DATABASE_URL: "sqlite+pysqlite:///:memory:"
           ALLOWED_ORIGINS: http://localhost:5173
-        run: pytest
+        run: |
+          pytest --ignore-glob='**/test_routers_*.py' \
+                 --ignore=tests/test_excel_importer_e2e.py \
+                 --junitxml=junit-unit.xml
+
+      - name: Integration tests (API + e2e)
+        env:
+          DATABASE_URL: "sqlite+pysqlite:///:memory:"
+          ALLOWED_ORIGINS: http://localhost:5173
+        run: |
+          pytest tests/test_routers_browse.py \
+                 tests/test_routers_chat.py \
+                 tests/test_routers_convert.py \
+                 tests/test_routers_emission_factors.py \
+                 tests/test_routers_imports.py \
+                 tests/test_routers_raw_rows.py \
+                 tests/test_excel_importer_e2e.py \
+                 --cov-append \
+                 --junitxml=junit-integration.xml
+
+      - name: Upload test result artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: |
+            backend/junit-unit.xml
+            backend/junit-integration.xml
+          if-no-files-found: warn
 
       - name: Upload coverage artifact
         if: always()
@@ -132,7 +166,15 @@ jobs:
         run: npm run typecheck
 
       - name: Unit tests with coverage
-        run: npm run test:coverage
+        run: npm run test:coverage -- --reporter=default --reporter=junit --outputFile=junit-frontend.xml
+
+      - name: Upload test result artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: frontend/junit-frontend.xml
+          if-no-files-found: warn
 
       - name: Production build
         run: npm run build
@@ -233,12 +275,12 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # Dependency vulnerability scan (informational; does not block merges yet).
+  # SAST: Bandit security scan of backend Python code. BLOCKING — the codebase
+  # scans clean, so any new finding must be fixed (or justified via # nosec).
   # ---------------------------------------------------------------------------
-  dependency-audit:
-    name: Dependency audit
+  sast-bandit:
+    name: SAST (Bandit)
     runs-on: ubuntu-latest
-    continue-on-error: true  # informational in v1; flip to false after triage.
 
     steps:
       - name: Checkout
@@ -249,10 +291,54 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: pip-audit (backend)
+      - name: Bandit scan
+        run: |
+          pip install bandit
+          bandit -r backend/app -f txt  -o bandit-report.txt --exit-zero
+          cat bandit-report.txt
+          # Blocking pass: fail on any finding.
+          bandit -r backend/app -f json -o bandit-report.json
+
+      - name: Upload Bandit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-reports
+          path: |
+            bandit-report.txt
+            bandit-report.json
+
+  # ---------------------------------------------------------------------------
+  # Dependency vulnerability scan. BLOCKING since triage on 2026-07-22:
+  #   * pip-audit — accepted risks (major-version-only fixes) are listed with
+  #     justifications in security/pip-audit-ignores.txt; anything else fails.
+  #   * npm audit — production dependencies must be free of high/critical;
+  #     dev-tooling chain tracked separately (see SECURITY notes) via an
+  #     informational full audit.
+  # ---------------------------------------------------------------------------
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: pip-audit (backend, blocking with triaged ignore list)
         run: |
           pip install pip-audit
-          pip-audit -r backend/requirements.txt --strict || true
+          # Build --ignore-vuln flags from the triaged ignore file
+          # (comments and blank lines skipped).
+          IGNORES=$(grep -vE '^\s*(#|$)' security/pip-audit-ignores.txt \
+                    | awk '{printf " --ignore-vuln %s", $1}')
+          echo "Ignoring triaged advisories:$IGNORES"
+          # shellcheck disable=SC2086
+          pip-audit -r backend/requirements.txt --no-deps --strict $IGNORES
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -261,6 +347,10 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: npm audit (frontend)
+      - name: npm audit (frontend, production deps — blocking)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: npm audit (frontend, full — informational)
         working-directory: frontend
         run: npm audit --audit-level=high || true

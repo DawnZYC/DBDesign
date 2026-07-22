@@ -83,7 +83,8 @@ jobs:
           format: 'sarif'
           output: 'trivy-${{ matrix.component }}.sarif'
           severity: 'HIGH,CRITICAL'
-          exit-code: '0'  # informational in v1; flip to '1' once baseline is clean.
+          ignore-unfixed: true  # base-image CVEs without an upstream fix can't be acted on
+          exit-code: '1'        # BLOCKING since 2026-07-22: fail on fixable HIGH/CRITICAL
 
       - name: Upload Trivy results to GitHub Security tab
         if: always()

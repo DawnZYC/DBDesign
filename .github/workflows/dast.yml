@@ -1,0 +1,90 @@
+name: DAST (OWASP ZAP)
+
+# Dynamic Application Security Testing against a *running* full stack.
+#
+# Brings up the same deploy stack used by deploy.yml (ephemeral mode), then:
+#   * zap-baseline  — passive spider + scan of the frontend SPA (via nginx,
+#                     which also exercises the /api reverse proxy)
+#   * zap-api-scan  — active scan of the backend driven by its OpenAPI spec
+#
+# Reports (HTML/JSON/MD) are uploaded as artifacts. Warnings are informational
+# in v1 (rules can be tuned via .zap/rules.tsv); flip fail_action once the
+# baseline is clean to make findings block the pipeline.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * 1'   # weekly Monday 02:00 UTC rescan
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/dast.yml'
+      - '.zap/**'
+
+concurrency:
+  group: dast-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write   # ZAP actions can file tracking issues (disabled below, but required by the action)
+
+jobs:
+  zap:
+    name: ZAP baseline + API scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bring up full stack (ephemeral)
+        run: ./deploy/deploy.sh staging
+
+      - name: Wait for stack readiness
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            curl -fsS localhost:8000/api/health >/dev/null 2>&1 \
+              && curl -fsS localhost:5173/ >/dev/null 2>&1 && break
+            sleep 2
+          done
+          curl -fsS localhost:8000/api/health | grep -q '"ok"'
+
+      - name: Export OpenAPI spec
+        run: curl -fsS localhost:8000/openapi.json -o openapi.json
+
+      - name: ZAP baseline scan (frontend via nginx)
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://localhost:5173'
+          rules_file_name: '.zap/rules.tsv'
+          artifact_name: 'zap-baseline-frontend'
+          allow_issue_writing: false
+          fail_action: false   # informational in v1; flip after triage.
+          cmd_options: '-a'
+
+      - name: ZAP API scan (backend, OpenAPI-driven)
+        uses: zaproxy/action-api-scan@v0.9.0
+        with:
+          target: 'openapi.json'
+          format: 'openapi'
+          rules_file_name: '.zap/rules.tsv'
+          artifact_name: 'zap-api-backend'
+          allow_issue_writing: false
+          fail_action: false   # informational in v1; flip after triage.
+          cmd_options: '-O http://localhost:8000'
+
+      - name: Show stack logs on failure
+        if: failure()
+        run: docker compose -p strata-staging -f deploy/docker-compose.deploy.yml logs --tail 100
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -p strata-staging -f deploy/docker-compose.deploy.yml down -v || true
