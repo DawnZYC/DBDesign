@@ -1,0 +1,31 @@
+# Triaged pip-audit advisories — accepted risks, one ID per line.
+#
+# Triage date: 2026-07-22 (see VULNERABILITY_ASSESSMENT.md for the full
+# before/after evidence chain). Every advisory below is fixable ONLY by a
+# major-version upgrade (starlette 1.x / langchain 1.x / langgraph 1.x),
+# which is a breaking change tracked as planned work — not silently ignored.
+# Anything NOT in this list fails the dependency-audit CI job.
+
+# starlette — fixes require starlette >=1.x; pinned by fastapi compatibility.
+PYSEC-2026-161
+PYSEC-2026-248
+PYSEC-2026-249
+PYSEC-2026-2280
+PYSEC-2026-2281
+
+# langchain family — fixes require the 1.x line; 0.3.x is at latest patch.
+PYSEC-2026-2192
+PYSEC-2026-2193
+PYSEC-2026-2562
+PYSEC-2026-77
+PYSEC-2026-76
+PYSEC-2026-2556
+
+# langgraph family — fixes require langgraph >=0.3/1.x with breaking
+# checkpoint-format changes; upgrade planned as a dedicated milestone.
+PYSEC-2026-83
+PYSEC-2026-2194
+PYSEC-2026-1527
+PYSEC-2026-2573
+PYSEC-2026-2574
+PYSEC-2026-2575
