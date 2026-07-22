@@ -94,6 +94,11 @@ jobs:
           format: 'sarif'
           output: 'trivy-${{ matrix.component }}.sarif'
           severity: 'HIGH,CRITICAL'
+          # REQUIRED: trivy-action's entrypoint does `unset TRIVY_SEVERITY` for
+          # sarif output unless this is true ("Building SARIF report with all
+          # severities"). Without it the severity filter above is silently
+          # dropped and exit-code 1 fires on any fixable LOW/MEDIUM finding.
+          limit-severities-for-sarif: true
           ignore-unfixed: true  # base-image CVEs without an upstream fix can't be acted on
           exit-code: '1'        # BLOCKING since 2026-07-22: fail on fixable HIGH/CRITICAL
           trivyignores: 'security/.trivyignore'  # triaged accepted risks (justified inline)
