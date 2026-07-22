@@ -42,10 +42,11 @@ CVE-2026-27794
 GHSA-mhr3-j7m5-c7c9
 
 # --- 3. transformers (ML extra, sentence-transformers dependency) ---
-# All three require loading attacker-supplied models or trust_remote_code to
-# exploit. Strata only loads a pinned, first-party-curated embedding model
-# from HuggingFace Hub and never sets trust_remote_code. transformers 5.x
-# upgrade tracked together with the sentence-transformers major bump.
-CVE-2024-11394
+# CVE-2024-11392 / -11393 / -11394 are FIXED, not ignored: transformers bumped
+# 4.46.3 -> 4.48.0 in requirements-ml.txt (2026-07-22). The two below have no
+# 4.x fix (5.3.0 / 5.5.0) and both require loading attacker-supplied models or
+# trust_remote_code to exploit. Strata only loads a pinned, first-party-curated
+# embedding model from HuggingFace Hub and never sets trust_remote_code. The
+# transformers 5.x upgrade is tracked with the sentence-transformers major bump.
 CVE-2026-4372
 CVE-2026-5241
