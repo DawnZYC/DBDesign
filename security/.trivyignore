@@ -1,0 +1,9 @@
+# Triaged Trivy findings — accepted risks, one CVE/GHSA ID per line.
+#
+# Mirror of the pip-audit triage (security/pip-audit-ignores.txt): advisories
+# whose only fix is a breaking major-version upgrade (starlette 1.x,
+# langchain/langgraph 1.x) are accepted here too, since Trivy rescans the
+# same installed packages inside the backend image. Add IDs below with a
+# justification comment; anything not listed blocks the image build.
+#
+# (populate from the "findings table" step of the next build-images run)
