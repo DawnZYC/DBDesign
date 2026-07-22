@@ -1,9 +1,51 @@
 # Triaged Trivy findings — accepted risks, one CVE/GHSA ID per line.
+# Triage date: 2026-07-22. See VULNERABILITY_ASSESSMENT.md for the full chain.
 #
-# Mirror of the pip-audit triage (security/pip-audit-ignores.txt): advisories
-# whose only fix is a breaking major-version upgrade (starlette 1.x,
-# langchain/langgraph 1.x) are accepted here too, since Trivy rescans the
-# same installed packages inside the backend image. Add IDs below with a
-# justification comment; anything not listed blocks the image build.
-#
-# (populate from the "findings table" step of the next build-images run)
+# Sections 1–2 mirror the pip-audit triage (security/pip-audit-ignores.txt):
+# the same advisories, mapped to the CVE/GHSA IDs Trivy reports (via OSV
+# aliases). Only fix = breaking major-version upgrade (starlette 1.x,
+# langchain/langgraph 1.x), tracked as a planned migration milestone.
+# Anything NOT listed here blocks the image build.
+
+# --- 1. starlette (accepted: fix requires starlette >=1.x) ---
+CVE-2026-48710
+GHSA-86qp-5c8j-p5mr
+CVE-2026-54282
+GHSA-jp82-jpqv-5vv3
+CVE-2026-54283
+GHSA-82w8-qh3p-5jfq
+CVE-2026-48817
+GHSA-x746-7m8f-x49c
+CVE-2026-48818
+GHSA-wqp7-x3pw-xc5r
+
+# --- 2. langchain / langgraph family (accepted: fix requires 1.x line) ---
+CVE-2026-55443
+GHSA-gr75-jv2w-4656
+CVE-2026-34070
+GHSA-qh6h-p6c9-ff54
+CVE-2026-26013
+GHSA-2g6r-c272-w58r
+CVE-2026-41481
+GHSA-fv5p-p927-qmxr
+CVE-2026-41488
+GHSA-r7w7-9xr2-qq2r
+CVE-2026-28277
+GHSA-g48c-2wqr-h844
+CVE-2026-48776
+GHSA-w39p-vh2g-g8g5
+CVE-2025-64439
+GHSA-wwqv-p2pp-99h5
+CVE-2026-48775
+GHSA-fjqc-hq36-qh5p
+CVE-2026-27794
+GHSA-mhr3-j7m5-c7c9
+
+# --- 3. transformers (ML extra, sentence-transformers dependency) ---
+# All three require loading attacker-supplied models or trust_remote_code to
+# exploit. Strata only loads a pinned, first-party-curated embedding model
+# from HuggingFace Hub and never sets trust_remote_code. transformers 5.x
+# upgrade tracked together with the sentence-transformers major bump.
+CVE-2024-11394
+CVE-2026-4372
+CVE-2026-5241
