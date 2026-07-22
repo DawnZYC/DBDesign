@@ -76,6 +76,17 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
           provenance: false
 
+      - name: Trivy scan — findings table (log visibility, non-blocking)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}-${{ matrix.component }}@${{ steps.build.outputs.digest }}
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '0'
+        env:
+          TRIVY_SKIP_DB_UPDATE: false
+
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
@@ -85,6 +96,9 @@ jobs:
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true  # base-image CVEs without an upstream fix can't be acted on
           exit-code: '1'        # BLOCKING since 2026-07-22: fail on fixable HIGH/CRITICAL
+          trivyignores: 'security/.trivyignore'  # triaged accepted risks (justified inline)
+        env:
+          TRIVY_SKIP_DB_UPDATE: true  # reuse the DB downloaded by the table step
 
       - name: Upload Trivy results to GitHub Security tab
         if: always()

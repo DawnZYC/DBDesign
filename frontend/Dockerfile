@@ -17,7 +17,9 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 2: runtime — Nginx serving the static bundle
 # ---------------------------------------------------------------------------
-FROM nginx:1.27-alpine AS runtime
+# 1.30 = current stable line; bumped from 1.27 (alpine 3.21) on 2026-07-22 to
+# clear fixable HIGH/CRITICAL OS-package CVEs flagged by the Trivy gate.
+FROM nginx:1.30-alpine AS runtime
 
 # Replace the default config with one tuned for an SPA + /api reverse-proxy.
 COPY nginx.conf /etc/nginx/conf.d/default.conf

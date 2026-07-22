@@ -45,7 +45,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Bring up full stack (ephemeral)
-        run: ./deploy/deploy.sh staging
+        # Scan the latest images published from main. deploy.sh requires an
+        # explicit IMAGE_TAG (it never assumes).
+        run: IMAGE_TAG=latest ./deploy/deploy.sh staging
 
       - name: Wait for stack readiness
         run: |
