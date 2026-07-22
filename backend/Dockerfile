@@ -22,8 +22,11 @@ RUN apt-get update \
 ARG INSTALL_ML=true
 
 COPY requirements.txt requirements-ml.txt ./
+# setuptools/wheel are upgraded explicitly: the versions bundled with the base
+# image vendor vulnerable jaraco.context (CVE-2026-23949) and wheel
+# (CVE-2026-24049), both flagged HIGH by the Trivy gate (fixed 2026-07-22).
 RUN python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install --upgrade pip setuptools wheel \
     && /opt/venv/bin/pip install -r requirements.txt \
     && if [ "$INSTALL_ML" = "true" ]; then \
          /opt/venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu \
@@ -40,9 +43,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 # libpq for psycopg runtime; tini for proper signal handling.
+# The runtime's own site-packages also carries the base image's setuptools with
+# vendored jaraco.context/wheel (CVE-2026-23949 / CVE-2026-24049) — upgrade it
+# too so both copies Trivy sees are patched.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq5 tini curl \
     && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir --upgrade setuptools wheel \
     && groupadd --system app && useradd --system --gid app --home /app app
 
 COPY --from=builder /opt/venv /opt/venv
