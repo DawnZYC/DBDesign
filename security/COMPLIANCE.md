@@ -20,11 +20,11 @@ history *is* the audit trail.
 
 | # | Control (SOC 2 CC / PDPA-GDPR principle) | Implemented by (artifact) | Enforcement |
 |---|---|---|---|
-| 1 | Change management (CC8.1) | All infra + pipeline defined in `.github/workflows/*.yml`, `docker-compose*.yml`, `deploy/`; every change is a reviewed commit | Git history, PR review |
+| 1 | Change management (CC8.1) | All infra + pipeline defined as code — `.github/workflows/*.yml`, `docker-compose*.yml`, `deploy/` shell, and **`deploy/terraform/`** (Terraform: Docker-provider runtime stack + GitHub-provider policy-as-code); every change is a reviewed commit | Git history, PR review, `terraform plan` drift |
 | 2 | Code integrity before release (CC7.1) | `ci.yml`: lint, typecheck, 600+ unit/integration tests, SonarCloud quality gate | Blocking CI |
 | 3 | Vulnerability management (CC7.1) | Bandit, pip-audit + triaged ignore list (`security/pip-audit-ignores.txt`), npm audit, Trivy, ZAP — see `VULNERABILITY_ASSESSMENT.md` | Blocking CI (DAST informational v1) |
 | 4 | Least-privilege pipeline (CC6.3) | Per-workflow `permissions:` blocks (read-only by default; `packages: write` only where images are pushed) | GitHub Actions |
-| 5 | Segregation of environments (CC6.1) | Staging vs production compose project isolation; production deploys gated behind GitHub Environment required reviewers | `deploy.yml` |
+| 5 | Segregation of environments (CC6.1) | Staging vs production compose project isolation; production deploys gated behind GitHub Environment required reviewers, codified in `deploy/terraform/github-policy/` | `deploy.yml`, Terraform policy-as-code |
 | 6 | Immutable release artifacts (CC8.1) | Images tagged by content (`sha-<digest>`) and semver; deploys reference immutable tags; `deploy.sh` auto-rollback | `build-images.yml`, `deploy/` |
 | 7 | Secrets management (CC6.1; PDPA Protection / GDPR integrity-confidentiality) | No secrets in the repo (`.env` gitignored); credentials only via GitHub Secrets / env injection | `.gitignore`, workflow design |
 | 8 | Data minimisation (PDPA Purpose Limitation / GDPR Art. 5(1)(c)) | Only EcoTEA model data is ingested; the confidential source workbook is excluded from version control and tests synthesise structures instead | `.gitignore`, `tests/test_schema_mapper.py` |

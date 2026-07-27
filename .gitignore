@@ -59,6 +59,16 @@ desktop.ini
 *.pem
 *.key
 
+# Terraform: never commit state (may contain secrets) or local vars/plugins.
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+.terraform.lock.hcl
+
 # =============================================================================
 # Logs and Generated Artifacts
 # =============================================================================
