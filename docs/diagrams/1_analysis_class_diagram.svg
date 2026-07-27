@@ -1,0 +1,241 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 960" width="1400" height="960" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="solid" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#333"/>
+    </marker>
+    <marker id="openarrow" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+      <path d="M 1 1 L 11 6 L 1 11" fill="none" stroke="#333" stroke-width="1.5"/>
+    </marker>
+    <marker id="hollowtri" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="13" markerHeight="13" orient="auto-start-reverse">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#ffffff" stroke="#333" stroke-width="1.2"/>
+    </marker>
+    <marker id="diamond" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto-start-reverse">
+      <path d="M 1 6 L 7 1 L 13 6 L 7 11 z" fill="#ffffff" stroke="#333" stroke-width="1.2"/>
+    </marker>
+    <marker id="fdiamond" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto-start-reverse">
+      <path d="M 1 6 L 7 1 L 13 6 L 7 11 z" fill="#333"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1400" height="960" fill="#ffffff"/>
+  <text x="700.0" y="36" text-anchor="middle" font-size="21" font-weight="700" fill="#111">1. Analysis Class Diagram (Domain Model) — UC11 Ask a question in natural language</text>
+  <text x="700.0" y="58" text-anchor="middle" font-size="12" fill="#666">WHAT the business is about: conceptual classes in the analyst's vocabulary. No controllers, services, frameworks or persistence.</text>
+  <g stroke="#333" stroke-width="1.8" fill="none"><circle cx="150" cy="78" r="11" fill="#fff"/><line x1="150" y1="89" x2="150" y2="111"/><line x1="135" y1="97" x2="165" y2="97"/><line x1="150" y1="111" x2="139" y2="128"/><line x1="150" y1="111" x2="161" y2="128"/></g>
+  <text x="150" y="146" text-anchor="middle" font-size="12" font-weight="700" fill="#111">Analyst</text>
+  <text x="150" y="161" text-anchor="middle" font-size="9.5" fill="#666">(researcher, modeller)</text>
+  <rect x="60" y="210" width="205" height="60" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="162.5" y="227" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">Conversation</text>
+  <line x1="60" y1="232" x2="265" y2="232" stroke="#2e7d32" stroke-width="1"/>
+  <text x="68" y="248" font-size="9.5" fill="#333">startedAt</text>
+  <text x="68" y="261" font-size="9.5" fill="#333">replyLanguage</text>
+  <rect x="320" y="190" width="215" height="60" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="427.5" y="207" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">Question</text>
+  <line x1="320" y1="212" x2="535" y2="212" stroke="#2e7d32" stroke-width="1"/>
+  <text x="328" y="228" font-size="9.5" fill="#333">text</text>
+  <text x="328" y="241" font-size="9.5" fill="#333">askedAt</text>
+  <rect x="590" y="100" width="215" height="86" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="697.5" y="115" text-anchor="middle" font-size="9.5" font-style="italic" fill="#2e7d32">&#171;enumeration&#187;</text>
+  <text x="697.5" y="131" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">Intent</text>
+  <line x1="590" y1="135" x2="805" y2="135" stroke="#2e7d32" stroke-width="1"/>
+  <text x="598" y="151" font-size="9.5" fill="#333">DataQuestion</text>
+  <text x="598" y="164" font-size="9.5" fill="#333">DomainQuestion</text>
+  <text x="598" y="177" font-size="9.5" fill="#333">SmallTalk</text>
+  <rect x="860" y="100" width="215" height="60" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="967.5" y="117" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">KnowledgeDocument</text>
+  <line x1="860" y1="122" x2="1075" y2="122" stroke="#2e7d32" stroke-width="1"/>
+  <text x="868" y="138" font-size="9.5" fill="#333">title</text>
+  <text x="868" y="151" font-size="9.5" fill="#333">passages</text>
+  <rect x="320" y="312" width="215" height="47" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="427.5" y="329" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">AnalysisPlan</text>
+  <line x1="320" y1="334" x2="535" y2="334" stroke="#2e7d32" stroke-width="1"/>
+  <text x="328" y="350" font-size="9.5" fill="#333">steps [1..5]</text>
+  <rect x="320" y="424" width="215" height="86" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="427.5" y="441" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">QuerySpecification</text>
+  <line x1="320" y1="446" x2="535" y2="446" stroke="#2e7d32" stroke-width="1"/>
+  <text x="328" y="462" font-size="9.5" fill="#333">aggregation</text>
+  <text x="328" y="475" font-size="9.5" fill="#333">filters</text>
+  <text x="328" y="488" font-size="9.5" fill="#333">yearRange</text>
+  <text x="328" y="501" font-size="9.5" fill="#333">resultLimit</text>
+  <rect x="590" y="424" width="215" height="86" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="697.5" y="439" text-anchor="middle" font-size="9.5" font-style="italic" fill="#2e7d32">&#171;enumeration&#187;</text>
+  <text x="697.5" y="455" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">Metric</text>
+  <line x1="590" y1="459" x2="805" y2="459" stroke="#2e7d32" stroke-width="1"/>
+  <text x="598" y="475" font-size="9.5" fill="#333">name</text>
+  <text x="598" y="488" font-size="9.5" fill="#333">unit</text>
+  <text x="598" y="501" font-size="9.5" fill="#333">12 permitted metrics</text>
+  <rect x="320" y="574" width="215" height="60" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="427.5" y="591" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">AnswerSet</text>
+  <line x1="320" y1="596" x2="535" y2="596" stroke="#2e7d32" stroke-width="1"/>
+  <text x="328" y="612" font-size="9.5" fill="#333">rowCount</text>
+  <text x="328" y="625" font-size="9.5" fill="#333">truncated</text>
+  <rect x="590" y="574" width="215" height="60" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="697.5" y="591" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">DataPoint</text>
+  <line x1="590" y1="596" x2="805" y2="596" stroke="#2e7d32" stroke-width="1"/>
+  <text x="598" y="612" font-size="9.5" fill="#333">value</text>
+  <text x="598" y="625" font-size="9.5" fill="#333">unit</text>
+  <rect x="860" y="574" width="215" height="73" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="967.5" y="591" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">SourceCell</text>
+  <line x1="860" y1="596" x2="1075" y2="596" stroke="#2e7d32" stroke-width="1"/>
+  <text x="868" y="612" font-size="9.5" fill="#333">workbook, sheet</text>
+  <text x="868" y="625" font-size="9.5" fill="#333">rowNumber</text>
+  <text x="868" y="638" font-size="9.5" fill="#333">rawCells</text>
+  <rect x="860" y="424" width="215" height="47" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="967.5" y="441" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">TechnologyYear</text>
+  <line x1="860" y1="446" x2="1075" y2="446" stroke="#2e7d32" stroke-width="1"/>
+  <text x="868" y="462" font-size="9.5" fill="#333">dataYear</text>
+  <rect x="860" y="262" width="215" height="73" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="967.5" y="279" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">Technology</text>
+  <line x1="860" y1="284" x2="1075" y2="284" stroke="#2e7d32" stroke-width="1"/>
+  <text x="868" y="300" font-size="9.5" fill="#333">code</text>
+  <text x="868" y="313" font-size="9.5" fill="#333">description</text>
+  <text x="868" y="326" font-size="9.5" fill="#333">startYear, lifetime</text>
+  <rect x="1130" y="248" width="205" height="60" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="1232.5" y="265" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">Sector</text>
+  <line x1="1130" y1="270" x2="1335" y2="270" stroke="#2e7d32" stroke-width="1"/>
+  <text x="1138" y="286" font-size="9.5" fill="#333">code</text>
+  <text x="1138" y="299" font-size="9.5" fill="#333">name</text>
+  <rect x="1130" y="352" width="205" height="60" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="1232.5" y="369" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">Geography</text>
+  <line x1="1130" y1="374" x2="1335" y2="374" stroke="#2e7d32" stroke-width="1"/>
+  <text x="1138" y="390" font-size="9.5" fill="#333">code</text>
+  <text x="1138" y="403" font-size="9.5" fill="#333">name</text>
+  <rect x="60" y="560" width="205" height="47" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="162.5" y="577" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">Insight</text>
+  <line x1="60" y1="582" x2="265" y2="582" stroke="#2e7d32" stroke-width="1"/>
+  <text x="68" y="598" font-size="9.5" fill="#333">narrative</text>
+  <rect x="60" y="668" width="205" height="60" rx="4" fill="#f1f8f2" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="162.5" y="685" text-anchor="middle" font-size="11.5" font-weight="700" fill="#111">Chart</text>
+  <line x1="60" y1="690" x2="265" y2="690" stroke="#2e7d32" stroke-width="1"/>
+  <text x="68" y="706" font-size="9.5" fill="#333">chartType</text>
+  <text x="68" y="719" font-size="9.5" fill="#333">dimensions, series</text>
+  <path d="M 150,156 L 150,210" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="155.1" y="195" width="25.8" height="12" fill="#ffffff"/>
+  <text x="168" y="204" text-anchor="middle" font-size="9" fill="#333">0..*</text>
+  <rect x="167.9375" y="184.0" width="32.125" height="12" fill="#ffffff"/>
+  <text x="184.0" y="193.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">holds</text>
+  <path d="M 265,224 L 320,224" fill="none" stroke="#444" stroke-width="1.4"/>
+  <path d="M 265,224 L 272.0,230.0 L 279.0,224.0 L 272.0,218.0 z" fill="#333" stroke="#333" stroke-width="1.2"/>
+  <rect x="275.525" y="208" width="10.95" height="12" fill="#ffffff"/>
+  <text x="281" y="217" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="289.1" y="208" width="25.8" height="12" fill="#ffffff"/>
+  <text x="302" y="217" text-anchor="middle" font-size="9" fill="#333">1..*</text>
+  <rect x="268.6" y="233.0" width="47.800000000000004" height="12" fill="#ffffff"/>
+  <text x="292.5" y="242.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">contains</text>
+  <path d="M 535,206 L 590,168" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="568.525" y="183" width="10.95" height="12" fill="#ffffff"/>
+  <text x="574" y="192" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="529.5375" y="169.0" width="73.92500000000001" height="12" fill="#ffffff"/>
+  <text x="566.5" y="178.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">classified as</text>
+  <path d="M 427,250 L 427,312" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="433.525" y="255" width="10.95" height="12" fill="#ffffff"/>
+  <text x="439" y="264" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="430.1" y="297" width="25.8" height="12" fill="#ffffff"/>
+  <text x="443" y="306" text-anchor="middle" font-size="9" fill="#333">0..1</text>
+  <rect x="449.875" y="276.0" width="58.25000000000001" height="12" fill="#ffffff"/>
+  <text x="479.0" y="285.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">planned as</text>
+  <path d="M 427,359 L 427,424" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="433.525" y="364" width="10.95" height="12" fill="#ffffff"/>
+  <text x="439" y="373" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="430.1" y="409" width="25.8" height="12" fill="#ffffff"/>
+  <text x="443" y="418" text-anchor="middle" font-size="9" fill="#333">0..1</text>
+  <rect x="450.325" y="386.5" width="37.35" height="12" fill="#ffffff"/>
+  <text x="469.0" y="395.5" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">yields</text>
+  <path d="M 535,458 L 590,458" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="539.525" y="443" width="10.95" height="12" fill="#ffffff"/>
+  <text x="545" y="452" text-anchor="middle" font-size="9" fill="#333">*</text>
+  <rect x="574.525" y="443" width="10.95" height="12" fill="#ffffff"/>
+  <text x="580" y="452" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="541.2125" y="441.0" width="42.575" height="12" fill="#ffffff"/>
+  <text x="562.5" y="450.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">targets</text>
+  <path d="M 427,510 L 427,574" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="433.525" y="515" width="10.95" height="12" fill="#ffffff"/>
+  <text x="439" y="524" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="430.1" y="559" width="25.8" height="12" fill="#ffffff"/>
+  <text x="443" y="568" text-anchor="middle" font-size="9" fill="#333">0..1</text>
+  <rect x="449.2625" y="537.0" width="63.47500000000001" height="12" fill="#ffffff"/>
+  <text x="481.0" y="546.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">answered by</text>
+  <path d="M 535,604 L 590,604" fill="none" stroke="#444" stroke-width="1.4"/>
+  <path d="M 535,604 L 542.0,610.0 L 549.0,604.0 L 542.0,598.0 z" fill="#333" stroke="#333" stroke-width="1.2"/>
+  <rect x="551.525" y="587" width="10.95" height="12" fill="#ffffff"/>
+  <text x="557" y="596" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="561.1" y="587" width="25.8" height="12" fill="#ffffff"/>
+  <text x="574" y="596" text-anchor="middle" font-size="9" fill="#333">1..*</text>
+  <rect x="538.6" y="587.0" width="47.800000000000004" height="12" fill="#ffffff"/>
+  <text x="562.5" y="596.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">contains</text>
+  <path d="M 805,620 L 860,620" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="811.525" y="628" width="10.95" height="12" fill="#ffffff"/>
+  <text x="817" y="637" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="842.525" y="628" width="10.95" height="12" fill="#ffffff"/>
+  <text x="848" y="637" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="805.9875" y="602.0" width="53.025000000000006" height="12" fill="#ffffff"/>
+  <text x="832.5" y="611.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">traces to</text>
+  <path d="M 660,574 L 660,511" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="642.525" y="559" width="10.95" height="12" fill="#ffffff"/>
+  <text x="648" y="568" text-anchor="middle" font-size="9" fill="#333">*</text>
+  <rect x="642.525" y="516" width="10.95" height="12" fill="#ffffff"/>
+  <text x="648" y="525" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="665.775" y="537.5" width="16.450000000000003" height="12" fill="#ffffff"/>
+  <text x="674.0" y="546.5" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">of</text>
+  <path d="M 750,574 L 750,544 L 960,544 L 960,466" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="732.525" y="559" width="10.95" height="12" fill="#ffffff"/>
+  <text x="738" y="568" text-anchor="middle" font-size="9" fill="#333">*</text>
+  <rect x="976.525" y="471" width="10.95" height="12" fill="#ffffff"/>
+  <text x="982" y="480" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="823.2625" y="528.0" width="63.47500000000001" height="12" fill="#ffffff"/>
+  <text x="855.0" y="537.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">measured on</text>
+  <path d="M 967,330 L 967,424" fill="none" stroke="#444" stroke-width="1.4"/>
+  <path d="M 967,330 L 961.0,337.0 L 967.0,344.0 L 973.0,337.0 z" fill="#333" stroke="#333" stroke-width="1.2"/>
+  <rect x="977.525" y="343" width="10.95" height="12" fill="#ffffff"/>
+  <text x="983" y="352" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="972.1" y="409" width="25.8" height="12" fill="#ffffff"/>
+  <text x="985" y="418" text-anchor="middle" font-size="9" fill="#333">1..*</text>
+  <rect x="988.8125" y="372.0" width="84.37500000000001" height="12" fill="#ffffff"/>
+  <text x="1031.0" y="381.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">has yearly data</text>
+  <path d="M 1075,288 L 1130,274" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="1079.525" y="273" width="10.95" height="12" fill="#ffffff"/>
+  <text x="1085" y="282" text-anchor="middle" font-size="9" fill="#333">*</text>
+  <rect x="1114.525" y="259" width="10.95" height="12" fill="#ffffff"/>
+  <text x="1120" y="268" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="1094.275" y="263.0" width="16.450000000000003" height="12" fill="#ffffff"/>
+  <text x="1102.5" y="272.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">in</text>
+  <path d="M 1075,312 L 1130,378" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="1081.525" y="313" width="10.95" height="12" fill="#ffffff"/>
+  <text x="1087" y="322" text-anchor="middle" font-size="9" fill="#333">*</text>
+  <rect x="1112.525" y="363" width="10.95" height="12" fill="#ffffff"/>
+  <text x="1118" y="372" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="1067.375" y="348.0" width="58.25000000000001" height="12" fill="#ffffff"/>
+  <text x="1096.5" y="357.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">located in</text>
+  <path d="M 320,590 L 265,584" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="300.525" y="573" width="10.95" height="12" fill="#ffffff"/>
+  <text x="306" y="582" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="266.1" y="567" width="25.8" height="12" fill="#ffffff"/>
+  <text x="279" y="576" text-anchor="middle" font-size="9" fill="#333">0..1</text>
+  <rect x="258.15" y="569.0" width="68.7" height="12" fill="#ffffff"/>
+  <text x="292.5" y="578.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">explained by</text>
+  <path d="M 320,612 L 292,612 L 292,700 L 265,700" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="300.525" y="615" width="10.95" height="12" fill="#ffffff"/>
+  <text x="306" y="624" text-anchor="middle" font-size="9" fill="#333">1</text>
+  <rect x="268.1" y="683" width="25.8" height="12" fill="#ffffff"/>
+  <text x="281" y="692" text-anchor="middle" font-size="9" fill="#333">0..1</text>
+  <rect x="226.1" y="651.0" width="47.800000000000004" height="12" fill="#ffffff"/>
+  <text x="250.0" y="660.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">shown as</text>
+  <path d="M 535,246 L 822,246 L 822,126 L 860,126" fill="none" stroke="#444" stroke-width="1.4"/>
+  <rect x="545.525" y="231" width="10.95" height="12" fill="#ffffff"/>
+  <text x="551" y="240" text-anchor="middle" font-size="9" fill="#333">*</text>
+  <rect x="831.1" y="107" width="25.8" height="12" fill="#ffffff"/>
+  <text x="844" y="116" text-anchor="middle" font-size="9" fill="#333">0..*</text>
+  <rect x="696.75" y="227.0" width="110.50000000000001" height="12" fill="#ffffff"/>
+  <text x="752.0" y="236.0" text-anchor="middle" font-size="9.5" font-style="italic" fill="#555">may be answered from</text>
+  <rect x="60" y="780" width="1275" height="109" rx="8" fill="#fffbe6" stroke="#d4b106" stroke-width="1.2"/>
+  <text x="74" y="801" font-size="11.5" font-weight="700" fill="#6b5900">Analysis (domain) model conventions</text>
+  <text x="74" y="820" font-size="9.5" font-weight="700" fill="#6b5900">Vocabulary</text>
+  <text x="178" y="820" font-size="9.5" fill="#7a6a20">every class is a noun an energy analyst would recognise -- there is no Controller, Service, Repository or framework type here.</text>
+  <text x="74" y="835" font-size="9.5" font-weight="700" fill="#6b5900">No behaviour</text>
+  <text x="178" y="835" font-size="9.5" fill="#7a6a20">operations are deliberately omitted: analysis answers WHAT the business deals with, design answers HOW software realises it.</text>
+  <text x="74" y="850" font-size="9.5" font-weight="700" fill="#6b5900">Key invariant</text>
+  <text x="178" y="850" font-size="9.5" fill="#7a6a20">DataPoint 1--1 SourceCell: every figure the platform ever shows can be traced back to the exact workbook cell it came from.</text>
+  <text x="74" y="865" font-size="9.5" font-weight="700" fill="#6b5900">Constrained data</text>
+  <text x="178" y="865" font-size="9.5" fill="#7a6a20">Metric is an enumeration of 12 permitted measures; QuerySpecification can only ever refer to one of them.</text>
+  <text x="74" y="880" font-size="9.5" font-weight="700" fill="#6b5900">Becomes</text>
+  <text x="178" y="880" font-size="9.5" fill="#7a6a20">these concepts reappear in diagram 3 as Pydantic DTOs, AgentState fields and SQLAlchemy entities -- see UC11_analysis_to_design.md.</text>
+</svg>

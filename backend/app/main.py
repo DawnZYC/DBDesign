@@ -50,6 +50,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Security response headers on the backend itself, so a client hitting the API
+# directly (not just through the nginx proxy) still gets them. Clears ZAP
+# baseline alerts 10021 (X-Content-Type-Options) and the CORP instance of 90004
+# on the OpenAPI API scan. `setdefault` avoids clobbering headers a route sets.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    for header, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
+    return response
+
+
 app.include_router(health.router)
 app.include_router(convert.router)  # VT -> EcoTEA workbook conversion (from main)
 app.include_router(imports.router)

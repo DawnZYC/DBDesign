@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars and adjust. terraform.tfvars is gitignored (secrets).
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+environment    = "staging"
+backend_image  = "ghcr.io/dawnzyc/dbdesign-backend:sha-abc1234"
+frontend_image = "ghcr.io/dawnzyc/dbdesign-frontend:sha-abc1234"
+backend_port   = 8000
+frontend_port  = 5173
+
+# Never commit real secrets. Prefer environment injection:
+#   export TF_VAR_postgres_password=...
+#   export TF_VAR_openai_api_key=...
+# postgres_password = "change-me"
+# openai_api_key    = "sk-..."

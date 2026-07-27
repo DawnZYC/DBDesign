@@ -1,0 +1,202 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 1020" width="1300" height="1020" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="open" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+      <path d="M 1 1 L 11 6 L 1 11" fill="none" stroke="#333" stroke-width="1.6"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1300" height="1020" fill="#ffffff"/>
+
+  <text x="650" y="36" text-anchor="middle" font-size="22" font-weight="700" fill="#111">Use Case Diagram</text>
+
+  <!-- System boundary -->
+  <rect x="220" y="55" width="760" height="830" rx="12" fill="#ffffff" stroke="#222222" stroke-width="2.5"/>
+  <text x="600" y="86" text-anchor="middle" font-size="15" font-weight="700" fill="#111">Strata — Multi-Agent Energy Model Analytics (EcoTEA WP1)</text>
+
+  <!-- Use cases : column A, directly used by the actor -->
+  <g fill="#ffffff" stroke="#2e7d32" stroke-width="1.7">
+    <ellipse cx="420" cy="150" rx="128" ry="30"/>
+    <ellipse cx="420" cy="300" rx="128" ry="30"/>
+    <ellipse cx="420" cy="470" rx="128" ry="30"/>
+    <ellipse cx="420" cy="560" rx="128" ry="30"/>
+  </g>
+  <g fill="#ffffff" stroke="#1565c0" stroke-width="1.7">
+    <ellipse cx="420" cy="680" rx="128" ry="30"/>
+    <ellipse cx="420" cy="830" rx="128" ry="30"/>
+  </g>
+  <g text-anchor="middle" font-size="11.5" fill="#1b1b1b">
+    <text x="420" y="147">1. Convert VT model file to</text><text x="420" y="162">EcoTEA workbook</text>
+    <text x="420" y="297">3. Import EcoTEA workbook</text><text x="420" y="312">into the database</text>
+    <text x="420" y="467">8. Browse &amp; filter</text><text x="420" y="482">technology database</text>
+    <text x="420" y="564">10. Maintain emission factors</text>
+    <text x="420" y="677">11. Ask a question in</text><text x="420" y="692">natural language</text>
+    <text x="420" y="827">16. Manage RAG</text><text x="420" y="842">knowledge base</text>
+  </g>
+
+  <!-- Use cases : column B, included or extending -->
+  <g fill="#ffffff" stroke="#2e7d32" stroke-width="1.7">
+    <ellipse cx="800" cy="150" rx="128" ry="30"/>
+    <ellipse cx="800" cy="225" rx="128" ry="30"/>
+    <ellipse cx="800" cy="300" rx="128" ry="30"/>
+    <ellipse cx="800" cy="375" rx="128" ry="30"/>
+    <ellipse cx="800" cy="450" rx="128" ry="30"/>
+    <ellipse cx="800" cy="525" rx="128" ry="30"/>
+  </g>
+  <g fill="#ffffff" stroke="#1565c0" stroke-width="1.7">
+    <ellipse cx="800" cy="620" rx="128" ry="30"/>
+    <ellipse cx="800" cy="695" rx="128" ry="30"/>
+    <ellipse cx="800" cy="770" rx="128" ry="30"/>
+    <ellipse cx="800" cy="845" rx="128" ry="30"/>
+  </g>
+  <g text-anchor="middle" font-size="11.5" fill="#1b1b1b">
+    <text x="800" y="147">2. Download / hand off</text><text x="800" y="162">converted workbook</text>
+    <text x="800" y="222">4. Preview sheets &amp; rows</text><text x="800" y="237">before import</text>
+    <text x="800" y="297">5. Review &amp; correct</text><text x="800" y="312">column mapping</text>
+    <text x="800" y="372">6. View import summary &amp;</text><text x="800" y="387">data-quality issues</text>
+    <text x="800" y="454">7. Resolve sector conflicts</text>
+    <text x="800" y="522">9. View technology detail</text><text x="800" y="537">by year</text>
+    <text x="800" y="617">12. Plan intent &amp; run</text><text x="800" y="632">injection-safe SQL query</text>
+    <text x="800" y="686">13. Answer via function-</text><text x="800" y="701">calling tools</text>
+    <text x="800" y="774">14. Render interactive chart</text>
+    <text x="800" y="842">15. Trace data point to</text><text x="800" y="857">source Excel cell</text>
+  </g>
+  <text x="800" y="716" text-anchor="middle" font-size="8.5" fill="#777">terminology · unit · emission · forecast</text>
+
+  <!-- Primary actor -->
+  <g stroke="#222" stroke-width="2" fill="none">
+    <circle cx="95" cy="452" r="12" fill="#fff"/>
+    <line x1="95" y1="464" x2="95" y2="490"/>
+    <line x1="77" y1="472" x2="113" y2="472"/>
+    <line x1="95" y1="490" x2="82" y2="510"/>
+    <line x1="95" y1="490" x2="108" y2="510"/>
+  </g>
+  <text x="95" y="534" text-anchor="middle" font-size="13" font-weight="700" fill="#111">User</text>
+  <text x="95" y="550" text-anchor="middle" font-size="10" fill="#555">(Energy analysts,</text>
+  <text x="95" y="563" text-anchor="middle" font-size="10" fill="#555">researchers, modellers)</text>
+
+  <g stroke="#222" stroke-width="1.5" fill="none">
+    <line x1="113" y1="472" x2="150" y2="472"/>
+    <line x1="150" y1="472" x2="292" y2="150"/>
+    <line x1="150" y1="472" x2="292" y2="300"/>
+    <line x1="150" y1="472" x2="292" y2="470"/>
+    <line x1="150" y1="472" x2="292" y2="560"/>
+    <line x1="150" y1="472" x2="292" y2="680"/>
+    <line x1="150" y1="472" x2="292" y2="830"/>
+  </g>
+
+  <!-- include relationships : base to included -->
+  <g stroke="#333" stroke-width="1.4" stroke-dasharray="7 5" fill="none" marker-end="url(#open)">
+    <line x1="550" y1="150" x2="668" y2="150"/>
+    <line x1="548" y1="292" x2="668" y2="228"/>
+    <line x1="548" y1="310" x2="668" y2="372"/>
+    <line x1="548" y1="474" x2="668" y2="522"/>
+    <line x1="548" y1="672" x2="668" y2="622"/>
+    <line x1="548" y1="686" x2="668" y2="693"/>
+  </g>
+  <g fill="#ffffff">
+    <rect x="578" y="130" width="62" height="14"/>
+    <rect x="609" y="227" width="62" height="14"/>
+    <rect x="576" y="336" width="62" height="14"/>
+    <rect x="576" y="490" width="62" height="14"/>
+    <rect x="574" y="628" width="62" height="14"/>
+    <rect x="579" y="670" width="62" height="14"/>
+  </g>
+  <g text-anchor="middle" font-size="10.5" font-style="italic" fill="#333">
+    <text x="609" y="141">&#171;include&#187;</text>
+    <text x="640" y="238">&#171;include&#187;</text>
+    <text x="607" y="347">&#171;include&#187;</text>
+    <text x="607" y="501">&#171;include&#187;</text>
+    <text x="605" y="639">&#171;include&#187;</text>
+    <text x="610" y="681">&#171;include&#187;</text>
+  </g>
+
+  <!-- extend relationships : extending to base -->
+  <g stroke="#333" stroke-width="1.4" stroke-dasharray="7 5" fill="none" marker-end="url(#open)">
+    <line x1="668" y1="300" x2="552" y2="300"/>
+    <line x1="668" y1="444" x2="552" y2="318"/>
+    <line x1="668" y1="762" x2="552" y2="692"/>
+    <path d="M 680,833 C 600,822 600,792 680,782"/>
+  </g>
+  <g fill="#ffffff">
+    <rect x="578" y="264" width="64" height="14"/>
+    <rect x="548" y="276" width="124" height="12"/>
+    <rect x="608" y="386" width="64" height="14"/>
+    <rect x="578" y="398" width="124" height="12"/>
+    <rect x="566" y="702" width="64" height="14"/>
+    <rect x="546" y="714" width="104" height="12"/>
+    <rect x="530" y="782" width="64" height="14"/>
+    <rect x="496" y="794" width="98" height="12"/>
+  </g>
+  <g text-anchor="middle" font-size="10.5" font-style="italic" fill="#333">
+    <text x="610" y="275">&#171;extend&#187;</text>
+    <text x="640" y="397">&#171;extend&#187;</text>
+    <text x="598" y="713">&#171;extend&#187;</text>
+    <text x="594" y="793" text-anchor="end">&#171;extend&#187;</text>
+  </g>
+  <g text-anchor="middle" font-size="8.5" fill="#888">
+    <text x="610" y="286">[headers drift from template]</text>
+    <text x="640" y="408">[one tech, several sectors]</text>
+    <text x="598" y="724">[result is chartable]</text>
+    <text x="594" y="805" text-anchor="end">[user clicks a point]</text>
+  </g>
+
+  <!-- Secondary actor : LLM provider -->
+  <g stroke="#222" stroke-width="2" fill="none">
+    <circle cx="1170" cy="400" r="12" fill="#fff"/>
+    <line x1="1170" y1="412" x2="1170" y2="438"/>
+    <line x1="1152" y1="420" x2="1188" y2="420"/>
+    <line x1="1170" y1="438" x2="1157" y2="458"/>
+    <line x1="1170" y1="438" x2="1183" y2="458"/>
+  </g>
+  <text x="1170" y="482" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111">LLM Provider</text>
+  <text x="1170" y="498" text-anchor="middle" font-size="9.5" fill="#555">(OpenAI / DeepSeek / Qwen /</text>
+  <text x="1170" y="511" text-anchor="middle" font-size="9.5" fill="#555">Moonshot / Zhipu / Anthropic)</text>
+  <g stroke="#222" stroke-width="1.4" stroke-dasharray="7 5" fill="none">
+    <path d="M 1148,420 L 1010,420"/>
+    <path d="M 1010,300 L 1010,770"/>
+    <path d="M 1010,300 L 934,300"/>
+    <path d="M 1010,620 L 934,620"/>
+    <path d="M 1010,695 L 934,695"/>
+    <path d="M 1010,770 L 934,770"/>
+  </g>
+
+  <!-- Secondary actor : embedding provider and vector store -->
+  <g stroke="#222" stroke-width="2" fill="none">
+    <circle cx="1170" cy="620" r="12" fill="#fff"/>
+    <line x1="1170" y1="632" x2="1170" y2="658"/>
+    <line x1="1152" y1="640" x2="1188" y2="640"/>
+    <line x1="1170" y1="658" x2="1157" y2="678"/>
+    <line x1="1170" y1="658" x2="1183" y2="678"/>
+  </g>
+  <text x="1170" y="702" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111">Embedding Provider</text>
+  <text x="1170" y="718" text-anchor="middle" font-size="9.5" fill="#555">(local sentence-transformers</text>
+  <text x="1170" y="731" text-anchor="middle" font-size="9.5" fill="#555">by default; OpenAI / Qwen)</text>
+  <g stroke="#222" stroke-width="1.4" stroke-dasharray="7 5" fill="none">
+    <path d="M 1148,640 L 1070,640 L 1070,952 L 420,952 L 420,862"/>
+    <path d="M 1070,660 L 1070,700 L 934,700"/>
+  </g>
+
+  <!-- Legend -->
+  <rect x="20" y="96" width="196" height="216" rx="8" fill="#fafafa" stroke="#ccc" stroke-width="1"/>
+  <text x="36" y="118" font-size="11.5" font-weight="700" fill="#333">Legend</text>
+
+  <line x1="36" y1="142" x2="80" y2="142" stroke="#222" stroke-width="1.5"/>
+  <text x="88" y="139" font-size="9.5" font-weight="700" fill="#333">Association</text>
+  <text x="88" y="151" font-size="8.5" fill="#666">actor uses the use case</text>
+
+  <line x1="36" y1="180" x2="80" y2="180" stroke="#333" stroke-width="1.4" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="88" y="177" font-size="9.5" font-weight="700" fill="#333">&#171;include&#187;</text>
+  <text x="88" y="189" font-size="8.5" fill="#666">base &#8594; always-run sub-case</text>
+
+  <line x1="36" y1="218" x2="80" y2="218" stroke="#333" stroke-width="1.4" stroke-dasharray="7 5" marker-end="url(#open)"/>
+  <text x="88" y="215" font-size="9.5" font-weight="700" fill="#333">&#171;extend&#187;</text>
+  <text x="88" y="227" font-size="8.5" fill="#666">optional case &#8594; base</text>
+
+  <line x1="36" y1="256" x2="80" y2="256" stroke="#222" stroke-width="1.4" stroke-dasharray="7 5"/>
+  <text x="88" y="253" font-size="9.5" font-weight="700" fill="#333">External service</text>
+  <text x="88" y="265" font-size="8.5" fill="#666">third party, out of scope</text>
+
+  <ellipse cx="52" cy="290" rx="16" ry="9" fill="#fff" stroke="#2e7d32" stroke-width="1.6"/>
+  <text x="80" y="287" font-size="9" fill="#2e7d32" font-weight="700">green = Data Ops</text>
+  <text x="80" y="299" font-size="9" fill="#1565c0" font-weight="700">blue = AI Analytics</text>
+</svg>
