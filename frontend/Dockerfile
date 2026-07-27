@@ -23,6 +23,9 @@ FROM nginx:1.30-alpine AS runtime
 
 # Replace the default config with one tuned for an SPA + /api reverse-proxy.
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Security-header snippet, included by nginx.conf. Kept outside conf.d so it is
+# not auto-loaded as a server block.
+COPY security_headers.conf /etc/nginx/security_headers.conf
 
 # Copy built assets from the builder stage.
 COPY --from=builder /build/dist /usr/share/nginx/html

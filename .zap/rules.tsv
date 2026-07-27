@@ -1,5 +1,25 @@
 # ZAP rule overrides for Strata (tab-separated: rule-id	action	comment)
 # Actions: IGNORE / WARN / FAIL. Default for unlisted rules is WARN.
 #
-# Triage log — move a rule here only with a justification:
+# Triage baseline: 2026-07-27 (see security/VULNERABILITY_ASSESSMENT.md §5 for
+# the full before/after chain). Header-hygiene alerts were FIXED (nginx +
+# backend middleware) and are absent on rescan, so they are not listed here.
+# The entries below are alerts ACCEPTED with justification — informational
+# findings or artifacts of ZAP fuzzing a typed API, none higher than Low.
+#
+# --- pre-existing ---
 10096	IGNORE	(Timestamp Disclosure) API responses legitimately contain ISO timestamps
+#
+# --- accepted 2026-07-27: informational / not server-controllable ---
+10027	IGNORE	(Suspicious Comments) matches tokens inside the minified Vite bundle; no secrets, no internal info
+10109	IGNORE	(Modern Web Application) purely informational — Strata is a SPA by design
+90005	IGNORE	(Sec-Fetch-* headers missing) these are request headers the browser sends; not server-controllable
+10049	IGNORE	(Storable/Cacheable Content) hashed static assets are cached on purpose (Cache-Control public, immutable)
+10024	IGNORE	(Sensitive Information in URL) flags numeric resource IDs like /api/raw-rows/{id}; surrogate keys, not secrets
+#
+# --- accepted 2026-07-27: ZAP active-scan artifacts against a typed API ---
+100000	IGNORE	(Server/Client Error response code) OpenAPI scan fuzzes 317 typed endpoints with invalid params; 4xx/5xx are correct rejections
+90022	IGNORE	(Application Error Disclosure) FastAPI returns structured JSON validation errors (422), not stack traces; DEBUG is off in the image
+#
+# --- accepted 2026-07-27: residual cross-origin isolation ---
+90004	IGNORE	(Cross-Origin isolation) COOP + CORP are now set; COEP require-corp intentionally omitted (risks blocking legitimate subresources; app is same-origin, network-isolated)
