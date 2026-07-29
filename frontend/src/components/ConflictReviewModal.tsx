@@ -85,10 +85,17 @@ export function ConflictReviewModal({ onClose, onResolved }: ConflictReviewModal
       onClick={() => {
         if (!submitting) onClose();
       }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && !submitting) onClose();
+      }}
       role="dialog"
       aria-modal="true"
     >
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
         <header className="modal-header">
           <div>
             <h2>Conflict review</h2>

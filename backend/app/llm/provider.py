@@ -267,12 +267,8 @@ def test_connectivity(provider: str | None = None) -> dict[str, Any]:
         info["latency_ms"] = int((time.perf_counter() - start) * 1000)
         info["ok"] = True
         if hasattr(result, "content"):
-            preview = (
-                str(result.content)[:60]
-                if isinstance(result.content, str)
-                else str(result.content)[:60]
-            )
-            info["response_preview"] = preview
+            # str() handles both str and non-str content, so no branch is needed.
+            info["response_preview"] = str(result.content)[:60]
     except Exception as exc:  # noqa: BLE001
         info["error"] = f"{type(exc).__name__}: {exc!s}"
     return info

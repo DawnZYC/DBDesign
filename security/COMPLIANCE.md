@@ -44,8 +44,6 @@ history *is* the audit trail.
 
 ## 3. Gaps & planned work
 
-* DAST gate is informational until the first triage pass (tracked in
-  `VULNERABILITY_ASSESSMENT.md` §5).
 * No authentication layer yet — access control is deployment-level
   (network isolation). Required before any multi-user production use.
 * langchain/langgraph 1.x migration empties the pip-audit accepted-risk list.

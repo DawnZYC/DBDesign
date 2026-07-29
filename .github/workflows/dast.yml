@@ -69,7 +69,7 @@ jobs:
           rules_file_name: '.zap/rules.tsv'
           artifact_name: 'zap-baseline-frontend'
           allow_issue_writing: false
-          fail_action: false   # informational in v1; flip after triage.
+          fail_action: true    # BLOCKING since 2026-07-27: header findings fixed; residuals triaged in .zap/rules.tsv
           cmd_options: '-a'
 
       - name: ZAP API scan (backend, OpenAPI-driven)
@@ -80,7 +80,7 @@ jobs:
           rules_file_name: '.zap/rules.tsv'
           artifact_name: 'zap-api-backend'
           allow_issue_writing: false
-          fail_action: false   # informational in v1; flip after triage.
+          fail_action: true    # BLOCKING since 2026-07-27: header findings fixed; residuals triaged in .zap/rules.tsv
           cmd_options: '-O http://localhost:8000'
 
       - name: Show stack logs on failure

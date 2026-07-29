@@ -56,6 +56,9 @@ export function CellTraceModal({ rawRowId, onClose }: Props) {
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
       <div className="modal" role="dialog" aria-modal="true">
         {/* Header */}
