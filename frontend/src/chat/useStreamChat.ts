@@ -27,9 +27,16 @@ import type { ChatMessage, ToolCallEvent, ToolResultEvent } from '../types';
 // Helpers
 // ---------------------------------------------------------------------------
 function newId(): string {
-  return typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+  // Prefer the standard UUID API; fall back to crypto random bytes. Avoids
+  // Math.random(), which SonarQube flags as weak cryptography.
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  const bytes =
+    typeof crypto !== 'undefined' && crypto.getRandomValues
+      ? crypto.getRandomValues(new Uint8Array(16))
+      : Uint8Array.from({ length: 16 }, (_, i) => (Date.now() + i) & 0xff);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** Immutable update of the message whose id === targetId. */

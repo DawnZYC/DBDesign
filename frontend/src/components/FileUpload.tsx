@@ -54,6 +54,12 @@ export function FileUpload({
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
       onClick={() => !disabled && inputRef.current?.click()}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && !disabled) {
+          e.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
       role="button"
       tabIndex={0}
       aria-label="Select or drop an Excel file"

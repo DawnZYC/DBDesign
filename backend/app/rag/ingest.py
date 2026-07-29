@@ -24,6 +24,15 @@ from app.rag.chroma_client import get_vectorstore
 logger = logging.getLogger(__name__)
 
 
+def _safe_log(value: str) -> str:
+    """Neutralise user-controlled text before logging.
+
+    Strips CR/LF and other control characters to prevent log injection /
+    forging (SonarQube python:S5145). Truncates to keep log lines bounded.
+    """
+    return re.sub(r"[\x00-\x1f\x7f]", "", value)[:200]
+
+
 # -----------------------------------------------------------------------------
 # Dictionary -> Document
 # -----------------------------------------------------------------------------
@@ -240,7 +249,7 @@ def ingest_uploaded_text(content: str, *, file_name: str) -> int:
     ids = [_make_doc_id(d) for d in docs]
     vs = get_vectorstore()
     vs.add_documents(documents=docs, ids=ids)
-    logger.info("Ingested uploaded doc %s: %d chunks", file_name, len(docs))
+    logger.info("Ingested uploaded doc %s: %d chunks", _safe_log(file_name), len(docs))
     return len(docs)
 
 
@@ -269,5 +278,5 @@ def delete_uploaded_document(file_name: str) -> int:
     ids = got.get("ids") or []
     if ids:
         vs._collection.delete(ids=ids)  # noqa: SLF001
-        logger.info("Deleted uploaded doc %s: %d chunks", file_name, len(ids))
+        logger.info("Deleted uploaded doc %s: %d chunks", _safe_log(file_name), len(ids))
     return len(ids)

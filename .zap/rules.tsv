@@ -23,3 +23,6 @@
 #
 # --- accepted 2026-07-27: residual cross-origin isolation ---
 90004	IGNORE	(Cross-Origin isolation) COOP + CORP are now set; COEP require-corp intentionally omitted (risks blocking legitimate subresources; app is same-origin, network-isolated)
+#
+# --- accepted 2026-07-27: CSP hardening trade-off (after first fix) ---
+10055	IGNORE	(CSP directive nuance) style-src 'unsafe-inline' is required by the ECharts charting UI; nonces/hashes aren't feasible for the Vite SPA + third-party lib. CSP is otherwise strict (default-src/script-src 'self', frame-ancestors 'none', object-src 'none', form-action 'self')
