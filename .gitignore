@@ -114,3 +114,4 @@ sdist/
 # Confidential data — keep locally, never commit (supply your own; see *.example placeholders)
 backend/app/assets/*.xlsx
 backend/data/domain_knowledge.md
+coverage.xml
